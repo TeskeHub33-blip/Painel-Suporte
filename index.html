@@ -165,7 +165,7 @@ tr.clickable-row:hover td { background: rgba(255,255,255,0.03); }
     </div>
     <div class="header-right">
       <div class="clock" id="clock">--:--:--</div>
-      <div>Dados de 21/07/2026 18:11 (Brasilia)</div>
+      <div>Dados de 21/07/2026 18:12 (Brasilia)</div>
     </div>
   </div>
 
@@ -273,7 +273,7 @@ const RESOLVED_MONTHS = {};
 Object.keys(RESOLVED_MONTHS_RAW).forEach(k => {
   RESOLVED_MONTHS[k] = RESOLVED_MONTHS_RAW[k].filter(r => r.ownerTeam === 'Suporte');
 });
-const NOW = new Date("2026-07-21T21:11:36Z");
+const NOW = new Date("2026-07-21T21:12:53Z");
 const TODAY_STR = NOW.toISOString().slice(0,10);
 
 function parseDt(s) { return s ? new Date(s.split('.')[0] + 'Z') : null; }
