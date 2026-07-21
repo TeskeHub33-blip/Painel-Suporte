@@ -1,0 +1,6 @@
+﻿*.json
+*.log
+*.docx
+*.txt
+!index.html
+dashboard_suporte.html
