@@ -165,7 +165,7 @@ tr.clickable-row:hover td { background: rgba(255,255,255,0.03); }
     </div>
     <div class="header-right">
       <div class="clock" id="clock">--:--:--</div>
-      <div>Dados de 21/07/2026 18:04 (Brasilia)</div>
+      <div>Dados de 21/07/2026 18:07 (Brasilia)</div>
     </div>
   </div>
 
@@ -273,7 +273,7 @@ const RESOLVED_MONTHS = {};
 Object.keys(RESOLVED_MONTHS_RAW).forEach(k => {
   RESOLVED_MONTHS[k] = RESOLVED_MONTHS_RAW[k].filter(r => r.ownerTeam === 'Suporte');
 });
-const NOW = new Date("2026-07-21T21:04:56Z");
+const NOW = new Date("2026-07-21T21:07:17Z");
 const TODAY_STR = NOW.toISOString().slice(0,10);
 
 function parseDt(s) { return s ? new Date(s.split('.')[0] + 'Z') : null; }
@@ -968,6 +968,139 @@ enhancePanels('gridBottom', true);
 enhancePanels('gridHist', true);
 enhancePanels('priorityPanel', false);
 enhancePanels('chatsLivePanel', false);
+
+// ============================================================
+// Aba Clientes — Status Report (indicadores ITIL por mes/cliente)
+// ============================================================
+function computeIndicadores(items) {
+  const total = items.length;
+  const comTempo = items.filter(r => r.createdDate && r.resolvedIn).map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000);
+  const mttrH = avg(comTempo);
+  const comSla = items.filter(r => r.slaSolutionDate);
+  const noPrazo = comSla.filter(r => parseDt(r.resolvedIn) <= parseDt(r.slaSolutionDate)).length;
+  const pctSla = comSla.length ? Math.round(noPrazo / comSla.length * 100) : null;
+  const reincidencia = items.filter(r => r.reopenedIn).length;
+  const pctReincidencia = total ? Math.round(reincidencia / total * 100) : 0;
+  return { total, mttrH, pctSla, comSlaLength: comSla.length, reincidencia, pctReincidencia };
+}
+
+function populateSelect(sel, options, selectedValue) {
+  sel.innerHTML = options.map(([val, label]) => `<option value="${esc(val)}">${esc(label)}</option>`).join('');
+  if (selectedValue !== undefined) sel.value = selectedValue;
+}
+
+const selMesCliente = document.getElementById('selMesCliente');
+const selCliente = document.getElementById('selCliente');
+populateSelect(selMesCliente, Object.keys(MONTH_LABELS).map(k => [k, MONTH_LABELS[k]]));
+
+function clientesDoMes(mesKey) {
+  const set = new Set((RESOLVED_MONTHS[mesKey] || []).map(r => r.clientOrg).filter(Boolean));
+  return Array.from(set).sort((a,b) => a.localeCompare(b));
+}
+
+function refreshClienteOptions() {
+  const mesKey = selMesCliente.value;
+  const clientesList = clientesDoMes(mesKey);
+  const prevSelected = selCliente.value;
+  populateSelect(selCliente, clientesList.map(c => [c, c]));
+  if (clientesList.indexOf(prevSelected) !== -1) selCliente.value = prevSelected;
+}
+
+function renderClienteReport() {
+  const mesKey = selMesCliente.value;
+  const cliente = selCliente.value;
+  const monthItems = (RESOLVED_MONTHS[mesKey] || []).filter(r => r.clientOrg === cliente);
+  const ind = computeIndicadores(monthItems);
+  const backlog = TICKETS.filter(t => t.clientOrg === cliente).length;
+
+  document.getElementById('kpiCliente').innerHTML =
+    kpiTileStatic('neutral', ind.total, 'Chamados no mes', `${MONTH_LABELS[mesKey]} · time Suporte`) +
+    kpiTileStatic('warn', ind.mttrH !== null ? fmtH(ind.mttrH) : '-', 'MTTR (tempo medio resolucao)', `${monthItems.filter(r=>r.createdDate && r.resolvedIn).length} chamados com tempo calculavel`) +
+    kpiTileStatic(ind.pctSla !== null && ind.pctSla < 70 ? 'danger' : 'ok', ind.pctSla !== null ? `${ind.pctSla}%` : '-', 'SLA no prazo', `${ind.comSlaLength} chamados com SLA definido`) +
+    kpiTileStatic('pink', backlog, 'Backlog (em aberto agora)', 'chamados atualmente nao fechados deste cliente') +
+    kpiTileStatic(ind.reincidencia > 0 ? 'danger' : 'ok', ind.reincidencia, 'Reincidencia (reabertos)', `${ind.pctReincidencia}% do total do mes`);
+
+  document.getElementById('gridCliente').innerHTML = `
+    <div class="panel">
+      <h2>📋 Chamados do cliente no mes${exportButtonHtml("exportHistListToExcel(RESOLVED_MONTHS['" + mesKey + "'].filter(r=>r.clientOrg===" + JSON.stringify(cliente) + "), 'cliente.txt')")}</h2>
+      <div class="panel-sub">${ind.total} chamados resolvidos — ${esc(cliente)} — ${MONTH_LABELS[mesKey]}</div>
+      <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Categoria</th><th>Resolvido em</th></tr></thead>
+        <tbody>${tableHtmlHist(monthItems.slice().sort((a,b)=>new Date(b.resolvedIn)-new Date(a.resolvedIn)), 100)}</tbody></table>
+    </div>
+  `;
+}
+selMesCliente.addEventListener('change', () => { refreshClienteOptions(); renderClienteReport(); });
+selCliente.addEventListener('change', renderClienteReport);
+refreshClienteOptions();
+renderClienteReport();
+
+// ============================================================
+// Aba One-on-One — protegida por senha (aviso: trava simples do lado do navegador, nao e seguranca real)
+// ============================================================
+const ONE_ON_ONE_PASSWORD = '3300';
+function checkOneOnOnePassword() {
+  const val = document.getElementById('oneOnOnePassInput').value;
+  if (val === ONE_ON_ONE_PASSWORD) {
+    document.getElementById('oneOnOneGate').style.display = 'none';
+    document.getElementById('oneOnOneContent').style.display = 'block';
+    sessionStorage.setItem('oneOnOneUnlocked', '1');
+    initOneOnOne();
+  } else {
+    document.getElementById('oneOnOneError').style.display = 'block';
+  }
+}
+document.getElementById('oneOnOnePassInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkOneOnOnePassword(); });
+if (sessionStorage.getItem('oneOnOneUnlocked') === '1') {
+  document.getElementById('oneOnOneGate').style.display = 'none';
+  document.getElementById('oneOnOneContent').style.display = 'block';
+}
+
+let oneOnOneInited = false;
+function initOneOnOne() {
+  if (oneOnOneInited) return;
+  oneOnOneInited = true;
+  const selPeriodo = document.getElementById('selPeriodoOneOnOne');
+  const selTecnico = document.getElementById('selTecnicoOneOnOne');
+  populateSelect(selPeriodo, Object.keys(MONTH_LABELS).map(k => [k, MONTH_LABELS[k]]));
+
+  function tecnicosDoPeriodo(periodoKey) {
+    const set = new Set((RESOLVED_MONTHS[periodoKey] || []).map(r => r.ownerName).filter(Boolean));
+    return Array.from(set).sort((a,b) => a.localeCompare(b));
+  }
+  function refreshTecnicoOptions() {
+    const periodoKey = selPeriodo.value;
+    const list = tecnicosDoPeriodo(periodoKey);
+    const prev = selTecnico.value;
+    populateSelect(selTecnico, list.map(t => [t, t]));
+    if (list.indexOf(prev) !== -1) selTecnico.value = prev;
+  }
+  function renderOneOnOne() {
+    const periodoKey = selPeriodo.value;
+    const tecnico = selTecnico.value;
+    const periodItems = (RESOLVED_MONTHS[periodoKey] || []).filter(r => r.ownerName === tecnico);
+    const ind = computeIndicadores(periodItems);
+    const pctPrimeira = periodItems.length ? Math.round(periodItems.filter(isPrimeiraResposta).length / periodItems.length * 100) : 0;
+
+    const liveDoTecnico = TICKETS.filter(t => t.ownerName === tecnico);
+    const bouncingTecnico = liveDoTecnico.filter(t => t.status === 'Em atendimento' && t._hoursSinceUpdate !== null && t._hoursSinceUpdate >= 48).length;
+    const naoAtualizadosTecnico = liveDoTecnico.filter(t => (t.status === 'Em atendimento' || t.status === 'Aguardando Cliente') && !t._updatedToday).length;
+
+    document.getElementById('kpiOneOnOne').innerHTML =
+      kpiTileStatic('neutral', ind.total, 'Chamados resolvidos', `${MONTH_LABELS[periodoKey]}`) +
+      kpiTileStatic('ok', `${pctPrimeira}%`, 'Resolvidos na 1a resposta', `de ${ind.total} chamados no periodo`) +
+      kpiTileStatic('warn', ind.mttrH !== null ? fmtH(ind.mttrH) : '-', 'Tempo medio de resolucao', `${ind.comSlaLength} chamados com SLA definido`);
+
+    document.getElementById('kpiOneOnOne2').innerHTML =
+      kpiTileStatic(ind.pctSla !== null && ind.pctSla < 70 ? 'danger' : 'ok', ind.pctSla !== null ? `${ind.pctSla}%` : '-', 'SLA no prazo', 'no periodo selecionado') +
+      kpiTileStatic(bouncingTecnico > 0 ? 'danger' : 'ok', bouncingTecnico, 'Bouncing atual (>2 dias)', 'situacao ao vivo, nao e do periodo') +
+      kpiTileStatic(naoAtualizadosTecnico > 0 ? 'warn' : 'ok', naoAtualizadosTecnico, 'Nao atualizados hoje', 'situacao ao vivo, nao e do periodo');
+  }
+  selPeriodo.addEventListener('change', () => { refreshTecnicoOptions(); renderOneOnOne(); });
+  selTecnico.addEventListener('change', renderOneOnOne);
+  refreshTecnicoOptions();
+  renderOneOnOne();
+}
+if (sessionStorage.getItem('oneOnOneUnlocked') === '1') initOneOnOne();
 
 function tick() {
   const el = document.getElementById('clock');
