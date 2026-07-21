@@ -273,7 +273,7 @@ const RESOLVED_MONTHS = {};
 Object.keys(RESOLVED_MONTHS_RAW).forEach(k => {
   RESOLVED_MONTHS[k] = RESOLVED_MONTHS_RAW[k].filter(r => r.ownerTeam === 'Suporte');
 });
-const NOW = new Date("2026-07-21T21:07:17Z");
+const NOW = new Date("2026-07-21T21:07:56Z");
 const TODAY_STR = NOW.toISOString().slice(0,10);
 
 function parseDt(s) { return s ? new Date(s.split('.')[0] + 'Z') : null; }
