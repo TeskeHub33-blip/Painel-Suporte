@@ -175,35 +175,35 @@ month_labels_json = json.dumps(month_labels, ensure_ascii=False)
 html = rf"""<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {{
-  /* Identidade visual EmiteAi (mesmos tokens do sistema real) */
-  --navy: #24243E;
-  --navy-mid: #2E2E50;
-  --navy-lt: #595974;
+  /* Identidade visual EmiteAi — variante escura (mesma paleta navy/pink, superficies invertidas) */
+  --navy: #EAEAF2;
+  --navy-mid: #C9C9DC;
+  --navy-lt: #B8B8D0;
   --pink: #ED6DA2;
   --pink2: #E05592;
-  --pink-dim: rgba(237,109,162,0.08);
+  --pink-dim: rgba(237,109,162,0.14);
   --pink-logo: #E8386D;
-  --bg: #EBEDEF;
-  --panel: #FFFFFF;
-  --panel-border: rgba(135,135,153,0.25);
-  --surface2: #F7F8FA;
-  --text: #1A1A2C;
-  --text-dim: #595974;
-  --text3: #878799;
-  --ok: #065F46;
+  --bg: #14141F;
+  --panel: #1E1E30;
+  --panel-border: rgba(255,255,255,0.09);
+  --surface2: #262640;
+  --text: #EAEAF2;
+  --text-dim: #A5A5BD;
+  --text3: #82829C;
+  --ok: #34D399;
   --ok-solid: #10B981;
-  --ok-dim: #D1FAE5;
-  --ok-bord: #6EE7B7;
-  --warn: #92400E;
+  --ok-dim: rgba(16,185,129,0.15);
+  --ok-bord: rgba(52,211,153,0.35);
+  --warn: #FBBF24;
   --warn-solid: #F59E0B;
-  --warn-dim: #FEF3C7;
-  --warn-bord: #FCD34D;
-  --danger: #991B1B;
-  --danger-solid: #D32F2F;
-  --danger-dim: #FEE2E2;
-  --danger-bord: #FCA5A5;
-  --shadow: rgba(0,0,0,0.12) 0px 2px 6px 0px;
-  --shadow2: rgba(0,0,0,0.18) 0px 4px 12px 0px;
+  --warn-dim: rgba(245,158,11,0.15);
+  --warn-bord: rgba(251,191,36,0.35);
+  --danger: #F87171;
+  --danger-solid: #EF4444;
+  --danger-dim: rgba(239,68,68,0.15);
+  --danger-bord: rgba(248,113,113,0.35);
+  --shadow: rgba(0,0,0,0.35) 0px 2px 8px 0px;
+  --shadow2: rgba(0,0,0,0.5) 0px 6px 18px 0px;
 }}
 * {{ box-sizing: border-box; }}
 body, .dashboard-root {{
@@ -231,7 +231,7 @@ body, .dashboard-root {{
   font-family: inherit; font-size: 13px; font-weight: 600; padding: 9px 20px; border-radius: 6px;
   cursor: pointer; letter-spacing: 0; transition: all .15s ease; box-shadow: var(--shadow);
 }}
-.tab-btn:hover {{ background: rgba(36,36,62,0.05); border-color: var(--navy); }}
+.tab-btn:hover {{ background: rgba(255,255,255,0.06); border-color: var(--navy); }}
 .tab-btn.active {{ background: var(--pink-dim); color: var(--pink); border-color: rgba(232,56,109,0.3); font-weight: 700; }}
 .tab-btn:focus-visible {{ outline: 2px solid var(--pink); outline-offset: 2px; }}
 .tab-panel {{ display: none; }}
@@ -285,7 +285,7 @@ body, .dashboard-root {{
   border: 1.25px solid #878799; border-radius: 6px; padding: 4px 9px; white-space: nowrap;
   transition: all .15s ease;
 }}
-.export-btn:hover {{ background: rgba(36,36,62,0.05); border-color: var(--navy); }}
+.export-btn:hover {{ background: rgba(255,255,255,0.06); border-color: var(--navy); }}
 .panel h2 .export-btn {{ margin-left: 6px; }}
 .panel h2 {{ font-size: 16px; font-weight: 600; margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px; color: var(--text); }}
 .panel .panel-sub {{ color: var(--text3); font-size: 11.5px; margin-bottom: 10px; }}
@@ -302,12 +302,12 @@ td {{ padding: 8px 6px; border-bottom: 1px solid var(--panel-border); vertical-a
 .ticket-link:hover {{ text-decoration: underline; color: var(--pink2); }}
 .hist-bar-row {{ cursor: pointer !important; }}
 .hist-row {{ cursor: pointer; }}
-.hist-row:hover td {{ background: rgba(36,36,62,0.025); }}
+.hist-row:hover td {{ background: rgba(255,255,255,0.03); }}
 tr.clickable-row {{ cursor: pointer; }}
-tr.clickable-row:hover td {{ background: rgba(36,36,62,0.025); }}
+tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 
 .bar-row {{ display: flex; align-items: center; gap: 8px; margin-bottom: 7px; cursor: pointer; padding: 2px 4px; border-radius: 6px; }}
-.bar-row:hover {{ background: rgba(36,36,62,0.04); }}
+.bar-row:hover {{ background: rgba(255,255,255,0.05); }}
 .bar-label {{ width: 150px; font-size: 11.5px; color: var(--text-dim); flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
 .bar-track {{ flex: 1; background: var(--surface2); border-radius: 6px; height: 12px; overflow: hidden; }}
 .bar-fill {{ background: var(--pink); height: 100%; }}
