@@ -421,14 +421,10 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
       <div id="oneOnOneError" style="color:var(--danger); font-size:12px; margin-top:10px; display:none;">Senha incorreta.</div>
     </div>
     <div id="oneOnOneContent" style="display:none;">
-      <div class="panel" style="margin-bottom: 18px;">
-        <h2>🎯 Indicadores individuais — One-on-One</h2>
-        <div class="panel-sub">Selecione o periodo e o responsavel</div>
-        <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:8px; align-items:center;">
-          <select id="selPeriodoOneOnOne" class="itil-select"></select>
-          <select id="selTecnicoOneOnOne" class="itil-select" style="min-width:260px;"></select>
-          <span id="tierBadgeOneOnOne" style="font-size:12px; font-weight:700; padding:5px 12px; border-radius:20px;"></span>
-        </div>
+      <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-bottom: 10px;">
+        <span id="tierBadgeOneOnOne" style="font-size:12px; font-weight:700; padding:5px 12px; border-radius:20px;"></span>
+        <select id="selPeriodoOneOnOne" class="itil-select" title="Periodo" style="max-width:160px; font-size:12px; padding:4px 8px;"></select>
+        <select id="selTecnicoOneOnOne" class="itil-select" title="Responsavel" style="max-width:220px; font-size:12px; padding:4px 8px;"></select>
       </div>
       <div class="kpi-row" id="kpiOneOnOne" style="grid-template-columns: repeat(3, 1fr);"></div>
       <div class="kpi-row" id="kpiOneOnOne2" style="grid-template-columns: repeat(3, 1fr); margin-top:-4px;"></div>
@@ -446,12 +442,8 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
       <div id="gamificacaoError" style="color:var(--danger); font-size:12px; margin-top:10px; display:none;">Senha incorreta.</div>
     </div>
     <div id="gamificacaoContent" style="display:none;">
-      <div class="panel" style="margin-bottom: 18px;">
-        <h2>🏆 Gamificacao — metas batidas</h2>
-        <div class="panel-sub">Selecione o mes (ou a soma dos ultimos 3 meses) para ver quantas metas cada tecnico bateu</div>
-        <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:8px;">
-          <select id="selMesGamificacao" class="itil-select"></select>
-        </div>
+      <div style="display:flex; justify-content:flex-end; margin-bottom: 10px;">
+        <select id="selMesGamificacao" class="itil-select" title="Mes / periodo" style="max-width:220px; font-size:12px; padding:4px 8px;"></select>
       </div>
       <div class="kpi-row" id="kpiGamificacao" style="grid-template-columns: repeat(2, 1fr);"></div>
       <div class="grid" id="gridGamificacao" style="margin-top: 18px;"></div>
