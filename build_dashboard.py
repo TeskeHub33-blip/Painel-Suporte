@@ -404,13 +404,9 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
   </div>
 
   <div class="tab-panel" id="tabClientes">
-    <div class="panel" style="margin-bottom: 18px;">
-      <h2>📊 Status Report — Cliente</h2>
-      <div class="panel-sub">Selecione o mes e o cliente para ver os indicadores ITIL do periodo</div>
-      <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:8px;">
-        <select id="selMesCliente" class="itil-select"></select>
-        <select id="selCliente" class="itil-select" style="min-width:260px;"></select>
-      </div>
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom: 10px;">
+      <select id="selMesCliente" class="itil-select" title="Mes" style="max-width:160px; font-size:12px; padding:4px 8px;"></select>
+      <select id="selCliente" class="itil-select" title="Cliente" style="max-width:220px; font-size:12px; padding:4px 8px;"></select>
     </div>
     <div class="kpi-row" id="kpiCliente" style="grid-template-columns: repeat(5, 1fr);"></div>
     <div class="grid" id="gridCliente" style="margin-top: 18px;"></div>
