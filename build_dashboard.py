@@ -438,15 +438,24 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
   </div>
 
   <div class="tab-panel" id="tabGamificacao">
-    <div class="panel" style="margin-bottom: 18px;">
-      <h2>🏆 Gamificacao — metas batidas</h2>
-      <div class="panel-sub">Selecione o mes (ou a soma dos ultimos 3 meses) para ver quantas metas cada tecnico bateu</div>
-      <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:8px;">
-        <select id="selMesGamificacao" class="itil-select"></select>
-      </div>
+    <div class="panel" id="gamificacaoGate" style="max-width: 420px; margin: 60px auto; text-align:center;">
+      <h2 style="justify-content:center;">🔒 Acesso restrito</h2>
+      <div class="panel-sub" style="text-align:center; margin-bottom:14px;">Esta aba e de uso da lideranca. Informe a senha para continuar.</div>
+      <input id="gamificacaoPassInput" type="password" class="itil-select" style="width:100%; text-align:center; margin-bottom:10px;" placeholder="Senha" />
+      <div><span class="export-btn" style="padding:8px 22px; font-size:13px;" onclick="checkGamificacaoPassword()">Entrar</span></div>
+      <div id="gamificacaoError" style="color:var(--danger); font-size:12px; margin-top:10px; display:none;">Senha incorreta.</div>
     </div>
-    <div class="kpi-row" id="kpiGamificacao" style="grid-template-columns: repeat(2, 1fr);"></div>
-    <div class="grid" id="gridGamificacao" style="margin-top: 18px;"></div>
+    <div id="gamificacaoContent" style="display:none;">
+      <div class="panel" style="margin-bottom: 18px;">
+        <h2>🏆 Gamificacao — metas batidas</h2>
+        <div class="panel-sub">Selecione o mes (ou a soma dos ultimos 3 meses) para ver quantas metas cada tecnico bateu</div>
+        <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:8px;">
+          <select id="selMesGamificacao" class="itil-select"></select>
+        </div>
+      </div>
+      <div class="kpi-row" id="kpiGamificacao" style="grid-template-columns: repeat(2, 1fr);"></div>
+      <div class="grid" id="gridGamificacao" style="margin-top: 18px;"></div>
+    </div>
   </div>
 
   <div class="footer-note">
@@ -854,11 +863,10 @@ function showTab(name, skipSave) {{
   document.getElementById('tabBtnOneOnOne').classList.toggle('active', name === 'oneOnOne');
   document.getElementById('tabBtnGamificacao').classList.toggle('active', name === 'gamificacao');
   if (!skipSave) localStorage.setItem('activeTab', name);
-  if (name === 'gamificacao' && typeof initGamificacao === 'function') initGamificacao();
 }}
-// Restaura a aba ativa apos o auto-refresh da pagina (nunca restaura direto na One-on-One, exige senha de novo)
+// Restaura a aba ativa apos o auto-refresh da pagina (nunca restaura direto em abas com senha, exige senha de novo)
 const _savedTab = localStorage.getItem('activeTab') || 'live';
-showTab(_savedTab === 'oneOnOne' ? 'live' : _savedTab, true);
+showTab((_savedTab === 'oneOnOne' || _savedTab === 'gamificacao') ? 'live' : _savedTab, true);
 
 // Resolvidos com 1a resposta (hoje e no mes)
 // Regra: chamado aberto e resolvido com no maximo 2 respostas (abertura + 1 retorno que ja resolveu),
@@ -1735,8 +1743,26 @@ function initOneOnOne() {{
 if (sessionStorage.getItem('oneOnOneUnlocked') === '1') initOneOnOne();
 
 // ============================================================
-// Aba Gamificacao — quantidade de metas batidas por tecnico, somando ou selecionando o mes.
+// Aba Gamificacao — protegida por senha (mesmo esquema simples do One-on-One).
 // ============================================================
+const GAMIFICACAO_PASSWORD = '3300';
+function checkGamificacaoPassword() {{
+  const val = document.getElementById('gamificacaoPassInput').value;
+  if (val === GAMIFICACAO_PASSWORD) {{
+    document.getElementById('gamificacaoGate').style.display = 'none';
+    document.getElementById('gamificacaoContent').style.display = 'block';
+    sessionStorage.setItem('gamificacaoUnlocked', '1');
+    initGamificacao();
+  }} else {{
+    document.getElementById('gamificacaoError').style.display = 'block';
+  }}
+}}
+document.getElementById('gamificacaoPassInput').addEventListener('keydown', e => {{ if (e.key === 'Enter') checkGamificacaoPassword(); }});
+if (sessionStorage.getItem('gamificacaoUnlocked') === '1') {{
+  document.getElementById('gamificacaoGate').style.display = 'none';
+  document.getElementById('gamificacaoContent').style.display = 'block';
+}}
+
 let gamificacaoInited = false;
 function initGamificacao() {{
   if (gamificacaoInited) return;
@@ -1793,6 +1819,7 @@ function initGamificacao() {{
   selMes.addEventListener('change', renderGamificacao);
   renderGamificacao();
 }}
+if (sessionStorage.getItem('gamificacaoUnlocked') === '1') initGamificacao();
 
 function tick() {{
   const el = document.getElementById('clock');
