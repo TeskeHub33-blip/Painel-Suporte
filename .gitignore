@@ -2,5 +2,7 @@
 *.log
 *.docx
 *.txt
+*.lock
 !index.html
+!ref_assets/logo_b64.txt
 dashboard_suporte.html
