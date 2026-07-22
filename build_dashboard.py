@@ -379,7 +379,6 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
   <div class="tab-panel active" id="tabLive">
     <div class="kpi-row" id="kpiRow"></div>
     <div class="kpi-row" id="kpiRow2" style="grid-template-columns: repeat(4, 1fr); margin-top: -4px;"></div>
-    <div class="kpi-row" id="kpiRow3" style="grid-template-columns: repeat(2, 1fr); margin-top: -4px;"></div>
 
     <div class="panel" id="chatsLivePanel" style="margin-top: 18px;"></div>
 
@@ -1096,7 +1095,6 @@ const contraturno = apply('contraturno');
 const cargaParada = apply('cargaParada');
 const classificacaoIncorreta = apply('classificacaoIncorreta');
 const chatsEmAtendimentoLive = apply('chatsEmAtendimento');
-const chatsAguardandoLive = apply('chatsAguardando');
 
 document.getElementById('kpiRow').innerHTML =
   kpiTile('neutral', novos.length, 'Novos (aguard. atend.)', 'novos') +
@@ -1118,10 +1116,6 @@ document.getElementById('kpiRow2').innerHTML =
   kpiTile('neutral', contraturno.length, 'Contraturno em atendimento', 'contraturno') +
   kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Carga parada / CIOT-MDFe-CTe', 'cargaParada') +
   kpiTile(classificacaoIncorreta.length === 0 ? 'ok' : 'warn', classificacaoIncorreta.length, 'Possivel classificacao incorreta', 'classificacaoIncorreta');
-
-document.getElementById('kpiRow3').innerHTML =
-  kpiTile(chatsAguardandoLive.length === 0 ? 'ok' : 'warn', chatsAguardandoLive.length, 'Chats aguardando (aprox.)', 'chatsAguardando', 'baseado em chamados de origem chat ainda sem atendimento') +
-  kpiTile('neutral', chatsEmAtendimentoLive.length, 'Chats em atendimento (aprox.)', 'chatsEmAtendimento', 'baseado em chamados de origem chat — pode nao refletir sessao ao vivo real');
 
 document.getElementById('chatsLivePanel').innerHTML = `
   <h2>💬 Chats em atendimento — quem e ha quanto tempo${{exportButtonHtml("exportLiveList(chatsEmAtendimentoLive, 'chats_em_atendimento.txt')")}}</h2>
