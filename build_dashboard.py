@@ -374,6 +374,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
     <button class="tab-btn" id="tabBtnClientes" onclick="showTab('clientes')">Clientes</button>
     <button class="tab-btn" id="tabBtnOneOnOne" onclick="showTab('oneOnOne')">One-on-One</button>
     <button class="tab-btn" id="tabBtnGamificacao" onclick="showTab('gamificacao')">Gamificacao</button>
+    <button class="tab-btn" id="tabBtnReuniaoMensal" onclick="showTab('reuniaoMensal')">Reuniao Mensal</button>
   </div>
 
   <div class="tab-panel active" id="tabLive">
@@ -446,6 +447,24 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
       </div>
       <div class="kpi-row" id="kpiGamificacao" style="grid-template-columns: repeat(2, 1fr);"></div>
       <div class="grid" id="gridGamificacao" style="margin-top: 18px;"></div>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="tabReuniaoMensal">
+    <div class="panel" id="reuniaoMensalGate" style="max-width: 420px; margin: 60px auto; text-align:center;">
+      <h2 style="justify-content:center;">🔒 Acesso restrito</h2>
+      <div class="panel-sub" style="text-align:center; margin-bottom:14px;">Esta aba e de uso da lideranca. Informe a senha para continuar.</div>
+      <input id="reuniaoMensalPassInput" type="password" class="itil-select" style="width:100%; text-align:center; margin-bottom:10px;" placeholder="Senha" />
+      <div><span class="export-btn" style="padding:8px 22px; font-size:13px;" onclick="checkReuniaoMensalPassword()">Entrar</span></div>
+      <div id="reuniaoMensalError" style="color:var(--danger); font-size:12px; margin-top:10px; display:none;">Senha incorreta.</div>
+    </div>
+    <div id="reuniaoMensalContent" style="display:none;">
+      <div class="kpi-row" id="kpiReuniaoMensalSla" style="grid-template-columns: repeat(3, 1fr);"></div>
+      <div class="panel" style="margin-top: 18px;">
+        <h2>📋 Chamados fechados por categoria (por mes)</h2>
+        <div class="panel-sub">Ultimos 3 meses — time Suporte</div>
+        <div id="tabelaReuniaoMensal"></div>
+      </div>
     </div>
   </div>
 
@@ -848,16 +867,19 @@ function showTab(name, skipSave) {{
   document.getElementById('tabClientes').classList.toggle('active', name === 'clientes');
   document.getElementById('tabOneOnOne').classList.toggle('active', name === 'oneOnOne');
   document.getElementById('tabGamificacao').classList.toggle('active', name === 'gamificacao');
+  document.getElementById('tabReuniaoMensal').classList.toggle('active', name === 'reuniaoMensal');
   document.getElementById('tabBtnLive').classList.toggle('active', name === 'live');
   document.getElementById('tabBtnHist').classList.toggle('active', name === 'hist');
   document.getElementById('tabBtnClientes').classList.toggle('active', name === 'clientes');
   document.getElementById('tabBtnOneOnOne').classList.toggle('active', name === 'oneOnOne');
   document.getElementById('tabBtnGamificacao').classList.toggle('active', name === 'gamificacao');
+  document.getElementById('tabBtnReuniaoMensal').classList.toggle('active', name === 'reuniaoMensal');
   if (!skipSave) localStorage.setItem('activeTab', name);
 }}
 // Restaura a aba ativa apos o auto-refresh da pagina (nunca restaura direto em abas com senha, exige senha de novo)
 const _savedTab = localStorage.getItem('activeTab') || 'live';
-showTab((_savedTab === 'oneOnOne' || _savedTab === 'gamificacao') ? 'live' : _savedTab, true);
+const _abasComSenha = ['oneOnOne', 'gamificacao', 'reuniaoMensal'];
+showTab(_abasComSenha.indexOf(_savedTab) !== -1 ? 'live' : _savedTab, true);
 
 // Resolvidos com 1a resposta (hoje e no mes)
 // Regra: chamado aberto e resolvido com no maximo 2 respostas (abertura + 1 retorno que ja resolveu),
@@ -1806,6 +1828,97 @@ function initGamificacao() {{
   renderGamificacao();
 }}
 if (sessionStorage.getItem('gamificacaoUnlocked') === '1') initGamificacao();
+
+// ============================================================
+// Aba Reuniao Mensal — protegida por senha. Chamados fechados por categoria/mes + SLA mensal.
+// Cobre somente os ultimos 3 meses (statusHistories/serie mensal completa nao esta disponivel
+// para meses mais antigos que isso no pipeline atual).
+// ============================================================
+const REUNIAO_MENSAL_PASSWORD = '3300';
+function checkReuniaoMensalPassword() {{
+  const val = document.getElementById('reuniaoMensalPassInput').value;
+  if (val === REUNIAO_MENSAL_PASSWORD) {{
+    document.getElementById('reuniaoMensalGate').style.display = 'none';
+    document.getElementById('reuniaoMensalContent').style.display = 'block';
+    sessionStorage.setItem('reuniaoMensalUnlocked', '1');
+    initReuniaoMensal();
+  }} else {{
+    document.getElementById('reuniaoMensalError').style.display = 'block';
+  }}
+}}
+document.getElementById('reuniaoMensalPassInput').addEventListener('keydown', e => {{ if (e.key === 'Enter') checkReuniaoMensalPassword(); }});
+if (sessionStorage.getItem('reuniaoMensalUnlocked') === '1') {{
+  document.getElementById('reuniaoMensalGate').style.display = 'none';
+  document.getElementById('reuniaoMensalContent').style.display = 'block';
+}}
+
+const REUNIAO_MENSAL_CATEGORIAS = ['Bloqueio Sistema', 'Bug', 'Dúvida', 'Melhoria', 'Erro Operacional', 'Terceiros', 'Serviços', 'GNRE Pagamento'];
+let reuniaoMensalInited = false;
+function initReuniaoMensal() {{
+  if (reuniaoMensalInited) return;
+  reuniaoMensalInited = true;
+
+  const mesesOrdenados = Object.keys(MONTH_LABELS).sort((a,b) => Number(b) - Number(a)); // offset 2,1,0 (mais antigo primeiro)
+
+  const linhas = mesesOrdenados.map(k => {{
+    const items = RESOLVED_MONTHS[k] || [];
+    const porCategoria = {{}};
+    let outros = 0;
+    items.forEach(r => {{
+      const cat = r.category || 'Sem categoria';
+      if (REUNIAO_MENSAL_CATEGORIAS.indexOf(cat) !== -1) {{
+        porCategoria[cat] = (porCategoria[cat] || 0) + 1;
+      }} else {{
+        outros++;
+      }}
+    }});
+    const total = items.length;
+    const duvidas = porCategoria['Dúvida'] || 0;
+    const pctDuvidas = total ? Math.round(duvidas / total * 100) : 0;
+    const stats = statsForMonth(items);
+    return {{ mesKey: k, label: MONTH_LABELS[k], porCategoria, outros, total, pctDuvidas, pctSla: stats.pctSla }};
+  }});
+
+  // KPIs de SLA mensal (um por mes, mais recente primeiro)
+  const linhasParaKpi = linhas.slice().reverse();
+  document.getElementById('kpiReuniaoMensalSla').innerHTML = linhasParaKpi.map(l =>
+    kpiTileStatic(l.pctSla !== null && l.pctSla < 70 ? 'danger' : 'ok', `${{l.pctSla}}%`, `SLA no prazo — ${{l.label}}`, `${{l.total}} chamados fechados no mes`)
+  ).join('');
+
+  // Tabela de categorias por mes (mesmo layout da planilha de reuniao)
+  const totalGeral = {{}};
+  REUNIAO_MENSAL_CATEGORIAS.forEach(c => totalGeral[c] = 0);
+  let totalGeralOutros = 0, totalGeralFechados = 0;
+  linhas.forEach(l => {{
+    REUNIAO_MENSAL_CATEGORIAS.forEach(c => totalGeral[c] += (l.porCategoria[c] || 0));
+    totalGeralOutros += l.outros;
+    totalGeralFechados += l.total;
+  }});
+
+  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + '<th>Outros</th><th>Total Fechados</th><th>% Duvidas</th>';
+  const bodyRows = linhas.map(l => {{
+    const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{l.porCategoria[c] || 0}}</td>`).join('');
+    return `<tr>
+      <td style="font-weight:600">${{esc(l.label)}}</td>
+      ${{cols}}
+      <td style="text-align:center">${{l.outros}}</td>
+      <td style="text-align:center; font-weight:700">${{l.total}}</td>
+      <td style="text-align:center">${{l.pctDuvidas}}%</td>
+    </tr>`;
+  }}).join('');
+  const totalRow = `<tr style="border-top:2px solid var(--panel-border); font-weight:700;">
+    <td>Total</td>
+    ${{REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{totalGeral[c]}}</td>`).join('')}}
+    <td style="text-align:center">${{totalGeralOutros}}</td>
+    <td style="text-align:center">${{totalGeralFechados}}</td>
+    <td style="text-align:center">${{totalGeralFechados ? Math.round((totalGeral['Dúvida']||0)/totalGeralFechados*100) : 0}}%</td>
+  </tr>`;
+
+  document.getElementById('tabelaReuniaoMensal').innerHTML = `
+    <table><thead><tr><th>Mes</th>${{headerCols}}</tr></thead>
+      <tbody>${{bodyRows}}${{totalRow}}</tbody></table>
+  `;
+}}
 
 function tick() {{
   const el = document.getElementById('clock');
