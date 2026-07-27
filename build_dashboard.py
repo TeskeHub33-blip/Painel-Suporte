@@ -1889,13 +1889,16 @@ function initReuniaoMensal() {{
   const totalGeral = {{}};
   REUNIAO_MENSAL_CATEGORIAS.forEach(c => totalGeral[c] = 0);
   let totalGeralOutros = 0, totalGeralFechados = 0;
+  const todosItensPeriodo = [];
   linhas.forEach(l => {{
     REUNIAO_MENSAL_CATEGORIAS.forEach(c => totalGeral[c] += (l.porCategoria[c] || 0));
     totalGeralOutros += l.outros;
     totalGeralFechados += l.total;
+    todosItensPeriodo.push(...(RESOLVED_MONTHS[l.mesKey] || []));
   }});
+  const statsGeral = statsForMonth(todosItensPeriodo);
 
-  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + '<th>Outros</th><th>Total Fechados</th><th>% Duvidas</th>';
+  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + '<th>Outros</th><th>Total Fechados</th><th>% Duvidas</th><th>% SLA no prazo</th>';
   const bodyRows = linhas.map(l => {{
     const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{l.porCategoria[c] || 0}}</td>`).join('');
     return `<tr>
@@ -1904,6 +1907,7 @@ function initReuniaoMensal() {{
       <td style="text-align:center">${{l.outros}}</td>
       <td style="text-align:center; font-weight:700">${{l.total}}</td>
       <td style="text-align:center">${{l.pctDuvidas}}%</td>
+      <td style="text-align:center">${{l.pctSla !== null ? l.pctSla+'%' : '-'}}</td>
     </tr>`;
   }}).join('');
   const totalRow = `<tr style="border-top:2px solid var(--panel-border); font-weight:700;">
@@ -1912,6 +1916,7 @@ function initReuniaoMensal() {{
     <td style="text-align:center">${{totalGeralOutros}}</td>
     <td style="text-align:center">${{totalGeralFechados}}</td>
     <td style="text-align:center">${{totalGeralFechados ? Math.round((totalGeral['Dúvida']||0)/totalGeralFechados*100) : 0}}%</td>
+    <td style="text-align:center">${{statsGeral.pctSla !== null ? statsGeral.pctSla+'%' : '-'}}</td>
   </tr>`;
 
   document.getElementById('tabelaReuniaoMensal').innerHTML = `
