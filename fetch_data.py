@@ -63,10 +63,11 @@ def main():
     now_utc = datetime.utcnow()
     today_str = now_utc.strftime("%Y-%m-%d")
 
-    # 1. Chamados abertos (com clients/organizacao e reopenedIn, para o relatorio de clientes)
+    # 1. Chamados abertos (com clients/organizacao, reopenedIn, e a 1a acao/descricao do chamado —
+    # usada para detectar "carga parada" tambem pelo texto da descricao, nao so pelo assunto)
     open_tickets = fetch({
         "$select": "id,protocol,subject,category,urgency,status,ownerTeam,createdDate,lastUpdate,tags,slaSolutionDate,reopenedIn",
-        "$expand": "owner($select=businessName),clients,statusHistories",
+        "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1)",
         "$filter": "status ne 'Fechado' and status ne 'Cancelado' and status ne 'Resolvido'",
         "$top": 500,
     })

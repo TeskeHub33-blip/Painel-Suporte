@@ -90,10 +90,12 @@ def month_offset_date(base_dt, offset):
 clean = []
 for t in raw_tickets:
     owner = t.get('owner') or {}
+    primeira_acao = (t.get('actions') or [{}])[0]
     clean.append({
         'id': t.get('id'),
         'protocol': t.get('protocol'),
         'subject': t.get('subject') or '',
+        'description': primeira_acao.get('description') or '',
         'category': t.get('category'),
         'urgency': t.get('urgency'),
         'status': t.get('status'),
@@ -142,6 +144,7 @@ def clean_month_record(t, keep_status_histories):
         'resolvedInFirstCall': bool(t.get('resolvedInFirstCall')),
         'actionCount': t.get('actionCount'),
         'ownerTeam': t.get('ownerTeam'),
+        'status': t.get('status'),
         'reopenedIn': t.get('reopenedIn'),
         'clientOrg': extract_org(t.get('clients')),
         'tags': t.get('tags') or [],
@@ -470,7 +473,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
   </div>
 
   <div class="footer-note">
-    Board gerado a partir do Movidesk (chamados nao fechados/cancelados/resolvidos) · Atualizacao agendada a cada 5 minutos · "Bouncing" = Em atendimento sem update ha 48h+ · "Contraturno" = chamados em atendimento com Alife Caetano dos Santos ou Vinicius Campestrini
+    Board gerado a partir do Movidesk (chamados nao fechados/cancelados/resolvidos) · Atualizacao agendada a cada 5 minutos · "Aging" = Em atendimento sem update ha 48h+ · "Contraturno" = chamados em atendimento com Alife Caetano dos Santos ou Vinicius Campestrini
   </div>
 </div>
 
@@ -500,7 +503,7 @@ const MOVIDESK_BASE = 'https://emiteai.movidesk.com/Ticket/Edit/';
 const TICKETS = {tickets_json};
 // Historico (resolvidos por tecnico, SLA, indicadores) considera somente o time de Suporte
 const RESOLVED_TODAY = ({resolved_json}).filter(r => r.ownerTeam === 'Suporte');
-const RESOLVED_MONTH_ALL = ({resolved_month_json}).filter(r => r.ownerTeam === 'Suporte');
+const RESOLVED_MONTH_ALL = ({resolved_month_json}).filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r));
 // RESOLVED_MONTH e chatsMes ficam mutaveis (let) porque a aba Historico pode filtrar por cliente
 // e reatribui-los em renderHistoricoMes() — assim os modais de drill-down (openModalHist*) sempre
 // refletem o filtro de cliente atualmente selecionado.
@@ -508,10 +511,13 @@ let RESOLVED_MONTH = RESOLVED_MONTH_ALL;
 let chatsMes = [];
 const RESOLVED_MONTHS_RAW = {resolved_months_json};
 const MONTH_LABELS = {month_labels_json};
-// Todos os 3 meses, ja restritos ao time de Suporte (mesmo criterio do resto do Historico)
+// Todos os 3 meses, ja restritos ao time de Suporte, sem chamados Cancelados, e sem chamados
+// reabertos INDEVIDAMENTE pelo Azure (reaberturas legitimas continuam contando normalmente).
+// Esse filtro fica aqui na origem dos dados porque TODAS as abas (Historico, Clientes, One-on-One,
+// Gamificacao, Reuniao Mensal) partem de RESOLVED_MONTHS — um unico lugar garante consistencia.
 const RESOLVED_MONTHS = {{}};
 Object.keys(RESOLVED_MONTHS_RAW).forEach(k => {{
-  RESOLVED_MONTHS[k] = RESOLVED_MONTHS_RAW[k].filter(r => r.ownerTeam === 'Suporte');
+  RESOLVED_MONTHS[k] = RESOLVED_MONTHS_RAW[k].filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r));
 }});
 const NOW = new Date("{now_iso}Z");
 const TODAY_STR = NOW.toISOString().slice(0,10);
@@ -554,7 +560,7 @@ const FILTERS = {{
   priorizados: t => t.ownerTeam === 'Suporte' && t._isPriorizado,
   contraturno: t => t.status === 'Em atendimento' && CONTRATURNO_TECNICOS.indexOf(t.ownerName) !== -1,
   naoAtualizadosHoje: t => (t.status === 'Em atendimento' || t.status === 'Aguardando Cliente') && !t._updatedToday,
-  cargaParada: t => t.status === 'Em atendimento' && CARGA_PARADA_RE.test(t.subject || ''),
+  cargaParada: t => t.status === 'Em atendimento' && (CARGA_PARADA_RE.test(t.subject || '') || CARGA_PARADA_RE.test(t.description || '')),
   classificacaoIncorreta: t => t._classificacaoIncorreta,
   chatsEmAtendimento: t => t.status === 'Em atendimento' && (t.origin === 24 || !!t.chatGroup),
   chatsAguardando: t => t.status === 'Novo' && (t.origin === 24 || !!t.chatGroup),
@@ -562,38 +568,28 @@ const FILTERS = {{
 
 // --- Priorizacao operacional ---
 // Ordem de atendimento pedida: 1) bloqueio operacional (MDFe/CIOT/GNRE/integracoes/carga travada,
-// cadeia logistica conectada) -> 2) risco fiscal (possiveis multas) -> 3) recorrencias/melhorias estruturais -> 4) demais.
+// cadeia logistica conectada) -> 2) risco fiscal (possiveis multas). Niveis 3/4 (recorrencia/outros)
+// foram removidos — chamados que nao se encaixam em 1 ou 2 nao aparecem mais nesta fila.
 const OPERACIONAL_RE = /mdf[-\s]?e|\bciot\b|\bgnre\b|integra[cç][aã]o|carga\s*(trava|parad)|travad/i;
 const FISCAL_RISCO_RE = /multa|risco fiscal|imposto|difal|\bicms\b|vencimento.*guia|guia.*vencid/i;
 
-function normalizeSubject(s) {{
-  return (s || '').toLowerCase().replace(/[^a-z0-9à-ü ]/g, '').replace(/\s+/g, ' ').trim();
-}}
-const subjectCounts = {{}};
-TICKETS.forEach(t => {{
-  const key = normalizeSubject(t.subject);
-  if (key) subjectCounts[key] = (subjectCounts[key] || 0) + 1;
-}});
-
+// Niveis 3 (Recorrencia/melhoria) e 4 (Outros) foram removidos a pedido — a fila agora so' lista
+// chamados que se encaixam em bloqueio operacional ou risco fiscal (niveis 1 e 2).
 function priorityTier(t) {{
   const s = t.subject || '';
   const isFiscal = FISCAL_RISCO_RE.test(s);
   const isOperacional = OPERACIONAL_RE.test(s);
-  const isRecorrente = subjectCounts[normalizeSubject(s)] > 1;
   if (isOperacional && !isFiscal) return 1;
   if (isFiscal) return 2;
-  if (t.category === 'Melhoria' || isRecorrente) return 3;
-  return 4;
+  return null;
 }}
 const TIER_INFO = {{
   1: {{ label: 'Bloqueio operacional', cls: 'tier-1' }},
   2: {{ label: 'Risco fiscal (multas)', cls: 'tier-2' }},
-  3: {{ label: 'Recorrencia / melhoria', cls: 'tier-3' }},
-  4: {{ label: 'Outros', cls: 'tier-4' }},
 }};
 const ATIVOS = TICKETS.filter(t => t.status !== 'Aguardando Time CS' || true); // todos os TICKETS ja sao nao-fechados
 ATIVOS.forEach(t => {{ t._tier = priorityTier(t); }});
-const filaPriorizada = ATIVOS.slice().sort((a,b) => {{
+const filaPriorizada = ATIVOS.filter(t => t._tier !== null).slice().sort((a,b) => {{
   if (a._tier !== b._tier) return a._tier - b._tier;
   return (b._hoursOpen||0) - (a._hoursOpen||0);
 }});
@@ -688,7 +684,7 @@ const LABELS = {{
   novos: 'Chamados novos',
   emAtendimento: 'Em atendimento',
   aguardandoCliente: 'Aguardando cliente',
-  bouncing: 'Bouncing — Em atendimento parado ha mais de 2 dias',
+  bouncing: 'Aging — Em atendimento parado ha mais de 2 dias',
   priorizados: 'Priorizados (WhatsApp)',
   naoAtualizadosHoje: 'Nao atualizados hoje',
   contraturno: 'Contraturno (Alife e Vinicius) — em atendimento',
@@ -792,6 +788,39 @@ function openModalHistTecnico(source, tecnico) {{
   const label = source === 'chats' ? 'Chats resolvidos' : 'Chamados resolvidos';
   renderModalHist(`${{label}} — ${{tecnico}} (mes)`, items);
 }}
+// Situacoes recorrentes no mes: agrupa os chamados resolvidos por assunto normalizado, listando os
+// que se repetiram 2+ vezes e quais clientes ("ofensores") tiveram esse mesmo problema.
+function normalizeSubjectHist(s) {{
+  return (s || '').toLowerCase().replace(/[^a-z0-9à-ü ]/g, '').replace(/\s+/g, ' ').trim();
+}}
+function chamadosRecorrentesDoMes(items) {{
+  const grupos = {{}};
+  items.forEach(r => {{
+    const key = normalizeSubjectHist(r.subject);
+    if (!key) return;
+    if (!grupos[key]) grupos[key] = {{ subject: r.subject, protocolos: new Set(), clientes: new Set(), count: 0 }};
+    grupos[key].protocolos.add(r.protocol);
+    grupos[key].clientes.add(r.clientOrg || 'Sem cliente');
+    grupos[key].count++;
+  }});
+  return Object.values(grupos).filter(g => g.count >= 2).sort((a,b) => b.count - a.count);
+}}
+function renderRecorrenciasHtml(grupos) {{
+  if (!grupos.length) return '<div class="empty-msg">Nenhuma situacao recorrente identificada no mes</div>';
+  return grupos.map((g, i) => `
+    <div class="bar-row" onclick="abrirModalRecorrencia(${{i}})">
+      <div class="bar-label" style="width:auto; flex:1;">${{esc(g.subject)}} <span style="color:var(--text3); font-size:10.5px;">(${{Array.from(g.clientes).slice(0,3).map(esc).join(', ')}}${{g.clientes.size>3 ? ' +'+(g.clientes.size-3) : ''}})</span></div>
+      <div class="bar-value">${{g.count}}</div>
+    </div>
+  `).join('');
+}}
+function abrirModalRecorrencia(idx) {{
+  const grupos = chamadosRecorrentesDoMes(RESOLVED_MONTH);
+  const g = grupos[idx];
+  if (!g) return;
+  const items = RESOLVED_MONTH.filter(r => g.protocolos.has(r.protocol));
+  renderModalHist(`Recorrencia — ${{g.subject}}`, items);
+}}
 function openModalHistCategoria(cat) {{
   const items = RESOLVED_MONTH.filter(r => (r.category || 'Sem categoria') === cat && r.slaSolutionDate && !reaberturaIndevidaAzure(r));
   renderModalHist(`SLA — ${{cat}} (mes)`, items);
@@ -849,6 +878,13 @@ function kpiTile(cls, count, label, filterName, hint) {{
 }}
 function kpiTileStatic(cls, count, label, hint) {{
   return `<div class="kpi ${{cls}}">
+    <div class="value">${{count}}</div>
+    ${{editableLabel(label)}}
+    ${{hint ? `<div class="hint">${{hint}}</div>` : ''}}
+  </div>`;
+}}
+function kpiTileClick(cls, count, label, onclickExpr, hint) {{
+  return `<div class="kpi ${{cls}}" tabindex="0" role="button" onclick="${{onclickExpr}}" onkeydown="if(event.key==='Enter'){{${{onclickExpr}}}}">
     <div class="value">${{count}}</div>
     ${{editableLabel(label)}}
     ${{hint ? `<div class="hint">${{hint}}</div>` : ''}}
@@ -931,15 +967,20 @@ function byTecnicoResolved(items) {{
 
 // --- Ciclo de vida do Bug (chamados categoria Bug, resolvidos no mes) ---
 // Baseado no historico de status (statusHistories) de cada chamado:
-// - "tempo para abrir bug": da criacao do chamado ate a 1a vez que entrou na fila de Bugs
+// - "tempo para abrir bug": tempo UTIL (permanencyTimeWorkingTime, nao tempo corrido) em fila ate o bug
+//   ser movimentado pra fila de Bugs — desconsidera qualquer periodo em 'Aguardando Cliente' antes disso.
 // - "tempo em devops": soma do tempo (todas as passagens) no status 'Aguardando Desenvolvimento - fila Bugs'
 // - "tempo em validacao": tempo em 'Em atendimento'/'Aguardando Cliente' APOS a ultima saida da fila de Bugs, ate resolver
-const bugsMes = RESOLVED_MONTH.filter(r => r.category === 'Bug' && (r.statusHistories||[]).length);
-const bugMetrics = bugsMes.map(r => {{
+// bugsMes/bugMetrics ficam mutaveis (let) porque a aba Historico pode filtrar por cliente e reatribui-los
+// em renderHistoricoMes() — assim o clique nos cards (abrirModalBugMetrica) sempre reflete o filtro atual.
+let bugsMes = RESOLVED_MONTH.filter(r => r.category === 'Bug' && (r.statusHistories||[]).length);
+function calcularCicloVidaBug(r) {{
   const hist = r.statusHistories.map(h => ({{ ...h, _d: parseDt(h.changedDate) }})).sort((a,b) => a._d - b._d);
-  const created = parseDt(r.createdDate);
   const firstBugQueue = hist.find(h => h.status === BUG_QUEUE_STATUS);
-  const tempoParaAbrirH = (firstBugQueue && created) ? (firstBugQueue._d - created) / 3600000 : null;
+  const idxBugQueue = firstBugQueue ? hist.indexOf(firstBugQueue) : -1;
+  const tempoParaAbrirH = idxBugQueue > 0
+    ? hist.slice(0, idxBugQueue).filter(h => h.status !== 'Aguardando Cliente').reduce((s,h) => s + (h.permanencyTimeWorkingTime || 0), 0) / 3600
+    : (idxBugQueue === 0 ? 0 : null);
 
   const devopsSeconds = hist.filter(h => h.status === BUG_QUEUE_STATUS)
     .reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0);
@@ -961,7 +1002,8 @@ const bugMetrics = bugsMes.map(r => {{
     validacaoH: validacaoSeconds !== null ? validacaoSeconds / 3600 : null,
     passouPorDevops: lastBugQueueIdx >= 0,
   }};
-}});
+}}
+let bugMetrics = bugsMes.map(calcularCicloVidaBug);
 function avg(arr) {{ return arr.length ? arr.reduce((s,v)=>s+v,0) / arr.length : null; }}
 
 // Meta = 10% de melhoria ao mes sobre a media dos ultimos 3 meses.
@@ -1144,11 +1186,18 @@ const cargaParada = apply('cargaParada');
 const classificacaoIncorreta = apply('classificacaoIncorreta');
 const chatsEmAtendimentoLive = apply('chatsEmAtendimento');
 
+// Cor por faixa de volume: verde ate okAte, amarelo ate warnAte, vermelho acima disso.
+function corPorFaixa(valor, okAte, warnAte) {{
+  if (valor <= okAte) return 'ok';
+  if (valor <= warnAte) return 'warn';
+  return 'danger';
+}}
+
 document.getElementById('kpiRow').innerHTML =
   kpiTile('neutral', novos.length, 'Novos (aguard. atend.)', 'novos') +
-  kpiTile('neutral', emAtendimento.length, 'Em atendimento', 'emAtendimento') +
-  kpiTile(aguardandoCliente.length === 0 ? 'ok' : 'warn', aguardandoCliente.length, 'Aguardando cliente', 'aguardandoCliente') +
-  kpiTile(bouncing.length === 0 ? 'ok' : 'danger', bouncing.length, 'Bouncing (Em atend. &gt;2 dias)', 'bouncing');
+  kpiTile(corPorFaixa(emAtendimento.length, 19, 50), emAtendimento.length, 'Em atendimento', 'emAtendimento') +
+  kpiTile(corPorFaixa(aguardandoCliente.length, 19, 50), aguardandoCliente.length, 'Aguardando cliente', 'aguardandoCliente') +
+  kpiTile(corPorFaixa(bouncing.length, 0, 10), bouncing.length, 'Aging (Em atend. &gt;2 dias)', 'bouncing');
 
 // Tempo medio de resolucao: priorizados vs nao-priorizados (chamados resolvidos no mes, time Suporte)
 const resolvidosComTag = RESOLVED_MONTH_ALL.map(r => ({{
@@ -1180,21 +1229,43 @@ document.getElementById('kpiRowHist').innerHTML =
   kpiTileHist(bateMeta(pctSlaNoPrazoGeral, metaPctSla, false) ? 'ok' : 'danger', `${{pctSlaNoPrazoGeral}}%`, 'SLA atendido no prazo (mes)', 'slaNoPrazoMes', `${{totalSlaNoPrazo}} de ${{totalComSla}} resolvidos com SLA definido · media 3m: ${{media3Meses.pctSla}}% · meta (+10%/mes): ${{metaPctSla !== null ? Math.round(metaPctSla)+'%' : '-'}} (clique p/ ver os fora do prazo)`) +
   kpiTileHist('neutral', chatsMes.length, 'Chats resolvidos (mes)', 'chatsMes', `${{pctChatsMes}}% do total resolvido no mes · ${{chatsHoje.length}} hoje · media 3m: ${{media3Meses.chats}}`);
 
-const mttrMesAtual = statsPorMes3.find(s => s.key === '0').mttrH;
-const metaMttr = metaMelhoria10(media3Meses.mttrH, true);
+// MTTR desconsidera chamados de categoria 'Melhoria' (que costumam ficar muito tempo em aberto e
+// distorcem a media) — os demais filtros (Suporte, sem Cancelado, sem reabertura indevida do Azure)
+// ja vem de RESOLVED_MONTH/RESOLVED_MONTHS na origem.
+function mttrSemMelhoria(items) {{
+  const comTempo = items.filter(r => r.category !== 'Melhoria' && r.createdDate && r.resolvedIn).map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000);
+  return avg(comTempo);
+}}
+const mttrMesAtual = mttrSemMelhoria(RESOLVED_MONTH);
+const mttrPorMes3 = Object.keys(MONTH_LABELS).map(k => ({{ key: k, label: MONTH_LABELS[k], mttrH: mttrSemMelhoria(RESOLVED_MONTHS[k]) }}));
+const mttrMedia3Meses = avg(mttrPorMes3.filter(s => s.mttrH !== null).map(s => s.mttrH));
+const comparativoMttrSemMelhoria = mttrPorMes3.map(s => `${{s.label.split('/')[0].slice(0,3)}}: ${{s.mttrH !== null ? fmtH(s.mttrH) : '-'}}`).join(' · ');
+const metaMttr = metaMelhoria10(mttrMedia3Meses, true);
 const mttrBateMeta = bateMeta(mttrMesAtual, metaMttr, true);
 document.getElementById('kpiRowHistMttr').innerHTML =
-  kpiTileStatic(mttrBateMeta === null ? 'warn' : (mttrBateMeta ? 'ok' : 'danger'), mttrMesAtual !== null ? fmtH(mttrMesAtual) : '-', 'Tempo medio de atendimento (MTTR)', `mes corrente: ${{MONTH_LABELS['0']}} · media 3m: ${{media3Meses.mttrH !== null ? fmtH(media3Meses.mttrH) : '-'}} · meta (10% menor que a media 3m): ${{metaMttr !== null ? fmtH(metaMttr) : '-'}} · ultimos 3 meses: ${{comparativoMttr}}`);
+  kpiTileStatic(mttrBateMeta === null ? 'warn' : (mttrBateMeta ? 'ok' : 'danger'), mttrMesAtual !== null ? fmtH(mttrMesAtual) : '-', 'Tempo medio de atendimento (MTTR)', `mes corrente: ${{MONTH_LABELS['0']}} · exclui Melhoria · media 3m: ${{mttrMedia3Meses !== null ? fmtH(mttrMedia3Meses) : '-'}} · meta (10% menor que a media 3m): ${{metaMttr !== null ? fmtH(metaMttr) : '-'}} · ultimos 3 meses: ${{comparativoMttrSemMelhoria}}`);
 
-function renderBugMetricsRow(elId, m) {{
+// Abre a lista de chamados (bugs) por tras de um dos 3 cards de ciclo de vida do bug.
+function abrirModalBugMetrica(urgency, metrica) {{
+  const subset = bugMetrics.filter(b => b.urgency === urgency);
+  let elegiveis;
+  if (metrica === 'abrir') elegiveis = subset.filter(b => b.tempoParaAbrirH !== null);
+  else if (metrica === 'devops') elegiveis = subset.filter(b => b.passouPorDevops);
+  else elegiveis = subset.filter(b => b.validacaoH !== null);
+  const protocolos = new Set(elegiveis.map(b => b.protocol));
+  const items = bugsMes.filter(r => protocolos.has(r.protocol));
+  const NOMES = {{ abrir: 'Tempo para abrir bug', devops: 'Tempo em devops', validacao: 'Tempo em validacao' }};
+  renderModalHist(`Bugs — ${{NOMES[metrica]}} (${{urgency}})`, items);
+}}
+function renderBugMetricsRow(elId, m, urgency) {{
   // Sem meta/limite definido para estes 3 tempos — cor neutra (nao ha "bom"/"ruim" estabelecido ainda).
   document.getElementById(elId).innerHTML =
-    kpiTileStatic('neutral', m.mediaParaAbrirBug!==null ? fmtH(m.mediaParaAbrirBug) : '-', 'Tempo medio para abrir bug', `media sobre ${{m.comAbertura.length}} de ${{m.total}} bugs`) +
-    kpiTileStatic('neutral', m.mediaDevops!==null ? fmtH(m.mediaDevops) : '-', 'Tempo medio aberto no devops', `media sobre ${{m.comDevops.length}} bugs que passaram pela fila`) +
-    kpiTileStatic('neutral', m.mediaValidacao!==null ? fmtH(m.mediaValidacao) : '-', 'Tempo medio em validacao', `media sobre ${{m.comValidacao.length}} bugs pos-devops`);
+    kpiTileClick('neutral', m.mediaParaAbrirBug!==null ? fmtH(m.mediaParaAbrirBug) : '-', 'Tempo medio para abrir bug', `abrirModalBugMetrica(${{jsStr(urgency)}}, 'abrir')`, `media sobre ${{m.comAbertura.length}} de ${{m.total}} bugs · tempo util em fila, exclui Aguardando Cliente`) +
+    kpiTileClick('neutral', m.mediaDevops!==null ? fmtH(m.mediaDevops) : '-', 'Tempo medio aberto no devops', `abrirModalBugMetrica(${{jsStr(urgency)}}, 'devops')`, `media sobre ${{m.comDevops.length}} bugs que passaram pela fila`) +
+    kpiTileClick('neutral', m.mediaValidacao!==null ? fmtH(m.mediaValidacao) : '-', 'Tempo medio em validacao', `abrirModalBugMetrica(${{jsStr(urgency)}}, 'validacao')`, `media sobre ${{m.comValidacao.length}} bugs pos-devops`);
 }}
-renderBugMetricsRow('kpiRowHistBugMedia', bugMetricsMedia);
-renderBugMetricsRow('kpiRowHistBugAlta', bugMetricsAlta);
+renderBugMetricsRow('kpiRowHistBugMedia', bugMetricsMedia, 'Média');
+renderBugMetricsRow('kpiRowHistBugAlta', bugMetricsAlta, 'Alta');
 
 document.getElementById('priorityPanel').innerHTML = `
   <h2>🎯 Fila de priorizacao operacional${{exportButtonHtml("exportLiveList(filaPriorizada, 'fila_priorizacao.txt')")}}</h2>
@@ -1228,7 +1299,7 @@ document.getElementById('barsNaoAtualizados').innerHTML = barsHtml(byTecnico(nao
 
 document.getElementById('gridBottom').innerHTML = `
   <div class="panel">
-    <h2>🔴 Bouncing — em atendimento parado ha mais de 2 dias${{exportButtonHtml("exportLiveList(bouncing, 'bouncing.txt')")}}</h2>
+    <h2>🔴 Aging — em atendimento parado ha mais de 2 dias${{exportButtonHtml("exportLiveList(bouncing, 'bouncing.txt')")}}</h2>
     <div class="panel-sub">${{bouncing.length}} chamados Em atendimento sem nenhuma atualizacao ha 48h+</div>
     <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Parado ha</th></tr></thead>
       <tbody>${{tableHtml(bouncing.sort((a,b)=>(b._hoursSinceUpdate||0)-(a._hoursSinceUpdate||0)), 'update', 14)}}</tbody></table>
@@ -1297,6 +1368,11 @@ document.getElementById('gridHist').innerHTML = `
         <div class="bar-value">${{count}}</div>
       </div>`;
     }}).join('') : '<div class="empty-msg">Nenhum chamado resolvido no mes</div>'}}</div>
+  </div>
+  <div class="panel" style="flex-basis:100%; width:100%;">
+    <h2>🔁 Situacoes recorrentes no mes${{exportButtonHtml("exportHistListToExcel(RESOLVED_MONTH.filter(r=>chamadosRecorrentesDoMes(RESOLVED_MONTH).some(g=>g.protocolos.has(r.protocol))), 'recorrencias_mes.txt')")}}</h2>
+    <div class="panel-sub">Assuntos que se repetiram 2 ou mais vezes entre os chamados resolvidos no mes, com os clientes ofensores</div>
+    <div>${{renderRecorrenciasHtml(chamadosRecorrentesDoMes(RESOLVED_MONTH))}}</div>
   </div>
 `;
 
@@ -1444,29 +1520,10 @@ function renderHistoricoMes(clienteFiltro) {{
   const chatsPorTecnico = byTecnicoResolved(chatsMes);
   const resolvidosPorTecnicoMes = byTecnicoResolved(RESOLVED_MONTH);
 
-  const bugsMes = RESOLVED_MONTH.filter(r => r.category === 'Bug' && (r.statusHistories||[]).length);
-  const bugMetricsF = bugsMes.map(r => {{
-    const hist = r.statusHistories.map(h => ({{ ...h, _d: parseDt(h.changedDate) }})).sort((a,b) => a._d - b._d);
-    const created = parseDt(r.createdDate);
-    const firstBugQueue = hist.find(h => h.status === BUG_QUEUE_STATUS);
-    const tempoParaAbrirH = (firstBugQueue && created) ? (firstBugQueue._d - created) / 3600000 : null;
-    const devopsSeconds = hist.filter(h => h.status === BUG_QUEUE_STATUS).reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0);
-    let lastBugQueueIdx = -1;
-    hist.forEach((h,i) => {{ if (h.status === BUG_QUEUE_STATUS) lastBugQueueIdx = i; }});
-    const validacaoSeconds = lastBugQueueIdx >= 0
-      ? hist.slice(lastBugQueueIdx+1).filter(h => h.status === 'Em atendimento' || h.status === 'Aguardando Cliente').reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0)
-      : null;
-    return {{ protocol: r.protocol, urgency: r.urgency, ownerName: r.ownerName, tempoParaAbrirH, devopsH: devopsSeconds/3600, validacaoH: validacaoSeconds !== null ? validacaoSeconds/3600 : null, passouPorDevops: lastBugQueueIdx >= 0 }};
-  }});
-  function bugMetricsForF(urgency) {{
-    const subset = urgency ? bugMetricsF.filter(b => b.urgency === urgency) : bugMetricsF;
-    const comAbertura = subset.filter(b => b.tempoParaAbrirH !== null).map(b => b.tempoParaAbrirH);
-    const comDevops = subset.filter(b => b.passouPorDevops).map(b => b.devopsH);
-    const comValidacao = subset.filter(b => b.validacaoH !== null).map(b => b.validacaoH);
-    return {{ total: subset.length, comAbertura, comDevops, comValidacao, mediaParaAbrirBug: avg(comAbertura), mediaDevops: avg(comDevops), mediaValidacao: avg(comValidacao) }};
-  }}
-  const bugMetricsMediaF = bugMetricsForF('Média');
-  const bugMetricsAltaF = bugMetricsForF('Alta');
+  bugsMes = RESOLVED_MONTH.filter(r => r.category === 'Bug' && (r.statusHistories||[]).length);
+  bugMetrics = bugsMes.map(calcularCicloVidaBug);
+  const bugMetricsMediaF = bugMetricsFor('Média');
+  const bugMetricsAltaF = bugMetricsFor('Alta');
 
   function statsForMonthCliente(items) {{
     return statsForMonth(clienteFiltro ? items.filter(r => r.clientOrg === clienteFiltro) : items);
@@ -1490,14 +1547,21 @@ function renderHistoricoMes(clienteFiltro) {{
     kpiTileHist(bateMeta(pctSlaNoPrazoGeral, metaPctSlaF, false) ? 'ok' : 'danger', `${{pctSlaNoPrazoGeral}}%`, 'SLA atendido no prazo (mes)', 'slaNoPrazoMes', `${{totalSlaNoPrazo}} de ${{totalComSla}} resolvidos com SLA definido · media 3m: ${{media3MesesF.pctSla}}% · meta (+10%/mes): ${{metaPctSlaF !== null ? Math.round(metaPctSlaF)+'%' : '-'}}${{filtroSufixo}} (clique p/ ver os fora do prazo)`) +
     kpiTileHist('neutral', chatsMes.length, 'Chats resolvidos (mes)', 'chatsMes', `${{pctChatsMes}}% do total resolvido no mes · ${{chatsHoje.length}} hoje · media 3m: ${{media3MesesF.chats}}${{filtroSufixo}}`);
 
-  const mttrMesAtualF = statsPorMes3F.find(s => s.key === '0').mttrH;
-  const metaMttrF = metaMelhoria10(media3MesesF.mttrH, true);
+  function mttrSemMelhoriaCliente(items) {{
+    const filtrados = clienteFiltro ? items.filter(r => r.clientOrg === clienteFiltro) : items;
+    return mttrSemMelhoria(filtrados);
+  }}
+  const mttrMesAtualF = mttrSemMelhoriaCliente(RESOLVED_MONTH);
+  const mttrPorMes3F = Object.keys(MONTH_LABELS).map(k => ({{ key: k, label: MONTH_LABELS[k], mttrH: mttrSemMelhoriaCliente(RESOLVED_MONTHS[k]) }}));
+  const mttrMedia3MesesF = avg(mttrPorMes3F.filter(s => s.mttrH !== null).map(s => s.mttrH));
+  const comparativoMttrSemMelhoriaF = mttrPorMes3F.map(s => `${{s.label.split('/')[0].slice(0,3)}}: ${{s.mttrH !== null ? fmtH(s.mttrH) : '-'}}`).join(' · ');
+  const metaMttrF = metaMelhoria10(mttrMedia3MesesF, true);
   const mttrBateMetaF = bateMeta(mttrMesAtualF, metaMttrF, true);
   document.getElementById('kpiRowHistMttr').innerHTML =
-    kpiTileStatic(mttrBateMetaF === null ? 'warn' : (mttrBateMetaF ? 'ok' : 'danger'), mttrMesAtualF !== null ? fmtH(mttrMesAtualF) : '-', 'Tempo medio de atendimento (MTTR)', `mes corrente: ${{MONTH_LABELS['0']}} · media 3m: ${{media3MesesF.mttrH !== null ? fmtH(media3MesesF.mttrH) : '-'}} · meta (10% menor que a media 3m): ${{metaMttrF !== null ? fmtH(metaMttrF) : '-'}} · ultimos 3 meses: ${{comparativoMttrF}}${{filtroSufixo}}`);
+    kpiTileStatic(mttrBateMetaF === null ? 'warn' : (mttrBateMetaF ? 'ok' : 'danger'), mttrMesAtualF !== null ? fmtH(mttrMesAtualF) : '-', 'Tempo medio de atendimento (MTTR)', `mes corrente: ${{MONTH_LABELS['0']}} · exclui Melhoria · media 3m: ${{mttrMedia3MesesF !== null ? fmtH(mttrMedia3MesesF) : '-'}} · meta (10% menor que a media 3m): ${{metaMttrF !== null ? fmtH(metaMttrF) : '-'}} · ultimos 3 meses: ${{comparativoMttrSemMelhoriaF}}${{filtroSufixo}}`);
 
-  renderBugMetricsRow('kpiRowHistBugMedia', bugMetricsMediaF);
-  renderBugMetricsRow('kpiRowHistBugAlta', bugMetricsAltaF);
+  renderBugMetricsRow('kpiRowHistBugMedia', bugMetricsMediaF, 'Média');
+  renderBugMetricsRow('kpiRowHistBugAlta', bugMetricsAltaF, 'Alta');
 
   document.getElementById('gridHist').innerHTML = `
     <div class="panel">
@@ -1543,6 +1607,11 @@ function renderHistoricoMes(clienteFiltro) {{
           <div class="bar-value">${{count}}</div>
         </div>`;
       }}).join('') : '<div class="empty-msg">Nenhum chamado resolvido no mes</div>'}}</div>
+    </div>
+    <div class="panel" style="flex-basis:100%; width:100%;">
+      <h2>🔁 Situacoes recorrentes no mes${{exportButtonHtml("exportHistListToExcel(RESOLVED_MONTH.filter(r=>chamadosRecorrentesDoMes(RESOLVED_MONTH).some(g=>g.protocolos.has(r.protocol))), 'recorrencias_mes.txt')")}}</h2>
+      <div class="panel-sub">Assuntos que se repetiram 2 ou mais vezes entre os chamados resolvidos no mes${{filtroSufixo}}, com os clientes ofensores</div>
+      <div>${{renderRecorrenciasHtml(chamadosRecorrentesDoMes(RESOLVED_MONTH))}}</div>
     </div>
   `;
   enhancePanels('gridHist', true);
@@ -1734,11 +1803,11 @@ function initOneOnOne() {{
 
     document.getElementById('kpiOneOnOne2').innerHTML =
       kpiTileStatic(ind.pctSla !== null && ind.pctSla < 70 ? 'danger' : 'ok', ind.pctSla !== null ? `${{ind.pctSla}}%` : '-', 'SLA no prazo', `media time ${{tier}}: ${{equipe.pctSla !== null ? Math.round(equipe.pctSla)+'%' : '-'}} · media 3m: ${{m3.pctSla !== null ? Math.round(m3.pctSla)+'%' : '-'}}`) +
-      kpiTileStatic(bouncingTecnico > 0 ? 'danger' : 'ok', bouncingTecnico, 'Bouncing atual (>2 dias)', 'situacao ao vivo, nao e do periodo') +
-      kpiTileStatic(naoAtualizadosTecnico > 0 ? 'warn' : 'ok', naoAtualizadosTecnico, 'Nao atualizados hoje', 'situacao ao vivo, nao e do periodo');
+      kpiTileStatic(corPorFaixa(bouncingTecnico, 0, 5), bouncingTecnico, 'Aging atual (>2 dias)', 'situacao ao vivo, nao e do periodo') +
+      kpiTileStatic(corPorFaixa(naoAtualizadosTecnico, 0, 5), naoAtualizadosTecnico, 'Nao atualizados hoje', 'situacao ao vivo, nao e do periodo');
 
     // Metas — melhoria de 10% ao mes sobre a media dos ultimos 3 meses do proprio tecnico.
-    // Bouncing/nao-atualizados sao indicadores ao vivo (sem serie mensal), entao continuam com meta fixa de zero.
+    // Aging/nao-atualizados sao indicadores ao vivo (sem serie mensal), entao continuam com meta fixa de zero.
     const metaMttrTec = metaMelhoria10(m3.mttrH, true);
     const metaSlaTec = metaMelhoria10(m3.pctSla, false);
     const metaPrimeiraTec = metaMelhoria10(m3.pctPrimeira, false);
@@ -1746,7 +1815,7 @@ function initOneOnOne() {{
     const slaBateMetaTec = bateMeta(ind.pctSla, metaSlaTec, false);
     const primeiraBateMetaTec = bateMeta(pctPrimeira, metaPrimeiraTec, false);
     document.getElementById('kpiOneOnOneMetas').innerHTML =
-      kpiTileStatic(bouncingTecnico === 0 ? 'ok' : 'danger', bouncingTecnico === 0 ? 'Meta batida' : 'Meta nao batida', 'Meta: 0 bouncing', `atual: ${{bouncingTecnico}} chamado(s) em bouncing`) +
+      kpiTileStatic(bouncingTecnico === 0 ? 'ok' : 'danger', bouncingTecnico === 0 ? 'Meta batida' : 'Meta nao batida', 'Meta: 0 aging', `atual: ${{bouncingTecnico}} chamado(s) em aging`) +
       kpiTileStatic(naoAtualizadosTecnico === 0 ? 'ok' : 'warn', naoAtualizadosTecnico === 0 ? 'Meta batida' : 'Meta nao batida', 'Meta: 0 nao atualizados', `atual: ${{naoAtualizadosTecnico}} chamado(s) sem atualizar hoje`) +
       kpiTileStatic(mttrBateMetaTec === null ? 'warn' : (mttrBateMetaTec ? 'ok' : 'danger'), mttrBateMetaTec === null ? '-' : (mttrBateMetaTec ? 'Meta batida' : 'Meta nao batida'), 'Meta MTTR (10% melhor que media 3m)', `atual: ${{ind.mttrH !== null ? fmtH(ind.mttrH) : '-'}} · meta: ${{metaMttrTec !== null ? fmtH(metaMttrTec) : '-'}}`) +
       kpiTileStatic(slaBateMetaTec === null ? 'warn' : (slaBateMetaTec ? 'ok' : 'danger'), slaBateMetaTec === null ? '-' : (slaBateMetaTec ? 'Meta batida' : 'Meta nao batida'), 'Meta SLA (+10%/mes s/ media 3m)', `atual: ${{ind.pctSla !== null ? ind.pctSla+'%' : '-'}} · meta: ${{metaSlaTec !== null ? Math.round(metaSlaTec)+'%' : '-'}}`) +
