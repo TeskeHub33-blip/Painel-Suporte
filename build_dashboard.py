@@ -1094,13 +1094,20 @@ const CATEGORIAS_TECNICAS_N2 = ['Bug', 'Melhoria', 'Serviços'];
 function cicloVidaTecnicaPorItem(r) {{
   if (!(r.statusHistories || []).length) return null;
   const hist = r.statusHistories.map(h => ({{ ...h, _d: parseDt(h.changedDate) }})).sort((a,b) => a._d - b._d);
+  const firstBugQueue = hist.find(h => h.status === BUG_QUEUE_STATUS);
+  const idxBugQueue = firstBugQueue ? hist.indexOf(firstBugQueue) : -1;
+  // Tempo que o N1 fica com o chamado ate acionar o N2 (movimentar pra fila de Bugs) — mesma logica
+  // do "tempo para abrir bug": tempo UTIL (exclui Aguardando Cliente), nao tempo corrido.
+  const tempoAteAcionarN2H = idxBugQueue > 0
+    ? hist.slice(0, idxBugQueue).filter(h => h.status !== 'Aguardando Cliente').reduce((s,h) => s + (h.permanencyTimeWorkingTime || 0), 0) / 3600
+    : (idxBugQueue === 0 ? 0 : null);
   const devopsSeconds = hist.filter(h => h.status === BUG_QUEUE_STATUS).reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0);
   let lastIdx = -1;
   hist.forEach((h,i) => {{ if (h.status === BUG_QUEUE_STATUS) lastIdx = i; }});
   const validacaoSeconds = lastIdx >= 0
     ? hist.slice(lastIdx+1).filter(h => h.status === 'Em atendimento' || h.status === 'Aguardando Cliente').reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0)
     : null;
-  return {{ passouPorTask: lastIdx >= 0, devopsH: devopsSeconds / 3600, validacaoH: validacaoSeconds !== null ? validacaoSeconds / 3600 : null }};
+  return {{ passouPorTask: lastIdx >= 0, tempoAteAcionarN2H, devopsH: devopsSeconds / 3600, validacaoH: validacaoSeconds !== null ? validacaoSeconds / 3600 : null }};
 }}
 // So' disponivel para o mes corrente (offset 0) — statusHistories nao e mantido nos meses anteriores.
 function computeN2Metrics(tecnico, periodoKey) {{
@@ -1114,6 +1121,22 @@ function computeN2Metrics(tecnico, periodoKey) {{
     pctTask: total ? Math.round(comTask / total * 100) : null,
     devopsMedio: avg(ciclos.filter(c => c.passouPorTask).map(c => c.devopsH)),
     validacaoMedio: avg(ciclos.filter(c => c.validacaoH !== null).map(c => c.validacaoH)),
+  }};
+}}
+// Indicador N1: tempo desde que o N1 assumiu o chamado ate acionar o N2 (movimentar pra fila de Bugs).
+// APROXIMACAO: nao existe no Movidesk um evento de "troca de responsavel" — usamos o momento em que
+// o chamado entra na fila de Bugs como proxy do "repasse para o N2", igual a metrica de ciclo de vida
+// do bug ja usada na aba Historico. So' disponivel para o mes corrente (statusHistories).
+function computeN1Metrics(tecnico, periodoKey) {{
+  if (periodoKey !== '0') return null;
+  const items = (RESOLVED_MONTHS['0'] || []).filter(r => r.ownerName === tecnico && CATEGORIAS_TECNICAS_N2.indexOf(r.category) !== -1);
+  const ciclos = items.map(cicloVidaTecnicaPorItem).filter(Boolean);
+  const total = items.length;
+  const acionaramN2 = ciclos.filter(c => c.passouPorTask);
+  return {{
+    total,
+    qtdAcionouN2: acionaramN2.length,
+    tempoAteAcionarN2Medio: avg(acionaramN2.filter(c => c.tempoAteAcionarN2H !== null).map(c => c.tempoAteAcionarN2H)),
   }};
 }}
 
@@ -1836,8 +1859,19 @@ function initOneOnOne() {{
           kpiTileStatic('neutral', '-', 'Indicadores tecnicos (N2)', 'so disponivel para o mes corrente (o historico de status nao e mantido para meses anteriores)');
       }}
     }} else {{
-      document.getElementById('kpiOneOnOneN2').style.display = 'none';
-      document.getElementById('kpiOneOnOneN2').innerHTML = '';
+      // Indicador N1 — tempo desde que assumiu o chamado ate acionar o N2 (proxy: entrada na fila de
+      // Bugs), nos mesmos chamados tecnicos (Bug/Melhoria/Servicos). So' calculavel no mes corrente.
+      const n1 = computeN1Metrics(tecnico, periodoKey);
+      document.getElementById('kpiOneOnOneN2').style.display = '';
+      if (n1) {{
+        document.getElementById('kpiOneOnOneN2').innerHTML =
+          kpiTileStatic('neutral', n1.total, 'Chamados tecnicos (Bug/Melhoria/Servicos)', 'atribuidos ao tecnico no mes corrente') +
+          kpiTileStatic('neutral', n1.qtdAcionouN2, 'Acionaram o N2 (fila de Bugs)', `de ${{n1.total}} chamados tecnicos`) +
+          kpiTileStatic('warn', n1.tempoAteAcionarN2Medio !== null ? fmtH(n1.tempoAteAcionarN2Medio) : '-', 'Tempo medio ate acionar N2', 'tempo util (exclui Aguardando Cliente) desde a atribuicao ate entrar na fila de Bugs');
+      }} else {{
+        document.getElementById('kpiOneOnOneN2').innerHTML =
+          kpiTileStatic('neutral', '-', 'Indicadores tecnicos (N1)', 'so disponivel para o mes corrente (o historico de status nao e mantido para meses anteriores)');
+      }}
     }}
   }}
   selPeriodo.addEventListener('change', () => {{ refreshTecnicoOptions(); renderOneOnOne(); }});
