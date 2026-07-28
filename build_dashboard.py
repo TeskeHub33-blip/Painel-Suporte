@@ -459,7 +459,8 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
       <div id="reuniaoMensalError" style="color:var(--danger); font-size:12px; margin-top:10px; display:none;">Senha incorreta.</div>
     </div>
     <div id="reuniaoMensalContent" style="display:none;">
-      <div class="kpi-row" id="kpiReuniaoMensalSla" style="grid-template-columns: repeat(3, 1fr);"></div>
+      <div class="kpi-row" id="kpiReuniaoMensalMeta" style="grid-template-columns: repeat(1, 1fr);"></div>
+      <div class="kpi-row" id="kpiReuniaoMensalSla" style="grid-template-columns: repeat(3, 1fr); margin-top:-4px;"></div>
       <div class="panel" style="margin-top: 18px;">
         <h2>📋 Chamados fechados por categoria (por mes)</h2>
         <div class="panel-sub">Ultimos 3 meses — time Suporte</div>
@@ -1860,6 +1861,13 @@ if (sessionStorage.getItem('reuniaoMensalUnlocked') === '1') {{
 }}
 
 const REUNIAO_MENSAL_CATEGORIAS = ['Bloqueio Sistema', 'Bug', 'Dúvida', 'Melhoria', 'Erro Operacional', 'Terceiros', 'Serviços', 'GNRE Pagamento'];
+// Meta de duvidas: baseline historico de 61% (media de ~7 meses, 3535 chamados de duvida) — a meta
+// e reduzir 20% desse percentual (nao 20 pontos percentuais, e sim 20% de reducao relativa ao baseline).
+const META_DUVIDAS_BASELINE_PCT = 61;
+const META_DUVIDAS_REDUCAO_ALVO_PCT = 20;
+function reducaoDuvidas(pctAtual) {{
+  return Math.round((META_DUVIDAS_BASELINE_PCT - pctAtual) / META_DUVIDAS_BASELINE_PCT * 100);
+}}
 let reuniaoMensalInited = false;
 function initReuniaoMensal() {{
   if (reuniaoMensalInited) return;
@@ -1883,7 +1891,7 @@ function initReuniaoMensal() {{
     const duvidas = porCategoria['Dúvida'] || 0;
     const pctDuvidas = total ? Math.round(duvidas / total * 100) : 0;
     const stats = statsForMonth(items);
-    return {{ mesKey: k, label: MONTH_LABELS[k], porCategoria, outros, total, pctDuvidas, pctSla: stats.pctSla }};
+    return {{ mesKey: k, label: MONTH_LABELS[k], porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla }};
   }});
 
   // KPIs de SLA mensal (um por mes, mais recente primeiro)
@@ -1905,24 +1913,40 @@ function initReuniaoMensal() {{
   }});
   const statsGeral = statsForMonth(todosItensPeriodo);
 
-  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + '<th>Outros</th><th>Total Fechados</th><th>% Duvidas</th><th>% SLA no prazo</th>';
+  // Meta de duvidas: baseline 61% (media historica de ~7 meses/3535 chamados), meta = reduzir 20% desse valor
+  const pctDuvidasTotalKpi = totalGeralFechados ? Math.round((totalGeral['Dúvida']||0)/totalGeralFechados*100) : 0;
+  const reducaoTotalKpi = reducaoDuvidas(pctDuvidasTotalKpi);
+  const metaBatida = reducaoTotalKpi >= META_DUVIDAS_REDUCAO_ALVO_PCT;
+  document.getElementById('kpiReuniaoMensalMeta').innerHTML =
+    kpiTileStatic(metaBatida ? 'ok' : (reducaoTotalKpi >= 0 ? 'warn' : 'danger'),
+      `${{reducaoTotalKpi > 0 ? '-' : (reducaoTotalKpi < 0 ? '+' : '')}}${{Math.abs(reducaoTotalKpi)}}%`,
+      'Meta de duvidas: reduzir 20% (baseline 61%)',
+      `% duvidas atual no periodo: ${{pctDuvidasTotalKpi}}% · baseline: ${{META_DUVIDAS_BASELINE_PCT}}% · ${{metaBatida ? 'meta batida' : 'meta nao batida'}}`);
+
+  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + '<th>Outros</th><th>Total Fechados</th><th>% Duvidas</th><th>Reducao vs meta (baseline 61%)</th><th>% SLA no prazo</th>';
   const bodyRows = linhas.map(l => {{
     const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{l.porCategoria[c] || 0}}</td>`).join('');
+    const corReducao = l.reducaoDuvidas >= META_DUVIDAS_REDUCAO_ALVO_PCT ? 'var(--ok)' : (l.reducaoDuvidas >= 0 ? 'var(--warn)' : 'var(--danger)');
     return `<tr>
       <td style="font-weight:600">${{esc(l.label)}}</td>
       ${{cols}}
       <td style="text-align:center">${{l.outros}}</td>
       <td style="text-align:center; font-weight:700">${{l.total}}</td>
       <td style="text-align:center">${{l.pctDuvidas}}%</td>
+      <td style="text-align:center; font-weight:700; color:${{corReducao}}">${{l.reducaoDuvidas > 0 ? '-' : (l.reducaoDuvidas < 0 ? '+' : '')}}${{Math.abs(l.reducaoDuvidas)}}%</td>
       <td style="text-align:center">${{l.pctSla !== null ? l.pctSla+'%' : '-'}}</td>
     </tr>`;
   }}).join('');
+  const pctDuvidasTotal = pctDuvidasTotalKpi;
+  const reducaoTotal = reducaoTotalKpi;
+  const corReducaoTotal = reducaoTotal >= META_DUVIDAS_REDUCAO_ALVO_PCT ? 'var(--ok)' : (reducaoTotal >= 0 ? 'var(--warn)' : 'var(--danger)');
   const totalRow = `<tr style="border-top:2px solid var(--panel-border); font-weight:700;">
     <td>Total</td>
     ${{REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{totalGeral[c]}}</td>`).join('')}}
     <td style="text-align:center">${{totalGeralOutros}}</td>
     <td style="text-align:center">${{totalGeralFechados}}</td>
-    <td style="text-align:center">${{totalGeralFechados ? Math.round((totalGeral['Dúvida']||0)/totalGeralFechados*100) : 0}}%</td>
+    <td style="text-align:center">${{pctDuvidasTotal}}%</td>
+    <td style="text-align:center; color:${{corReducaoTotal}}">${{reducaoTotal > 0 ? '-' : (reducaoTotal < 0 ? '+' : '')}}${{Math.abs(reducaoTotal)}}%</td>
     <td style="text-align:center">${{statsGeral.pctSla !== null ? statsGeral.pctSla+'%' : '-'}}</td>
   </tr>`;
 
