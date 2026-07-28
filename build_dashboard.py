@@ -793,14 +793,14 @@ function openModalHistTecnico(source, tecnico) {{
   renderModalHist(`${{label}} — ${{tecnico}} (mes)`, items);
 }}
 function openModalHistCategoria(cat) {{
-  const items = RESOLVED_MONTH.filter(r => (r.category || 'Sem categoria') === cat && r.slaSolutionDate && !r.reopenedIn);
+  const items = RESOLVED_MONTH.filter(r => (r.category || 'Sem categoria') === cat && r.slaSolutionDate && !reaberturaIndevidaAzure(r));
   renderModalHist(`SLA — ${{cat}} (mes)`, items);
 }}
 function openModalHistSimple(kind) {{
   if (kind === 'primeiraRespostaHoje') renderModalHist('Resolvidos c/ 1a resposta (hoje)', RESOLVED_TODAY.filter(isPrimeiraResposta));
   else if (kind === 'primeiraRespostaMes') renderModalHist('Resolvidos c/ 1a resposta (mes)', RESOLVED_MONTH.filter(isPrimeiraResposta));
   else if (kind === 'slaNoPrazoMes') renderModalHist('Fora do SLA (mes) — todas categorias', RESOLVED_MONTH.filter(r => {{
-    if (!r.slaSolutionDate || r.reopenedIn) return false;
+    if (!r.slaSolutionDate || reaberturaIndevidaAzure(r)) return false;
     const resolvedIn = parseDt(r.resolvedIn); const slaDate = parseDt(r.slaSolutionDate);
     return resolvedIn && slaDate && resolvedIn > slaDate;
   }}));
@@ -901,10 +901,9 @@ const pctPrimeiraRespostaMes = resolvidosMes ? Math.round(resolvidosPrimeiraResp
 
 // SLA por categoria — somente chamados RESOLVIDOS dentro do mes corrente,
 // comparando data de resolucao contra o prazo de SLA (slaSolutionDate).
-// Chamados reabertos (reopenedIn) ficam de fora — a data de resolucao final ja nao reflete
-// o prazo original, entao so conta quando fechado corretamente, sem reabertura indevida.
+// So exclui os reabertos INDEVIDAMENTE (integracao do Azure) — reaberturas legitimas contam normalmente.
 const slaPorCategoria = {{}};
-RESOLVED_MONTH.filter(r => r.slaSolutionDate && !r.reopenedIn).forEach(r => {{
+RESOLVED_MONTH.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r)).forEach(r => {{
   const cat = r.category || 'Sem categoria';
   if (!slaPorCategoria[cat]) slaPorCategoria[cat] = {{ total: 0, noPrazo: 0 }};
   slaPorCategoria[cat].total++;
@@ -978,6 +977,28 @@ function bateMeta(atual, meta, menorEhMelhor) {{
   return menorEhMelhor ? atual <= meta : atual >= meta;
 }}
 
+// Detecta reabertura INDEVIDA (integracao com o Azure reabrindo o chamado logo apos ele ja ter sido
+// marcado Resolvido/Fechado, sem uma pessoa envolvida) — diferente de uma reabertura legitima feita
+// por cliente/agente. So' e possivel verificar quando o historico de status esta disponivel (mes
+// corrente); nos demais meses nao ha como confirmar, entao o chamado e tratado como reabertura
+// legitima por padrao (conta normalmente no SLA), a favor de nao penalizar avaliacoes antigas por engano.
+// Heuristica: reaberto em menos de 60 minutos apos a transicao anterior ter sido Resolvido/Fechado —
+// tempo curto demais para ser uma acao manual de cliente/agente.
+function reaberturaIndevidaAzure(r) {{
+  if (!r.reopenedIn || !(r.statusHistories || []).length) return false;
+  const hist = r.statusHistories.map(h => ({{ ...h, _d: parseDt(h.changedDate) }})).sort((a,b) => a._d - b._d);
+  const reopenDt = parseDt(r.reopenedIn);
+  let idxReopen = -1;
+  for (let i = 0; i < hist.length; i++) {{
+    if (hist[i]._d && Math.abs(hist[i]._d - reopenDt) < 5000) {{ idxReopen = i; break; }}
+  }}
+  if (idxReopen <= 0) return false;
+  const anterior = hist[idxReopen - 1];
+  if (anterior.status !== 'Resolvido' && anterior.status !== 'Fechado') return false;
+  const gapMin = (reopenDt - anterior._d) / 60000;
+  return gapMin < 60;
+}}
+
 // Media dos ultimos 3 meses (usada como referencia em varios cards) — so' cobre campos
 // disponiveis em todos os meses (statusHistories so' fica no mes corrente, entao metricas
 // de ciclo de vida do Bug nao entram aqui).
@@ -985,10 +1006,9 @@ function statsForMonth(items) {{
   const total = items.length;
   const primeira = items.filter(isPrimeiraResposta).length;
   const pctPrimeira = total ? Math.round(primeira / total * 100) : 0;
-  // Chamados reabertos (reopenedIn) tem a data de resolucao final comparada contra um prazo de SLA
-  // que ja nao faz mais sentido (o chamado foi fechado, reaberto indevidamente e fechado de novo bem
-  // depois) — por isso ficam fora do calculo de SLA. So conta quando fechado corretamente (sem reabertura).
-  const comSla = items.filter(r => r.slaSolutionDate && !r.reopenedIn);
+  // So exclui do SLA os chamados reabertos INDEVIDAMENTE (pela integracao do Azure, apos ja estarem
+  // Resolvido/Fechado) — reaberturas legitimas (cliente/agente) continuam contando normalmente.
+  const comSla = items.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r));
   const noPrazo = comSla.filter(r => parseDt(r.resolvedIn) <= parseDt(r.slaSolutionDate)).length;
   const pctSla = comSla.length ? Math.round(noPrazo / comSla.length * 100) : 0;
   const chats = items.filter(r => r.origin === 24).length;
@@ -1235,7 +1255,7 @@ document.getElementById('gridBottom').innerHTML = `
 
 document.getElementById('gridHist').innerHTML = `
   <div class="panel">
-    <h2>⏱️ SLA por categoria (resolvidos no mes)${{exportButtonHtml("exportHistListToExcel(RESOLVED_MONTH.filter(r=>r.slaSolutionDate && !r.reopenedIn), 'sla_por_categoria.txt')")}}</h2>
+    <h2>⏱️ SLA por categoria (resolvidos no mes)${{exportButtonHtml("exportHistListToExcel(RESOLVED_MONTH.filter(r=>r.slaSolutionDate && !reaberturaIndevidaAzure(r)), 'sla_por_categoria.txt')")}}</h2>
     <div class="panel-sub">${{totalSlaNoPrazo}} de ${{totalComSla}} chamados resolvidos este mes com SLA definido foram resolvidos dentro do prazo (${{pctSlaNoPrazoGeral}}%)</div>
     <div class="sla-cat-row head"><div>Categoria</div><div>Resolvidos</div><div>No prazo</div><div>% no prazo</div></div>
     ${{slaCategoriasOrdenadas.map(([cat, v]) => {{
@@ -1406,7 +1426,7 @@ function renderHistoricoMes(clienteFiltro) {{
   const pctPrimeiraRespostaMes = resolvidosMes ? Math.round(resolvidosPrimeiraRespostaMes / resolvidosMes * 100) : 0;
 
   const slaPorCategoria = {{}};
-  RESOLVED_MONTH.filter(r => r.slaSolutionDate && !r.reopenedIn).forEach(r => {{
+  RESOLVED_MONTH.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r)).forEach(r => {{
     const cat = r.category || 'Sem categoria';
     if (!slaPorCategoria[cat]) slaPorCategoria[cat] = {{ total: 0, noPrazo: 0 }};
     slaPorCategoria[cat].total++;
@@ -1481,7 +1501,7 @@ function renderHistoricoMes(clienteFiltro) {{
 
   document.getElementById('gridHist').innerHTML = `
     <div class="panel">
-      <h2>⏱️ SLA por categoria (resolvidos no mes)${{exportButtonHtml("exportHistListToExcel(RESOLVED_MONTH.filter(r=>r.slaSolutionDate && !r.reopenedIn), 'sla_por_categoria.txt')")}}</h2>
+      <h2>⏱️ SLA por categoria (resolvidos no mes)${{exportButtonHtml("exportHistListToExcel(RESOLVED_MONTH.filter(r=>r.slaSolutionDate && !reaberturaIndevidaAzure(r)), 'sla_por_categoria.txt')")}}</h2>
       <div class="panel-sub">${{totalSlaNoPrazo}} de ${{totalComSla}} chamados resolvidos este mes com SLA definido foram resolvidos dentro do prazo (${{pctSlaNoPrazoGeral}}%)${{filtroSufixo}}</div>
       <div class="sla-cat-row head"><div>Categoria</div><div>Resolvidos</div><div>No prazo</div><div>% no prazo</div></div>
       ${{slaCategoriasOrdenadas.map(([cat, v]) => {{
@@ -1544,9 +1564,9 @@ function computeIndicadores(items) {{
   const total = items.length;
   const comTempo = items.filter(r => r.createdDate && r.resolvedIn).map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000);
   const mttrH = avg(comTempo);
-  // Chamados reabertos ficam fora do SLA (a data de resolucao final nao reflete mais o prazo original) —
-  // so conta quando fechado corretamente, sem reabertura indevida.
-  const comSla = items.filter(r => r.slaSolutionDate && !r.reopenedIn);
+  // So exclui do SLA os chamados reabertos INDEVIDAMENTE (integracao do Azure, apos ja estarem
+  // Resolvido/Fechado) — reaberturas legitimas (cliente/agente) continuam contando normalmente.
+  const comSla = items.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r));
   const noPrazo = comSla.filter(r => parseDt(r.resolvedIn) <= parseDt(r.slaSolutionDate)).length;
   const pctSla = comSla.length ? Math.round(noPrazo / comSla.length * 100) : null;
   const reincidencia = items.filter(r => r.reopenedIn).length;
