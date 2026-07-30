@@ -2288,6 +2288,7 @@ const FLOW_MAIN_STAGES = [
   {{ key: 'n1', title: 'N1', sub: 'Analise inicial — apoio do N3 (Multiplicador) quando necessario' }},
   {{ key: 'n2', title: 'N2', sub: "Repasse tecnico ('Em atendimento - N2')" }},
   {{ key: 'task_dev', title: 'Task / Desenvolvimento', sub: "Fila de dev ('Aguardando Desenvolvimento')" }},
+  {{ key: 'validacao_impedimento', title: 'Em Validacao / Impedimento', sub: "Log do Azure DevOps: task em validacao ou com impedimento" }},
   {{ key: 'validacao_cliente', title: 'Validacao do cliente', sub: "Chamado 'Resolvido', aguardando confirmacao" }},
   {{ key: 'encerrado', title: 'Encerramento', sub: 'Manual (cliente confirma) ou automatico em 3 dias' }},
 ];
@@ -2295,7 +2296,7 @@ const FLOW_SECONDARY_STAGE = {{ key: 'pendente_usuario', title: 'Pendente Usuari
 // Cor de cada etapa — usada tanto nas etiquetas quanto na barra de linha do tempo (gantt) do chamado.
 const STAGE_COLORS = {{
   entrada: '#82829C', triagem: '#F87171', n1: '#ED6DA2', n2: '#F59E0B',
-  task_dev: '#8B5CF6', pendente_usuario: '#38BDF8', validacao_cliente: '#34D399', encerrado: '#6B7280',
+  task_dev: '#8B5CF6', validacao_impedimento: '#FB923C', pendente_usuario: '#38BDF8', validacao_cliente: '#34D399', encerrado: '#6B7280',
 }};
 // Mapeamento aproximado do codigo "origin" do Movidesk pra um rotulo legivel — o unico 100% confirmado
 // no codigo e o 24 (Chat, ja usado nas metricas de chat existentes); os demais seguem a documentacao
@@ -2324,11 +2325,13 @@ function stageOfStatus(status) {{
 // Proximas opcoes possiveis a partir de cada ETAPA (nao status) — usadas tanto no texto quanto nos
 // pills clicaveis (cada pill abre a lista de chamados que estao hoje na etapa de destino).
 const FLOW_NEXT_OPTIONS = {{
+  entrada: [['triagem', 'Triagem inicial']],
   triagem: [['n1', 'N1 (Suporte)']],
   n1: [['n2', 'N2'], ['pendente_usuario', 'Pendente Usuario'], ['validacao_cliente', 'Resolver (Validacao cliente)']],
   pendente_usuario: [['n1', 'Volta ao N1'], ['encerrado', 'Encerramento automatico (3 dias)']],
   n2: [['n1', 'Resolve e devolve ao N1'], ['task_dev', 'Abre task (Desenvolvimento)']],
-  task_dev: [['n2', 'Volta ao N2 (validacao/impedimento)']],
+  task_dev: [['validacao_impedimento', 'Em validacao / impedimento']],
+  validacao_impedimento: [['pendente_usuario', 'Validado — Pendente Usuario'], ['task_dev', 'Retorna pro Desenvolvimento']],
   validacao_cliente: [['encerrado', 'Encerramento']],
   encerrado: [],
 }};
@@ -2373,6 +2376,77 @@ function avgTimeInStatus(items, status) {{
   return avg(durs);
 }}
 
+// --- Log do Azure DevOps embutido em notas do chamado ---
+// O Movidesk nao tem status proprio de "task em validacao/impedimento" — essa informacao chega como
+// uma nota automatica no formato "Usuario: X \n Status: Validacao/Impedimento/... \n Comentario: Y".
+// getFullActions busca o historico completo de acoes do chamado, priorizando o que ja vier junto no
+// proprio registro (campo actions) e caindo pro GOV_ACTIONS_BY_ID/ACTIONS_BY_ID (que ja cobrem, hoje,
+// todo chamado aberto + os tecnicos resolvidos no mes corrente).
+const DEVOPS_STATUS_RE = /Usuario:\s*([^\n\r]+?)\s*[\r\n]+\s*Status:\s*([^\n\r]+?)\s*[\r\n]+\s*Comentario:\s*([\s\S]*?)\s*$/;
+function getFullActions(ticket) {{
+  if (ticket.actions && ticket.actions.length) return ticket.actions;
+  const key = String(ticket.id);
+  return GOV_ACTIONS_BY_ID[key] || ACTIONS_BY_ID[key] || [];
+}}
+// Retorna todos os logs de status do devops (ordenados do mais antigo pro mais recente).
+function devopsStatusLogs(ticket) {{
+  return getFullActions(ticket)
+    .map(a => {{
+      const m = DEVOPS_STATUS_RE.exec((a.description || '').trim());
+      return m ? {{ usuario: m[1].trim(), status: m[2].trim(), comentario: m[3].trim(), createdDate: a.createdDate }} : null;
+    }})
+    .filter(Boolean)
+    .sort((a,b) => new Date(a.createdDate) - new Date(b.createdDate));
+}}
+// O log mais recente = o status atual da task no board do devops.
+function devopsSubStatusForTicket(ticket) {{
+  const logs = devopsStatusLogs(ticket);
+  return logs.length ? logs[logs.length - 1] : null;
+}}
+// Etapa efetiva do chamado: igual ao stageOfStatus, mas com override quando o log do devops indicar
+// que a task esta em validacao ou impedimento (o status do Movidesk pode continuar "Em atendimento").
+function effectiveStageForTicket(ticket) {{
+  const sub = devopsSubStatusForTicket(ticket);
+  if (sub) {{
+    const s = sub.status.toLowerCase();
+    if (s.indexOf('valida') !== -1 || s.indexOf('impediment') !== -1) return 'validacao_impedimento';
+  }}
+  return stageOfStatus(ticket.status);
+}}
+// Ha quanto tempo a task esta no sub-status atual do devops (desde o log mais recente ate agora).
+function devopsSubStatusDurationH(sub) {{
+  if (!sub) return null;
+  return (new Date() - new Date(sub.createdDate)) / 3600000;
+}}
+
+// Tempo que o usuario ficou na conversa de chat antes de virar chamado — aproximado, parseando os
+// horarios (DD/MM/AAAA HH:MM) que aparecem no texto da transcricao (1a acao do chamado). So funciona
+// pra chamados abertos (RESOLVED_MONTHS nao guarda a descricao da 1a acao).
+function tempoNoChatH(ticket) {{
+  if (ticket.origin !== 24 && !ticket.chatGroup) return null;
+  const desc = ticket.description || '';
+  const matches = Array.from(desc.matchAll(/(\d{{2}})\/(\d{{2}})\/(\d{{4}}) (\d{{2}}):(\d{{2}})/g));
+  if (matches.length < 2) return null;
+  const times = matches.map(m => new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5]).getTime());
+  return (Math.max(...times) - Math.min(...times)) / 3600000;
+}}
+
+// Tempo REAL (nao media) que ESTE chamado passou em cada etapa, somando o historico de status dele —
+// usado quando um chamado especifico e carregado, pra anotar cada card com o tempo daquele chamado.
+function stageDurationsForTicket(hist) {{
+  const totals = {{}};
+  const now = new Date();
+  hist.forEach((h,i) => {{
+    const key = stageOfStatus(h.status);
+    let durH;
+    if (h.permanencyTimeFullTime) durH = h.permanencyTimeFullTime / 3600;
+    else if (i === hist.length - 1) durH = (now - new Date(h.changedDate)) / 3600000;
+    else durH = 0;
+    totals[key] = (totals[key] || 0) + durH;
+  }});
+  return totals;
+}}
+
 // --- Filtros de mes/cliente para os dados GERAIS da aba (times/contagens agregadas) ---
 const selMesFluxo = document.getElementById('selMesFluxo');
 const selClienteFluxo = document.getElementById('selClienteFluxo');
@@ -2396,16 +2470,30 @@ function refreshClienteFluxoOptions() {{
   if (clientesList.indexOf(prev) !== -1) selClienteFluxo.value = prev;
 }}
 
-// Contagem AO VIVO (respeitando o filtro de cliente) de chamados abertos em cada etapa — clicar abre a lista.
+// Contagem AO VIVO (respeitando o filtro de cliente) de chamados abertos em cada etapa — clicar abre a
+// lista. Usa a etapa EFETIVA (considera o log do devops), entao um chamado com task em impedimento
+// aparece em "Em Validacao / Impedimento", nao em "Task / Desenvolvimento".
 function ticketsNaEtapa(key) {{
-  return fluxoOpenScope().filter(t => stageOfStatus(t.status) === key);
+  return fluxoOpenScope().filter(t => effectiveStageForTicket(t) === key);
 }}
 function abrirModalEtapaFluxo(key, titulo) {{
   renderModal(`${{titulo}} — chamados abertos agora`, ticketsNaEtapa(key), 'open');
 }}
-const FLOW_CLICKAVEL = ['n1', 'n2', 'task_dev', 'pendente_usuario', 'validacao_cliente', 'encerrado', 'triagem'];
+const FLOW_CLICKAVEL = ['n1', 'n2', 'task_dev', 'validacao_impedimento', 'pendente_usuario', 'validacao_cliente', 'encerrado', 'triagem'];
 
-function renderFlowDiagram(currentKey, stageTimes) {{
+// Pills com as proximas etapas possiveis a partir de uma etapa — aparecem em TODOS os cards, com ou
+// sem chamado selecionado (sem chamado: mostra o fluxo generico; com chamado: os pills continuam
+// clicaveis abrindo a lista de chamados na etapa de destino).
+function flowNextPillsHtml(key) {{
+  const opcoes = FLOW_NEXT_OPTIONS[key] || [];
+  if (!opcoes.length) return '';
+  return `<div class="flow-next-options">${{opcoes.map(([k, label]) => `<span class="flow-next-pill" onclick="event.stopPropagation(); abrirModalEtapaFluxo(${{jsStr(k)}}, ${{jsStr(label)}})">→ ${{esc(label)}}</span>`).join('')}}</div>`;
+}}
+
+// extras[key] = HTML adicional pra anexar dentro do card daquela etapa (ex.: canal de entrada + tempo
+// no chat, ou o comentario do devops) — so preenchido quando ha um chamado especifico carregado.
+function renderFlowDiagram(currentKey, stageTimes, extras, perTicket) {{
+  extras = extras || {{}};
   const boxHtml = (s) => {{
     const clickavel = FLOW_CLICKAVEL.indexOf(s.key) !== -1;
     const tempo = stageTimes[s.key];
@@ -2414,8 +2502,10 @@ function renderFlowDiagram(currentKey, stageTimes) {{
     return `<div class="flow-box ${{s.key === currentKey ? 'flow-current' : ''}} ${{clickavel ? 'flow-clickable' : ''}}" id="flowbox-${{s.key}}" ${{attrs}} style="border-top: 3px solid ${{STAGE_COLORS[s.key]}};">
       <div class="flow-title">${{esc(s.title)}}</div>
       <div class="flow-sub">${{esc(s.sub)}}</div>
-      ${{tempo !== undefined && tempo !== null ? `<div class="flow-time">⏱ media: ${{fmtH(tempo)}}</div>` : ''}}
+      ${{tempo !== undefined && tempo !== null ? `<div class="flow-time">⏱ ${{perTicket ? 'tempo' : 'media'}}: ${{fmtH(tempo)}}</div>` : ''}}
       ${{qtd !== null ? `<div class="flow-count">${{qtd}} agora</div>` : ''}}
+      ${{extras[s.key] || ''}}
+      ${{flowNextPillsHtml(s.key)}}
     </div>`;
   }};
   const mainRow = FLOW_MAIN_STAGES.map((s,i) => boxHtml(s) + (i < FLOW_MAIN_STAGES.length - 1 ? '<div class="flow-arrow">→</div>' : '')).join('');
@@ -2443,11 +2533,16 @@ function renderFluxoAgregado() {{
   const openScope = fluxoOpenScope();
   const comHistorico = resolvedScope.filter(r => (r.statusHistories || []).length);
   const ciclos = comHistorico.map(calcularCicloAtendimentoTecnico).filter(Boolean);
+  // Tempo em Validacao/Impedimento: como isso vem de um log de nota (nao um status do Movidesk),
+  // calcula em cima dos chamados ABERTOS que estao la agora — "ha quanto tempo esta parado nessa
+  // etapa", que e a pergunta que importa no dia a dia (diferente de uma media historica de meses).
+  const emValidacaoImpedimento = openScope.filter(t => effectiveStageForTicket(t) === 'validacao_impedimento');
   const stageTimes = {{
     triagem: avgTimeInStatus(comHistorico, 'Novo'),
     n1: avg(ciclos.filter(c => c.tempoRepasseN1H !== null).map(c => c.tempoRepasseN1H)),
     n2: avg(ciclos.filter(c => c.tempoAberturaTaskH !== null).map(c => c.tempoAberturaTaskH)),
     task_dev: avg(ciclos.filter(c => c.devopsH !== null).map(c => c.devopsH)),
+    validacao_impedimento: avg(emValidacaoImpedimento.map(t => devopsSubStatusDurationH(devopsSubStatusForTicket(t))).filter(v => v !== null)),
     pendente_usuario: avgTimeInStatus(comHistorico, 'Aguardando Cliente'),
     encerrado: avgTimeInStatus(comHistorico, 'Resolvido'),
   }};
@@ -2523,18 +2618,32 @@ function carregarChamadoFluxo(ticket) {{
   if (!ticket) return;
   document.getElementById('fluxoErro').style.display = 'none';
   document.getElementById('fluxoLimparBusca').style.display = '';
-  const curStage = stageOfStatus(ticket.status);
-  const stageTimesVazio = {{}};
-  renderFlowDiagram(curStage, stageTimesVazio);
-  const catTag = ['Bug','Melhoria','Serviços'].indexOf(ticket.category) !== -1 ? `<span class="flow-stage-tag">${{esc(ticket.category)}}</span>` : '';
+  const curStage = effectiveStageForTicket(ticket);
+  const devopsSub = devopsSubStatusForTicket(ticket);
   const hist = (ticket.statusHistories || []).slice().sort((a,b) => new Date(a.changedDate) - new Date(b.changedDate));
+
+  // Anota cada card com o tempo REAL deste chamado naquela etapa (nao a media geral).
+  const stageTimes = hist.length ? stageDurationsForTicket(hist) : {{}};
+  if (devopsSub && (curStage === 'validacao_impedimento')) {{
+    stageTimes.validacao_impedimento = devopsSubStatusDurationH(devopsSub);
+  }}
+
+  // Extras por card: Entrada mostra o canal e o tempo no chat; Em Validacao/Impedimento mostra o log
+  // do devops (quem, quando, comentario).
+  const extras = {{}};
+  const chatH = tempoNoChatH(ticket);
+  extras.entrada = `<div class="flow-sub" style="margin-top:6px;"><b>${{esc(originLabel(ticket.origin))}}</b>${{chatH !== null ? ` · ${{fmtH(chatH)}} no chat` : ''}}</div>`;
+  if (devopsSub) {{
+    extras.validacao_impedimento = `<div class="flow-sub" style="margin-top:6px;"><b>${{esc(devopsSub.status)}}</b> — ${{esc(devopsSub.usuario)}} em ${{new Date(devopsSub.createdDate).toLocaleString('pt-BR')}}${{devopsSub.comentario ? `<br>"${{esc(devopsSub.comentario)}}"` : ''}}</div>`;
+  }}
+
+  renderFlowDiagram(curStage, stageTimes, extras, true);
+  const catTag = ['Bug','Melhoria','Serviços'].indexOf(ticket.category) !== -1 ? `<span class="flow-stage-tag">${{esc(ticket.category)}}</span>` : '';
   const tempoNaEtapaAtualH = hist.length ? (new Date() - new Date(hist[hist.length-1].changedDate)) / 3600000 : null;
   document.getElementById('fluxoChamadoInfo').innerHTML =
     `Chamado <b>${{ticketLink(ticket.id, ticket.protocol)}}</b> — ${{esc(ticket.subject || '')}} · categoria: ${{esc(ticket.category || '-')}}${{catTag}} · status atual: <b>${{esc(ticket.status || '-')}}</b>${{tempoNaEtapaAtualH !== null ? ` (ha ${{fmtH(tempoNaEtapaAtualH)}} nesta etapa)` : ''}} · tecnico: ${{esc(ticket.ownerName || '-')}} · cliente: ${{esc(ticket.clientOrg || '-')}} · entrada: ${{esc(originLabel(ticket.origin))}}`;
 
-  const opcoes = FLOW_NEXT_OPTIONS[curStage] || [];
-  const pillsHtml = opcoes.length ? `<div class="flow-next-options">${{opcoes.map(([key, label]) => `<span class="flow-next-pill" onclick="abrirModalEtapaFluxo(${{jsStr(key)}}, ${{jsStr(label)}})">→ ${{esc(label)}}</span>`).join('')}}</div>` : '';
-  document.getElementById('fluxoProximosPassos').innerHTML = `<div class="flow-next-steps">${{proximosPassosTexto(ticket.status)}}</div>${{pillsHtml}}`;
+  document.getElementById('fluxoProximosPassos').innerHTML = `<div class="flow-next-steps">${{proximosPassosTexto(ticket.status)}}</div>${{flowNextPillsHtml(curStage)}}`;
 
   if (hist.length) {{
     renderFluxoGantt(hist);
