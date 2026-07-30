@@ -474,7 +474,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
     <div class="kpi-row" id="kpiRow"></div>
     <div class="kpi-row" id="kpiRow2" style="grid-template-columns: repeat(4, 1fr); margin-top: -4px;"></div>
 
-    <div class="panel" id="chatsLivePanel" style="margin-top: 18px;"></div>
+    <div class="grid" id="gridChatsLive" style="grid-template-columns: 1fr 1fr; margin-top: 18px;"></div>
 
     <div class="grid" id="gridTop"></div>
 
@@ -1393,6 +1393,7 @@ const contraturno = apply('contraturno');
 const cargaParada = apply('cargaParada');
 const classificacaoIncorreta = apply('classificacaoIncorreta');
 const chatsEmAtendimentoLive = apply('chatsEmAtendimento');
+const chatsAguardandoLive = apply('chatsAguardando');
 
 // Cor por faixa de volume: verde ate okAte, amarelo ate warnAte, vermelho acima disso.
 function corPorFaixa(valor, okAte, warnAte) {{
@@ -1422,12 +1423,20 @@ document.getElementById('kpiRow2').innerHTML =
   kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Carga parada / CIOT-MDFe-CTe', 'cargaParada') +
   kpiTile(classificacaoIncorreta.length === 0 ? 'ok' : 'warn', classificacaoIncorreta.length, 'Possivel classificacao incorreta', 'classificacaoIncorreta');
 
-document.getElementById('chatsLivePanel').innerHTML = `
-  <h2>💬 Chats em atendimento — quem e ha quanto tempo${{exportButtonHtml("exportLiveList(chatsEmAtendimentoLive, 'chats_em_atendimento.txt')")}}</h2>
-  <div class="panel-sub">${{chatsEmAtendimentoLive.length}} chamados de origem chat em atendimento agora (tempo desde a ultima atualizacao) · aproximacao — ver observacao abaixo</div>
-  <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Tempo</th></tr></thead>
-    <tbody>${{tableHtml(chatsEmAtendimentoLive.sort((a,b)=>(b._hoursSinceUpdate||0)-(a._hoursSinceUpdate||0)), 'update', 20)}}</tbody></table>
-  <div class="empty-msg" style="margin-top:8px; line-height:1.5;">
+document.getElementById('gridChatsLive').innerHTML = `
+  <div class="panel">
+    <h2>💬 Chats em atendimento — quem e ha quanto tempo${{exportButtonHtml("exportLiveList(chatsEmAtendimentoLive, 'chats_em_atendimento.txt')")}}</h2>
+    <div class="panel-sub">${{chatsEmAtendimentoLive.length}} chamados de origem chat em atendimento agora (tempo desde a ultima atualizacao) · aproximacao — ver observacao abaixo</div>
+    <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Tempo</th></tr></thead>
+      <tbody>${{tableHtml(chatsEmAtendimentoLive.sort((a,b)=>(b._hoursSinceUpdate||0)-(a._hoursSinceUpdate||0)), 'update', 20)}}</tbody></table>
+  </div>
+  <div class="panel">
+    <h2>💬 Chats aguardando atendimento${{exportButtonHtml("exportLiveList(chatsAguardandoLive, 'chats_aguardando.txt')")}}</h2>
+    <div class="panel-sub">${{chatsAguardandoLive.length}} chamados de origem chat aguardando (status Novo) · aproximacao — ver observacao abaixo</div>
+    <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Tempo</th></tr></thead>
+      <tbody>${{tableHtml(chatsAguardandoLive.sort((a,b)=>(b._hoursOpen||0)-(a._hoursOpen||0)), 'open', 20)}}</tbody></table>
+  </div>
+  <div class="empty-msg" style="grid-column: 1 / -1; margin-top:4px; line-height:1.5;">
     ⚠️ Limitacao conhecida: conversas de chat/WhatsApp (bot NLU) so aparecem aqui depois de viradas em chamado formal no Movidesk — enquanto o bot ainda esta atendendo, a conversa nao existe como Ticket na API e por isso nao aparece nesta lista, mesmo estando ativa na tela "Conversas em atendimento" do Movidesk. Alem disso, os dados sao atualizados a cada ~15 minutos — um chat que ja foi resolvido pode continuar aparecendo aqui como "em atendimento" ate o proximo ciclo.
   </div>
 `;
@@ -1697,7 +1706,7 @@ enhancePanels('gridTop', true);
 enhancePanels('gridBottom', true);
 enhancePanels('gridHist', true);
 enhancePanels('priorityPanel', false);
-enhancePanels('chatsLivePanel', false);
+enhancePanels('gridChatsLive', true);
 
 // ============================================================
 // Filtro de cliente na aba Historico — reaproveita a mesma logica de calculo dos cards
