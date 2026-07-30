@@ -317,18 +317,19 @@ body, .dashboard-root {{
 .panel.resizable {{ position: relative; overflow: auto; min-width: 260px; min-height: 180px; }}
 .panel.resizable.dragging {{ opacity: 0.35; }}
 .panel.resizable.drag-over {{ box-shadow: 0 0 0 2px var(--pink); }}
-/* 3 alcas de redimensionar: canto (largura+altura), lateral direita (so largura) e embaixo (so
-   altura) — assim da pra aumentar so pro lado, so pra baixo, ou os dois juntos pelo canto. */
+/* 5 alcas de redimensionar, cada uma numa borda/canto separado: direita, esquerda, embaixo, em cima,
+   e o canto (direita+embaixo juntos) — assim da pra crescer pro lado que quiser, sem misturar. */
 .resize-handle-corner {{
   position: absolute; right: 0; bottom: 0; width: 18px; height: 18px;
-  cursor: nwse-resize; z-index: 6;
+  z-index: 6;
   background: linear-gradient(135deg, transparent 0 50%, var(--panel-border) 50% 60%, transparent 60% 70%, var(--panel-border) 70% 80%, transparent 80%);
 }}
 .resize-handle-corner:hover {{ background: linear-gradient(135deg, transparent 0 50%, var(--pink) 50% 60%, transparent 60% 70%, var(--pink) 70% 80%, transparent 80%); }}
-.resize-handle-r {{ position: absolute; top: 6px; right: 0; bottom: 20px; width: 7px; cursor: ew-resize; z-index: 6; border-radius: 4px; }}
-.resize-handle-r:hover {{ background: var(--pink-dim); }}
-.resize-handle-b {{ position: absolute; left: 6px; right: 20px; bottom: 0; height: 7px; cursor: ns-resize; z-index: 6; border-radius: 4px; }}
-.resize-handle-b:hover {{ background: var(--pink-dim); }}
+.resize-handle-r {{ position: absolute; top: 6px; right: 0; bottom: 20px; width: 7px; z-index: 6; border-radius: 4px; }}
+.resize-handle-l {{ position: absolute; top: 6px; left: 0; bottom: 20px; width: 7px; z-index: 6; border-radius: 4px; }}
+.resize-handle-b {{ position: absolute; left: 6px; right: 20px; bottom: 0; height: 7px; z-index: 6; border-radius: 4px; }}
+.resize-handle-t {{ position: absolute; left: 6px; right: 20px; top: 0; height: 7px; z-index: 6; border-radius: 4px; }}
+.resize-handle-r:hover, .resize-handle-l:hover, .resize-handle-b:hover, .resize-handle-t:hover {{ background: var(--pink-dim); }}
 .drag-handle {{
   cursor: grab; user-select: none; color: var(--text3); font-size: 14px;
   padding: 0 4px; margin-left: auto; flex-shrink: 0;
@@ -1622,23 +1623,44 @@ document.getElementById('gridHist').innerHTML = `
 // Anexa 3 alcas de redimensionar num elemento: canto (largura+altura juntas), lateral direita (so
 // largura) e embaixo (so altura) — reusado tanto pelos paineis normais quanto pelos cards do
 // fluxograma. onResizeEnd(el) e chamado ao soltar o mouse, pra persistir o tamanho de cada um.
+// dir: 'e' (direita, cresce pra direita), 'w' (esquerda, cresce pra esquerda), 's' (embaixo, cresce
+// pra baixo), 'n' (em cima, cresce pra cima), ou combinacoes tipo 'se' (canto).
 function attachResizeHandles(el, minW, minH, onResizeEnd) {{
   if (Array.from(el.children).some(c => c.classList.contains('resize-handle-corner'))) return;
-  const startDrag = (axis) => (e) => {{
+  const startDrag = (dir) => (e) => {{
     e.preventDefault();
     e.stopPropagation();
     const clientX0 = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY0 = e.touches ? e.touches[0].clientY : e.clientY;
     const box = el.getBoundingClientRect();
     const startW = box.width, startH = box.height;
+    const cs = getComputedStyle(el);
+    const startML = parseFloat(cs.marginLeft) || 0;
+    const startMT = parseFloat(cs.marginTop) || 0;
+    // flex:1 (usado nos cards do fluxograma) fixa flex-basis:0%, que ignora o width/height explicito —
+    // sem isso, o card so' conseguia encolher ate o min-width/min-height e nunca crescer de verdade.
     el.style.flexGrow = '0';
     el.style.flexShrink = '0';
+    el.style.flexBasis = 'auto';
     document.body.style.userSelect = 'none';
     const onMove = e2 => {{
       const clientX = e2.touches ? e2.touches[0].clientX : e2.clientX;
       const clientY = e2.touches ? e2.touches[0].clientY : e2.clientY;
-      if (axis !== 'y') el.style.width = Math.max(minW, startW + (clientX - clientX0)) + 'px';
-      if (axis !== 'x') el.style.height = Math.max(minH, startH + (clientY - clientY0)) + 'px';
+      const dx = clientX - clientX0, dy = clientY - clientY0;
+      if (dir.indexOf('e') !== -1) {{
+        el.style.width = Math.max(minW, startW + dx) + 'px';
+      }} else if (dir.indexOf('w') !== -1) {{
+        const newW = Math.max(minW, startW - dx);
+        el.style.width = newW + 'px';
+        el.style.marginLeft = (startML - (newW - startW)) + 'px';
+      }}
+      if (dir.indexOf('s') !== -1) {{
+        el.style.height = Math.max(minH, startH + dy) + 'px';
+      }} else if (dir.indexOf('n') !== -1) {{
+        const newH = Math.max(minH, startH - dy);
+        el.style.height = newH + 'px';
+        el.style.marginTop = (startMT - (newH - startH)) + 'px';
+      }}
     }};
     const onUp = () => {{
       document.body.style.userSelect = '';
@@ -1653,12 +1675,15 @@ function attachResizeHandles(el, minW, minH, onResizeEnd) {{
     window.addEventListener('touchmove', onMove, {{passive:false}});
     window.addEventListener('touchend', onUp);
   }};
-  [['resize-handle-corner', 'both'], ['resize-handle-r', 'x'], ['resize-handle-b', 'y']].forEach(([cls, axis]) => {{
+  const cursorFor = {{ se: 'nwse-resize', e: 'ew-resize', s: 'ns-resize', w: 'ew-resize', n: 'ns-resize' }};
+  const titleFor = {{ se: 'Arrastar para redimensionar', e: 'Arrastar para alargar/estreitar pela direita', s: 'Arrastar para aumentar/diminuir altura por baixo', w: 'Arrastar para alargar/estreitar pela esquerda', n: 'Arrastar para aumentar/diminuir altura por cima' }};
+  [['resize-handle-corner', 'se'], ['resize-handle-r', 'e'], ['resize-handle-b', 's'], ['resize-handle-l', 'w'], ['resize-handle-t', 'n']].forEach(([cls, dir]) => {{
     const rh = document.createElement('div');
     rh.className = cls;
-    rh.title = axis === 'both' ? 'Arrastar para redimensionar' : (axis === 'x' ? 'Arrastar para alargar/estreitar' : 'Arrastar para aumentar/diminuir altura');
+    rh.title = titleFor[dir];
+    rh.style.cursor = cursorFor[dir];
     el.appendChild(rh);
-    const onDown = startDrag(axis);
+    const onDown = startDrag(dir);
     rh.addEventListener('mousedown', onDown);
     rh.addEventListener('touchstart', onDown, {{passive:false}});
     rh.addEventListener('click', e => {{ e.stopPropagation(); }});
@@ -1681,11 +1706,13 @@ function enhancePanels(containerId, allowReorder) {{
     if (savedSize) {{
       try {{
         const s = JSON.parse(savedSize);
-        if (s.w) {{ p.style.width = s.w; p.style.flexGrow = '0'; p.style.flexShrink = '0'; }}
+        if (s.w) {{ p.style.width = s.w; p.style.flexGrow = '0'; p.style.flexShrink = '0'; p.style.flexBasis = 'auto'; }}
         if (s.h) p.style.height = s.h;
+        if (s.ml) p.style.marginLeft = s.ml;
+        if (s.mt) p.style.marginTop = s.mt;
       }} catch(e) {{}}
     }}
-    attachResizeHandles(p, 260, 180, el => localStorage.setItem('panelsize_' + p.dataset.pid, JSON.stringify({{w: el.style.width, h: el.style.height}})));
+    attachResizeHandles(p, 260, 180, el => localStorage.setItem('panelsize_' + p.dataset.pid, JSON.stringify({{w: el.style.width, h: el.style.height, ml: el.style.marginLeft, mt: el.style.marginTop}})));
 
     if (!allowReorder) return;
     const h2 = p.querySelector('h2');
@@ -2597,12 +2624,14 @@ function enhanceFlowBoxes(containerId) {{
     if (savedSize) {{
       try {{
         const s = JSON.parse(savedSize);
-        if (s.w) {{ p.style.width = s.w; p.style.flexGrow = '0'; p.style.flexShrink = '0'; }}
+        if (s.w) {{ p.style.width = s.w; p.style.flexGrow = '0'; p.style.flexShrink = '0'; p.style.flexBasis = 'auto'; }}
         if (s.h) p.style.height = s.h;
+        if (s.ml) p.style.marginLeft = s.ml;
+        if (s.mt) p.style.marginTop = s.mt;
       }} catch(e) {{}}
     }}
 
-    attachResizeHandles(p, 140, 90, el => localStorage.setItem('flowboxsize_' + p.dataset.pid, JSON.stringify({{w: el.style.width, h: el.style.height}})));
+    attachResizeHandles(p, 140, 90, el => localStorage.setItem('flowboxsize_' + p.dataset.pid, JSON.stringify({{w: el.style.width, h: el.style.height, ml: el.style.marginLeft, mt: el.style.marginTop}})));
 
     const titleEl = p.querySelector('.flow-title');
     if (titleEl && !titleEl.querySelector('.drag-handle')) {{
