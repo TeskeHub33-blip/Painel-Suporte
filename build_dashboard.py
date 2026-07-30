@@ -39,11 +39,25 @@ def clean_status_histories(raw_list):
         })
     return out
 
+
+# Notas/acoes de chamados as vezes trazem links de anexo com URLs assinadas do S3 do Movidesk
+# (AWSAccessKeyId=...&Signature=...) ou outras credenciais coladas por engano — removidas antes de
+# qualquer texto de acao ser embutido no HTML publicado, para nao vazar nada na pagina publica.
+_S3_PRESIGNED_RE = re.compile(r'https://s3\.amazonaws\.com/\S+')
+_AWS_KEY_RE = re.compile(r'AKIA[0-9A-Z]{16}')
+
+def redact_secrets(text):
+    if not text:
+        return text
+    text = _S3_PRESIGNED_RE.sub('[anexo removido]', text)
+    text = _AWS_KEY_RE.sub('[chave removida]', text)
+    return text
+
 def clean_actions(raw_list):
     out = []
     for a in (raw_list or []):
         out.append({
-            'description': a.get('description') or '',
+            'description': redact_secrets(a.get('description') or ''),
             'createdDate': a.get('createdDate'),
             'type': a.get('type'),
         })
@@ -106,7 +120,7 @@ for t in raw_tickets:
         'id': t.get('id'),
         'protocol': t.get('protocol'),
         'subject': t.get('subject') or '',
-        'description': primeira_acao.get('description') or '',
+        'description': redact_secrets(primeira_acao.get('description') or ''),
         'category': t.get('category'),
         'urgency': t.get('urgency'),
         'status': t.get('status'),
@@ -190,12 +204,22 @@ except FileNotFoundError:
     raw_bug_actions = []
 actions_by_id = {str(t.get('id')): clean_actions(t.get('actions')) for t in raw_bug_actions if t.get('id') is not None}
 
+# Acoes dos chamados candidatos a expurgo retroativo de SLA por indisponibilidade de orgao
+# governamental (resolvidos em 2026 e fora do prazo, ou ainda abertos) — ver fetch_data.py.
+try:
+    with open(os.path.join(BASE_DIR, "gov_check_actions.json"), encoding='utf-8-sig') as f:
+        raw_gov_actions = json.load(f)
+except FileNotFoundError:
+    raw_gov_actions = []
+gov_actions_by_id = {str(t.get('id')): clean_actions(t.get('actions')) for t in raw_gov_actions if t.get('id') is not None}
+
 tickets_json = json.dumps(clean, ensure_ascii=False)
 resolved_json = json.dumps(clean_resolved, ensure_ascii=False)
 resolved_month_json = json.dumps(clean_resolved_month, ensure_ascii=False)
 resolved_months_json = json.dumps(resolved_months_clean, ensure_ascii=False)
 month_labels_json = json.dumps(month_labels, ensure_ascii=False)
 actions_by_id_json = json.dumps(actions_by_id, ensure_ascii=False)
+gov_actions_by_id_json = json.dumps(gov_actions_by_id, ensure_ascii=False)
 
 html = rf"""<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -357,6 +381,32 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 .sla-cat-num {{ text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }}
 .sla-cat-num.danger {{ color: var(--danger); }}
 
+.flow-wrap {{ display: flex; flex-direction: column; gap: 10px; }}
+.flow-row {{ display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; }}
+.flow-box {{
+  background: var(--surface2); border: 1.5px solid var(--panel-border); border-radius: 8px;
+  padding: 10px 14px; font-size: 12px; color: var(--text-dim); min-width: 140px; flex: 1;
+  transition: all .2s ease; position: relative;
+}}
+.flow-box .flow-title {{ font-weight: 700; color: var(--text); font-size: 12.5px; margin-bottom: 3px; }}
+.flow-box .flow-sub {{ font-size: 10.5px; color: var(--text3); line-height: 1.4; }}
+.flow-box.flow-done {{ border-color: var(--ok-bord); background: var(--ok-dim); }}
+.flow-box.flow-done .flow-title {{ color: var(--ok); }}
+.flow-box.flow-current {{ border-color: var(--pink); background: var(--pink-dim); box-shadow: 0 0 0 2px rgba(237,109,162,0.25); }}
+.flow-box.flow-current .flow-title {{ color: var(--pink); }}
+.flow-arrow {{ display: flex; align-items: center; justify-content: center; color: var(--text3); font-size: 18px; padding: 0 2px; flex-shrink: 0; }}
+.flow-branch {{ display: flex; flex-direction: column; gap: 6px; flex: 1; }}
+.flow-sla-table {{ font-size: 11px; }}
+.flow-sla-table td, .flow-sla-table th {{ padding: 4px 8px; }}
+.flow-search-row {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }}
+.flow-timeline {{ display: flex; flex-direction: column; gap: 0; margin-top: 10px; }}
+.flow-timeline-item {{ display: flex; gap: 10px; padding: 6px 0; border-left: 2px solid var(--panel-border); padding-left: 14px; margin-left: 6px; position: relative; }}
+.flow-timeline-item::before {{ content: ''; position: absolute; left: -5px; top: 12px; width: 8px; height: 8px; border-radius: 50%; background: var(--text3); }}
+.flow-timeline-item.is-last::before {{ background: var(--pink); }}
+.flow-timeline-status {{ font-weight: 700; font-size: 12px; color: var(--text); min-width: 220px; }}
+.flow-timeline-dur {{ font-size: 11.5px; color: var(--text-dim); }}
+.flow-next-steps {{ background: var(--surface2); border-radius: 8px; padding: 12px 16px; font-size: 12.5px; color: var(--text); margin-top: 4px; border-left: 3px solid var(--pink); }}
+
 .modal-overlay {{
   position: fixed; inset: 0; background: rgba(26,26,44,0.45);
   display: none; align-items: center; justify-content: center; z-index: 50;
@@ -400,6 +450,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
     <button class="tab-btn" id="tabBtnOneOnOne" onclick="showTab('oneOnOne')">One-on-One</button>
     <button class="tab-btn" id="tabBtnGamificacao" onclick="showTab('gamificacao')">Gamificacao</button>
     <button class="tab-btn" id="tabBtnReuniaoMensal" onclick="showTab('reuniaoMensal')">Reuniao Mensal</button>
+    <button class="tab-btn" id="tabBtnFluxo" onclick="showTab('fluxo')">Fluxograma</button>
   </div>
 
   <div class="tab-panel active" id="tabLive">
@@ -494,6 +545,49 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
     </div>
   </div>
 
+  <div class="tab-panel" id="tabFluxo">
+    <div class="flow-search-row">
+      <input id="fluxoBuscaProtocolo" class="itil-select" style="max-width:180px;" placeholder="Buscar por numero do chamado" />
+      <span class="export-btn" style="padding:9px 18px; font-size:12px;" onclick="buscarChamadoFluxoPorProtocolo()">Buscar</span>
+      <span style="color:var(--text3); font-size:11px;">ou filtre por mes e cliente:</span>
+      <select id="selMesFluxo" class="itil-select" title="Mes" style="max-width:170px; font-size:12px; padding:4px 8px;"></select>
+      <select id="selClienteFluxo" class="itil-select" title="Cliente" style="max-width:220px; font-size:12px; padding:4px 8px;"></select>
+      <select id="selChamadoFluxo" class="itil-select" title="Chamado" style="max-width:320px; font-size:12px; padding:4px 8px;"></select>
+    </div>
+    <div id="fluxoErro" style="display:none; color:var(--danger); font-size:12.5px; margin-bottom:10px;"></div>
+
+    <div class="panel">
+      <h2>🧭 Fluxo de atendimento — Central de Suporte EmiteAi</h2>
+      <div class="panel-sub" id="fluxoChamadoInfo">Selecione ou busque um chamado para ver em qual etapa ele esta e os proximos passos possiveis.</div>
+      <div class="flow-wrap" id="flowDiagram"></div>
+    </div>
+
+    <div class="grid" id="gridFluxo" style="grid-template-columns: 1fr 1fr; margin-top: 18px;">
+      <div class="panel">
+        <h2>⏱️ SLA de repasse para N2</h2>
+        <div class="panel-sub">Prazo a partir do momento em que o N1 aciona o N2</div>
+        <table class="flow-sla-table">
+          <thead><tr><th>Classificacao</th><th>Prazo (SLA)</th><th>Observacao</th></tr></thead>
+          <tbody>
+            <tr><td>Urgente</td><td>15 minutos</td><td>Atendimento imediato</td></tr>
+            <tr><td>Bug alto</td><td>1 hora</td><td>Atendimento prioritario</td></tr>
+            <tr><td>Bug medio</td><td>8 horas</td><td>Desde que fornecida solucao de contorno ao usuario</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <h2>📍 Chamado selecionado — proximos passos</h2>
+        <div id="fluxoProximosPassos"><div class="empty-msg">Nenhum chamado selecionado</div></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top: 18px;">
+      <h2>🕒 Linha do tempo do chamado</h2>
+      <div class="panel-sub" id="fluxoTimelineSub">Historico de status e tempo em cada etapa</div>
+      <div class="flow-timeline" id="fluxoTimeline"><div class="empty-msg">Nenhum chamado selecionado</div></div>
+    </div>
+  </div>
+
   <div class="footer-note">
     Board gerado a partir do Movidesk (chamados nao fechados/cancelados/resolvidos) · Atualizacao agendada a cada 5 minutos · "Aging" = Em atendimento sem update ha 48h+ · "Contraturno" = chamados em atendimento com Alife Caetano dos Santos ou Vinicius Campestrini
   </div>
@@ -537,6 +631,9 @@ const MONTH_LABELS = {month_labels_json};
 // id do chamado — usadas so' pra achar, no log do DevOps/Azure, o comentario que marca a task em
 // validacao/impedimento (o Movidesk nao tem status proprio pra isso).
 const ACTIONS_BY_ID = {actions_by_id_json};
+// Notas/acoes completas dos chamados candidatos a expurgo retroativo de SLA por indisponibilidade de
+// orgao governamental (resolvidos em 2026 e fora do prazo, ou ainda abertos) — ver fetch_data.py.
+const GOV_ACTIONS_BY_ID = {gov_actions_by_id_json};
 // Todos os 3 meses, ja restritos ao time de Suporte, sem chamados Cancelados, e sem chamados
 // reabertos INDEVIDAMENTE pelo Azure (reaberturas legitimas continuam contando normalmente).
 // Esse filtro fica aqui na origem dos dados porque TODAS as abas (Historico, Clientes, One-on-One,
@@ -592,8 +689,13 @@ TICKETS.forEach(t => {{
 // Chamados resolvidos que passaram pelo status de espera de orgao governamental (SEFAZ/ANTT/GNRE) tem
 // o tempo nesse status excluido do calculo de SLA — so detectavel via historico de status, disponivel
 // apenas para o mes corrente (RESOLVED_MONTHS['0']).
+// Texto de log/comentario indicando indisponibilidade de orgao governamental (usado como fallback
+// retroativo, pra chamados de antes do status 'Aguardando Sefaz/ANTT' existir).
+const GOV_LOG_RE = /sefaz|antt|prefeitura|portal nacional da gnre/i;
 function aguardouOrgaoGovernamental(r) {{
-  return (r.statusHistories || []).some(h => isGovWaitStatus(h.status));
+  if ((r.statusHistories || []).some(h => isGovWaitStatus(h.status))) return true;
+  const acoes = GOV_ACTIONS_BY_ID[String(r.id)] || [];
+  return acoes.some(a => GOV_LOG_RE.test(a.description || ''));
 }}
 
 const FILTERS = {{
@@ -949,12 +1051,14 @@ function showTab(name, skipSave) {{
   document.getElementById('tabOneOnOne').classList.toggle('active', name === 'oneOnOne');
   document.getElementById('tabGamificacao').classList.toggle('active', name === 'gamificacao');
   document.getElementById('tabReuniaoMensal').classList.toggle('active', name === 'reuniaoMensal');
+  document.getElementById('tabFluxo').classList.toggle('active', name === 'fluxo');
   document.getElementById('tabBtnLive').classList.toggle('active', name === 'live');
   document.getElementById('tabBtnHist').classList.toggle('active', name === 'hist');
   document.getElementById('tabBtnClientes').classList.toggle('active', name === 'clientes');
   document.getElementById('tabBtnOneOnOne').classList.toggle('active', name === 'oneOnOne');
   document.getElementById('tabBtnGamificacao').classList.toggle('active', name === 'gamificacao');
   document.getElementById('tabBtnReuniaoMensal').classList.toggle('active', name === 'reuniaoMensal');
+  document.getElementById('tabBtnFluxo').classList.toggle('active', name === 'fluxo');
   if (!skipSave) localStorage.setItem('activeTab', name);
 }}
 // Restaura a aba ativa apos o auto-refresh da pagina (nunca restaura direto em abas com senha, exige senha de novo)
@@ -2132,6 +2236,162 @@ function initReuniaoMensal() {{
       <tbody>${{bodyRows}}${{totalRow}}</tbody></table>
   `;
 }}
+
+// ============================================================
+// Aba Fluxograma — fluxo de atendimento (Entrada -> Triagem -> N1 -> N2 -> Task/Dev -> Validacao
+// cliente -> Encerramento), com busca de chamado (por numero, ou por mes+cliente) que mostra em qual
+// etapa o chamado esta agora, os proximos passos possiveis e a linha do tempo por status.
+// ============================================================
+const FLOW_MAIN_STAGES = [
+  {{ key: 'entrada', title: 'Entrada', sub: 'E-mail, WhatsApp/chat ou portal Movidesk' }},
+  {{ key: 'triagem', title: 'Triagem inicial', sub: 'Vendas / Implantacao / Suporte' }},
+  {{ key: 'n1', title: 'N1', sub: 'Analise inicial — apoio do N3 (Multiplicador) quando necessario' }},
+  {{ key: 'n2', title: 'N2', sub: "Repasse tecnico ('Em atendimento - N2')" }},
+  {{ key: 'task_dev', title: 'Task / Desenvolvimento', sub: "Fila de dev ('Aguardando Desenvolvimento')" }},
+  {{ key: 'validacao_cliente', title: 'Validacao do cliente', sub: "Chamado 'Resolvido', aguardando confirmacao" }},
+  {{ key: 'encerrado', title: 'Encerramento', sub: 'Manual (cliente confirma) ou automatico em 3 dias' }},
+];
+const FLOW_SECONDARY_STAGE = {{ key: 'pendente_usuario', title: 'Pendente Usuario', sub: "'Aguardando Cliente' — volta ao N1 quando o cliente responde, ou encerra em 3 dias sem resposta" }};
+
+// Mapeia o status atual do Movidesk pra uma etapa do fluxo (aproximado — o Movidesk nao tem um campo
+// proprio de "etapa do fluxo", so status; alguns status de espera especificos, tipo Aguardando
+// Terceiros/Sefaz-ANTT/Squad GNRE, ficam agrupados dentro da etapa tecnica corrente por simplicidade).
+function stageOfStatus(status) {{
+  if (status === 'Novo' || status === 'Em atendimento') return 'n1';
+  if (status === 'Aguardando Cliente') return 'pendente_usuario';
+  if (status === N2_HANDOFF_STATUS) return 'n2';
+  if (isDevQueueStatus(status)) return 'task_dev';
+  if (status === 'Resolvido') return 'validacao_cliente';
+  if (status === 'Fechado' || status === 'Cancelado') return 'encerrado';
+  if (status === 'Em atendimento - CS') return 'triagem';
+  return 'n1';
+}}
+
+function proximosPassosTexto(status) {{
+  if (status === 'Novo' || status === 'Em atendimento') {{
+    return "O N1 pode: <b>resolver diretamente</b> (o chamado segue para validacao do cliente), <b>colocar Aguardando Cliente</b> (Pendente Usuario, quando falta informacao do cliente), ou <b>repassar para 'Em atendimento - N2'</b> quando o caso exige um nivel tecnico mais aprofundado. O N3 (Multiplicador) pode apoiar o N1 em qualquer uma dessas etapas.";
+  }}
+  if (status === 'Aguardando Cliente') {{
+    return "Se o cliente responder, o chamado volta para o N1 (status 'Em atendimento'). Se nao houver resposta, o chamado e <b>encerrado automaticamente em 3 dias corridos</b>.";
+  }}
+  if (status === N2_HANDOFF_STATUS) {{
+    return "O N2 pode: <b>resolver diretamente</b>, informar o cliente e devolver o chamado ao N1 (fila 'Em atendimento'), ou <b>abrir task para o desenvolvimento</b> ('Aguardando Desenvolvimento') — nesse caso o N2 assume tanto o chamado quanto a task.";
+  }}
+  if (isDevQueueStatus(status)) {{
+    return "A task pode retornar ao N2 de 3 formas: <b>Em validacao</b> (o N2 testa a entrega e pede ao cliente para validar), <b>Em impedimento</b> (o N2 trata o motivo antes de prosseguir), ou <b>de volta para 'A Fazer'</b> se a task nao tiver a analise de negocio e a resolucao do problema claras (o desenvolvedor responsavel e mencionado no comentario do Azure DevOps para reforco).";
+  }}
+  if (status === 'Resolvido') {{
+    return "Chamado aguardando validacao do cliente: se o cliente confirmar a solucao, o chamado e <b>encerrado manualmente</b>; se nao houver resposta, e <b>encerrado automaticamente apos 3 dias corridos</b>.";
+  }}
+  if (status === 'Fechado' || status === 'Cancelado') {{
+    return "Fluxo encerrado — nao ha proximos passos.";
+  }}
+  if (isGovWaitStatus(status)) {{
+    return "Aguardando retorno de orgao governamental (SEFAZ/ANTT/Portal Nacional da GNRE) — por contrato, o SLA fica pausado enquanto o chamado estiver neste status. Ao retomar, o chamado volta pro atendimento (N1/N2).";
+  }}
+  if (status === 'Em atendimento - CS') {{
+    return "Chamado em atendimento pelo time de Implantacao/CS (fora do fluxo de Suporte).";
+  }}
+  return `Aguardando retorno de terceiro ou etapa intermediaria ('${{esc(status || '-')}}') antes de prosseguir no fluxo de atendimento tecnico.`;
+}}
+
+function renderFlowDiagram(currentKey) {{
+  const boxHtml = (s) => `<div class="flow-box ${{s.key === currentKey ? 'flow-current' : ''}}" id="flowbox-${{s.key}}">
+      <div class="flow-title">${{esc(s.title)}}</div>
+      <div class="flow-sub">${{esc(s.sub)}}</div>
+    </div>`;
+  const mainRow = FLOW_MAIN_STAGES.map((s,i) => boxHtml(s) + (i < FLOW_MAIN_STAGES.length - 1 ? '<div class="flow-arrow">→</div>' : '')).join('');
+  document.getElementById('flowDiagram').innerHTML = `
+    <div class="flow-row">${{mainRow}}</div>
+    <div class="flow-row" style="max-width:280px;">${{boxHtml(FLOW_SECONDARY_STAGE)}}</div>
+  `;
+}}
+renderFlowDiagram(null);
+
+function findTicketByProtocol(protocol) {{
+  protocol = String(protocol || '').trim();
+  if (!protocol) return null;
+  let t = TICKETS.find(x => String(x.protocol) === protocol);
+  if (t) return t;
+  for (const k of ['0', '1', '2']) {{
+    t = (RESOLVED_MONTHS[k] || []).find(x => String(x.protocol) === protocol);
+    if (t) return t;
+  }}
+  t = RESOLVED_TODAY.find(x => String(x.protocol) === protocol);
+  if (t) return t;
+  return null;
+}}
+
+function carregarChamadoFluxo(ticket) {{
+  if (!ticket) return;
+  document.getElementById('fluxoErro').style.display = 'none';
+  const curStage = stageOfStatus(ticket.status);
+  renderFlowDiagram(curStage);
+  document.getElementById('fluxoChamadoInfo').innerHTML =
+    `Chamado <b>${{ticketLink(ticket.id, ticket.protocol)}}</b> — ${{esc(ticket.subject || '')}} · categoria: ${{esc(ticket.category || '-')}} · status atual: <b>${{esc(ticket.status || '-')}}</b> · tecnico: ${{esc(ticket.ownerName || '-')}} · cliente: ${{esc(ticket.clientOrg || '-')}}`;
+  document.getElementById('fluxoProximosPassos').innerHTML = `<div class="flow-next-steps">${{proximosPassosTexto(ticket.status)}}</div>`;
+
+  const hist = (ticket.statusHistories || []).slice().sort((a,b) => new Date(a.changedDate) - new Date(b.changedDate));
+  if (hist.length) {{
+    document.getElementById('fluxoTimelineSub').textContent = 'Historico de status e tempo em cada etapa (tempo corrido)';
+    document.getElementById('fluxoTimeline').innerHTML = hist.map((h,i) => {{
+      const durH = (h.permanencyTimeFullTime || 0) / 3600;
+      const isLast = i === hist.length - 1;
+      return `<div class="flow-timeline-item ${{isLast ? 'is-last' : ''}}">
+        <div class="flow-timeline-status">${{esc(h.status)}}</div>
+        <div class="flow-timeline-dur">desde ${{new Date(h.changedDate).toLocaleString('pt-BR')}} · ${{durH > 0 ? fmtH(durH) : (isLast ? 'em andamento' : '-')}}</div>
+      </div>`;
+    }}).join('');
+  }} else {{
+    document.getElementById('fluxoTimelineSub').textContent = 'Historico detalhado de status nao disponivel para este chamado (so e mantido para chamados abertos e resolvidos no mes corrente)';
+    document.getElementById('fluxoTimeline').innerHTML = `<div class="flow-timeline-item is-last">
+        <div class="flow-timeline-status">${{esc(ticket.status || '-')}}</div>
+        <div class="flow-timeline-dur">criado em ${{ticket.createdDate ? new Date(ticket.createdDate).toLocaleString('pt-BR') : '-'}}${{ticket.resolvedIn ? (' · resolvido em ' + new Date(ticket.resolvedIn).toLocaleString('pt-BR')) : ''}}</div>
+      </div>`;
+  }}
+}}
+
+function buscarChamadoFluxoPorProtocolo() {{
+  const val = document.getElementById('fluxoBuscaProtocolo').value;
+  const found = findTicketByProtocol(val);
+  const erroEl = document.getElementById('fluxoErro');
+  if (!found) {{
+    erroEl.style.display = '';
+    erroEl.textContent = `Chamado "${{val}}" nao encontrado (busca entre chamados abertos e resolvidos nos ultimos 3 meses).`;
+    return;
+  }}
+  carregarChamadoFluxo(found);
+}}
+document.getElementById('fluxoBuscaProtocolo').addEventListener('keydown', (e) => {{ if (e.key === 'Enter') buscarChamadoFluxoPorProtocolo(); }});
+
+const selMesFluxo = document.getElementById('selMesFluxo');
+const selClienteFluxo = document.getElementById('selClienteFluxo');
+const selChamadoFluxo = document.getElementById('selChamadoFluxo');
+populateSelect(selMesFluxo, [['aberto', 'Chamados abertos'], ...Object.keys(MONTH_LABELS).map(k => [k, MONTH_LABELS[k]])]);
+
+function itemsDoMesFluxo(mesKey) {{
+  return mesKey === 'aberto' ? TICKETS : (RESOLVED_MONTHS[mesKey] || []);
+}}
+function refreshClienteFluxoOptions() {{
+  const items = itemsDoMesFluxo(selMesFluxo.value);
+  const clientesList = Array.from(new Set(items.map(r => r.clientOrg).filter(Boolean))).sort((a,b) => a.localeCompare(b));
+  const prev = selClienteFluxo.value;
+  populateSelect(selClienteFluxo, [['', 'Todos os clientes'], ...clientesList.map(c => [c, c])]);
+  if (clientesList.indexOf(prev) !== -1) selClienteFluxo.value = prev;
+}}
+function refreshChamadoFluxoOptions() {{
+  const items = itemsDoMesFluxo(selMesFluxo.value).filter(r => !selClienteFluxo.value || r.clientOrg === selClienteFluxo.value);
+  const sorted = items.slice().sort((a,b) => String(b.protocol).localeCompare(String(a.protocol)));
+  populateSelect(selChamadoFluxo, sorted.slice(0, 300).map(r => [r.protocol, `${{r.protocol}} — ${{(r.subject || '').slice(0, 50)}}`]));
+}}
+selMesFluxo.addEventListener('change', () => {{ refreshClienteFluxoOptions(); refreshChamadoFluxoOptions(); }});
+selClienteFluxo.addEventListener('change', refreshChamadoFluxoOptions);
+selChamadoFluxo.addEventListener('change', () => {{
+  const found = findTicketByProtocol(selChamadoFluxo.value);
+  if (found) carregarChamadoFluxo(found);
+}});
+refreshClienteFluxoOptions();
+refreshChamadoFluxoOptions();
 
 function tick() {{
   const el = document.getElementById('clock');

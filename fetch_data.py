@@ -83,9 +83,11 @@ def main():
     save("resolved_today.json", resolved_today)
 
     # 3. Resolvidos nos ultimos 3 meses (sempre busca os 3 do zero — nao ha cache entre runs no GitHub Actions)
+    resolved_months = {}
     for offset in range(3):
         target = add_months(now_utc, -offset)
         data = fetch_month(target.year, target.month)
+        resolved_months[offset] = data
         save(f"resolved_month_{offset}.json", data)
 
     # 4. Acoes/notas dos chamados tecnicos (Bug/Melhoria/Servicos) resolvidos no mes corrente — usadas
@@ -108,6 +110,40 @@ def main():
 
     bug_actions = fetch_actions_window(start, mid) + fetch_actions_window(mid, end)
     save("resolved_month_0_actions.json", bug_actions)
+
+    # 5. Acoes/notas completas dos chamados candidatos a expurgo retroativo de SLA por indisponibilidade
+    # de orgao governamental (SEFAZ/ANTT/prefeitura/GNRE) — o Movidesk so criou o status dedicado
+    # 'Aguardando Sefaz/ANTT' recentemente, entao pra chamados de antes disso a unica forma de saber e
+    # lendo o log/comentario do chamado. Restrito, a pedido, a chamados atendidos (resolvidos) em 2026
+    # que estouraram o SLA, mais todos os chamados que ainda estao abertos — nao busca acao de TODOS os
+    # chamados resolvidos (custo de payload alto demais), so dos candidatos reais a essa exclusao.
+    def fetch_actions_for_ids(ids, chunk_size=20):
+        ids = sorted(set(ids))
+        out = []
+        for i in range(0, len(ids), chunk_size):
+            chunk = ids[i:i + chunk_size]
+            filt = " or ".join(f"id eq {tid}" for tid in chunk)
+            out += fetch({
+                "$select": "id,protocol",
+                "$expand": "actions($select=description,createdDate,type)",
+                "$filter": filt,
+                "$top": chunk_size,
+            })
+        return out
+
+    gov_check_ids = set()
+    for offset, data in resolved_months.items():
+        for r in data:
+            if (r.get('ownerTeam') == 'Suporte' and r.get('resolvedIn') and r.get('slaSolutionDate')
+                    and r['resolvedIn'] > r['slaSolutionDate']
+                    and (r.get('resolvedIn') or '').startswith('2026')):
+                gov_check_ids.add(r['id'])
+    for t in open_tickets:
+        if t.get('id') is not None:
+            gov_check_ids.add(t['id'])
+
+    gov_actions = fetch_actions_for_ids(gov_check_ids)
+    save("gov_check_actions.json", gov_actions)
 
 
 if __name__ == "__main__":
