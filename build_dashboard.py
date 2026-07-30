@@ -2493,14 +2493,17 @@ function flowNextPillsHtml(key) {{
 
 // extras[key] = HTML adicional pra anexar dentro do card daquela etapa (ex.: canal de entrada + tempo
 // no chat, ou o comentario do devops) — so preenchido quando ha um chamado especifico carregado.
-function renderFlowDiagram(currentKey, stageTimes, extras, perTicket) {{
+function renderFlowDiagram(currentKey, stageTimes, extras, perTicket, visitedKeys) {{
   extras = extras || {{}};
+  visitedKeys = visitedKeys || [];
   const boxHtml = (s) => {{
     const clickavel = FLOW_CLICKAVEL.indexOf(s.key) !== -1;
     const tempo = stageTimes[s.key];
     const qtd = clickavel ? ticketsNaEtapa(s.key).length : null;
+    const isCurrent = s.key === currentKey;
+    const isDone = !isCurrent && visitedKeys.indexOf(s.key) !== -1;
     const attrs = clickavel ? `tabindex="0" role="button" onclick="abrirModalEtapaFluxo(${{jsStr(s.key)}}, ${{jsStr(s.title)}})" onkeydown="if(event.key==='Enter')abrirModalEtapaFluxo(${{jsStr(s.key)}}, ${{jsStr(s.title)}})"` : '';
-    return `<div class="flow-box ${{s.key === currentKey ? 'flow-current' : ''}} ${{clickavel ? 'flow-clickable' : ''}}" id="flowbox-${{s.key}}" ${{attrs}} style="border-top: 3px solid ${{STAGE_COLORS[s.key]}};">
+    return `<div class="flow-box ${{isCurrent ? 'flow-current' : ''}} ${{isDone ? 'flow-done' : ''}} ${{clickavel ? 'flow-clickable' : ''}}" id="flowbox-${{s.key}}" ${{attrs}} style="border-top: 3px solid ${{STAGE_COLORS[s.key]}};">
       <div class="flow-title">${{esc(s.title)}}</div>
       <div class="flow-sub">${{esc(s.sub)}}</div>
       ${{tempo !== undefined && tempo !== null ? `<div class="flow-time">⏱ ${{perTicket ? 'tempo' : 'media'}}: ${{fmtH(tempo)}}</div>` : ''}}
@@ -2638,7 +2641,15 @@ function carregarChamadoFluxo(ticket) {{
     extras.validacao_impedimento = `<div class="flow-sub" style="margin-top:6px;"><b>${{esc(devopsSub.status)}}</b> — ${{esc(devopsSub.usuario)}} em ${{new Date(devopsSub.createdDate).toLocaleString('pt-BR')}}${{devopsSub.comentario ? `<br>"${{esc(devopsSub.comentario)}}"` : ''}}</div>`;
   }}
 
-  renderFlowDiagram(curStage, stageTimes, extras, true);
+  // Etapas ja percorridas pelo chamado ate agora (historico de status + devops, na ordem em que
+  // aconteceram) — ficam destacadas em verde no diagrama, distinguindo do card atual (rosa).
+  const visitedKeys = Array.from(new Set([
+    'entrada',
+    ...hist.map(h => stageOfStatus(h.status)),
+    ...devopsStatusLogs(ticket).map(l => l.status.toLowerCase().indexOf('valida') !== -1 || l.status.toLowerCase().indexOf('impediment') !== -1 ? 'validacao_impedimento' : null).filter(Boolean),
+  ]));
+
+  renderFlowDiagram(curStage, stageTimes, extras, true, visitedKeys);
   const catTag = ['Bug','Melhoria','Serviços'].indexOf(ticket.category) !== -1 ? `<span class="flow-stage-tag">${{esc(ticket.category)}}</span>` : '';
   const tempoNaEtapaAtualH = hist.length ? (new Date() - new Date(hist[hist.length-1].changedDate)) / 3600000 : null;
   document.getElementById('fluxoChamadoInfo').innerHTML =
