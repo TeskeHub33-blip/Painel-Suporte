@@ -64,13 +64,26 @@ def main():
     today_str = now_utc.strftime("%Y-%m-%d")
 
     # 1. Chamados abertos (com clients/organizacao, reopenedIn, e a 1a acao/descricao do chamado —
-    # usada para detectar "carga parada" tambem pelo texto da descricao, nao so pelo assunto)
-    open_tickets = fetch({
-        "$select": "id,protocol,subject,category,urgency,status,ownerTeam,createdDate,lastUpdate,tags,slaSolutionDate,reopenedIn,origin",
-        "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1)",
-        "$filter": "status ne 'Fechado' and status ne 'Cancelado' and status ne 'Resolvido'",
-        "$top": 500,
-    })
+    # usada para detectar "carga parada" tambem pelo texto da descricao, nao so pelo assunto).
+    # Pagina com $skip ate a API retornar menos que $top — um $top fixo (usado antes) corta
+    # silenciosamente os chamados abertos mais recentes assim que o backlog passa desse numero
+    # (foi o que aconteceu: com $top=500 e ~744 chamados abertos, os ~244 mais novos sumiam do
+    # painel inteiro, nao so' da busca do Fluxograma).
+    open_tickets = []
+    page_size = 500
+    skip = 0
+    while True:
+        page = fetch({
+            "$select": "id,protocol,subject,category,urgency,status,ownerTeam,createdDate,lastUpdate,tags,slaSolutionDate,reopenedIn,origin",
+            "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1)",
+            "$filter": "status ne 'Fechado' and status ne 'Cancelado' and status ne 'Resolvido'",
+            "$top": page_size,
+            "$skip": skip,
+        })
+        open_tickets += page
+        if len(page) < page_size:
+            break
+        skip += page_size
     save("tickets_full.json", open_tickets)
 
     # 2. Resolvidos hoje
