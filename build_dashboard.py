@@ -608,10 +608,12 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
     </div>
 
     <div class="panel" style="margin-top: 18px;">
-      <h2>🕒 Linha do tempo do chamado</h2>
-      <div class="panel-sub" id="fluxoTimelineSub">Busque um chamado para ver a linha do tempo por status</div>
+      <h2 id="fluxoTimelineTitle">🕒 Linha do tempo</h2>
+      <div class="panel-sub" id="fluxoTimelineSub">Media geral do periodo/cliente selecionado — busque um chamado pra ver a linha do tempo real dele</div>
       <div id="fluxoGantt"></div>
       <div class="flow-timeline" id="fluxoTimeline"></div>
+      <div class="panel-sub" id="fluxoResumoEtapasSub" style="margin-top:14px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700;">Soma de tempo por etapa</div>
+      <div id="fluxoResumoEtapas"></div>
     </div>
   </div>
 
@@ -2329,8 +2331,8 @@ const FLOW_NEXT_OPTIONS = {{
   entrada: [['triagem', 'Triagem inicial']],
   triagem: [['n1', 'N1 (Suporte)']],
   n1: [['n2', 'N2'], ['pendente_usuario', 'Pendente Usuario'], ['validacao_cliente', 'Resolver (Validacao cliente)']],
-  pendente_usuario: [['n1', 'Volta ao N1'], ['encerrado', 'Encerramento automatico (3 dias)']],
-  n2: [['n1', 'Resolve e devolve ao N1'], ['task_dev', 'Abre task (Desenvolvimento)']],
+  pendente_usuario: [['n1', 'N1'], ['n2', 'N2'], ['encerrado', 'Encerrar por timeout (3 dias)']],
+  n2: [['validacao_cliente', 'Resolver (task retornada)'], ['n1', 'Resolve e devolve ao N1'], ['task_dev', 'Abre task (Desenvolvimento)']],
   task_dev: [['validacao_impedimento', 'Em validacao / impedimento']],
   validacao_impedimento: [['pendente_usuario', 'Validado — Pendente Usuario'], ['task_dev', 'Retorna pro Desenvolvimento']],
   validacao_cliente: [['encerrado', 'Encerramento']],
@@ -2420,6 +2422,37 @@ function devopsSubStatusDurationH(sub) {{
   return (new Date() - new Date(sub.createdDate)) / 3600000;
 }}
 
+// Quanto tempo o N2 levou pra agir depois do ultimo log de Validacao/Impedimento do devops: mede do
+// log ate a PROXIMA mudanca de status do chamado, e classifica o desfecho — "validado" quando o N2
+// confirmou que corrigiu e colocou Pendente Usuario ('Aguardando Cliente'), ou "retornou_dev" quando
+// devolveu pra fila de desenvolvimento (task nao estava pronta).
+function n2ReactionAfterDevopsLog(ticket) {{
+  const logs = devopsStatusLogs(ticket).filter(l => l.status.toLowerCase().indexOf('valida') !== -1 || l.status.toLowerCase().indexOf('impediment') !== -1);
+  if (!logs.length) return null;
+  const lastLog = logs[logs.length - 1];
+  const logDate = new Date(lastLog.createdDate);
+  const hist = (ticket.statusHistories || []).slice().sort((a,b) => new Date(a.changedDate) - new Date(b.changedDate));
+  const next = hist.find(h => new Date(h.changedDate) > logDate);
+  if (!next) return null;
+  const durH = (new Date(next.changedDate) - logDate) / 3600000;
+  const outcome = next.status === 'Aguardando Cliente' ? 'validado' : (isDevQueueStatus(next.status) ? 'retornou_dev' : 'outro');
+  return {{ durH, outcome, nextStatus: next.status }};
+}}
+// Media do tempo de reacao do N2 apos o log do devops, separada por desfecho — usada no card
+// "Em Validacao / Impedimento" da visao geral. So calculavel pra chamados cujas acoes completas estao
+// disponiveis (hoje: todo chamado aberto, mais os tecnicos resolvidos no mes corrente).
+function computeN2ReactionStats(items) {{
+  const durs = {{ validado: [], retornou_dev: [] }};
+  items.forEach(r => {{
+    const reaction = n2ReactionAfterDevopsLog(r);
+    if (reaction && durs[reaction.outcome]) durs[reaction.outcome].push(reaction.durH);
+  }});
+  return {{
+    mediaValidado: avg(durs.validado), nValidado: durs.validado.length,
+    mediaRetornouDev: avg(durs.retornou_dev), nRetornouDev: durs.retornou_dev.length,
+  }};
+}}
+
 // Tempo que o usuario ficou na conversa de chat antes de virar chamado — aproximado, parseando os
 // horarios (DD/MM/AAAA HH:MM) que aparecem no texto da transcricao (1a acao do chamado). So funciona
 // pra chamados abertos (RESOLVED_MONTHS nao guarda a descricao da 1a acao).
@@ -2485,17 +2518,26 @@ const FLOW_CLICKAVEL = ['n1', 'n2', 'task_dev', 'validacao_impedimento', 'penden
 // Pills com as proximas etapas possiveis a partir de uma etapa — aparecem em TODOS os cards, com ou
 // sem chamado selecionado (sem chamado: mostra o fluxo generico; com chamado: os pills continuam
 // clicaveis abrindo a lista de chamados na etapa de destino).
-function flowNextPillsHtml(key) {{
+// takenKey = a etapa de destino que o chamado REALMENTE seguiu a partir daqui (quando ha um chamado
+// selecionado) — o pill correspondente ganha destaque (borda solida + fundo na cor da etapa).
+function flowNextPillsHtml(key, takenKey) {{
   const opcoes = FLOW_NEXT_OPTIONS[key] || [];
   if (!opcoes.length) return '';
-  return `<div class="flow-next-options">${{opcoes.map(([k, label]) => `<span class="flow-next-pill" onclick="event.stopPropagation(); abrirModalEtapaFluxo(${{jsStr(k)}}, ${{jsStr(label)}})">→ ${{esc(label)}}</span>`).join('')}}</div>`;
+  return `<div class="flow-next-options">${{opcoes.map(([k, label]) => {{
+    const cor = STAGE_COLORS[k] || '#878799';
+    const taken = takenKey && k === takenKey;
+    const style = taken ? `border-color:${{cor}}; background:${{cor}}; color:#1B1B33; font-weight:700;` : `border-color:${{cor}};`;
+    return `<span class="flow-next-pill" style="${{style}}" onclick="event.stopPropagation(); abrirModalEtapaFluxo(${{jsStr(k)}}, ${{jsStr(label)}})">${{taken ? '✓' : '→'}} ${{esc(label)}}</span>`;
+  }}).join('')}}</div>`;
 }}
 
 // extras[key] = HTML adicional pra anexar dentro do card daquela etapa (ex.: canal de entrada + tempo
 // no chat, ou o comentario do devops) — so preenchido quando ha um chamado especifico carregado.
-function renderFlowDiagram(currentKey, stageTimes, extras, perTicket, visitedKeys) {{
+// takenNextMap[key] = etapa de destino que o chamado selecionado realmente seguiu a partir de "key".
+function renderFlowDiagram(currentKey, stageTimes, extras, perTicket, visitedKeys, takenNextMap) {{
   extras = extras || {{}};
   visitedKeys = visitedKeys || [];
+  takenNextMap = takenNextMap || {{}};
   const boxHtml = (s) => {{
     const clickavel = FLOW_CLICKAVEL.indexOf(s.key) !== -1;
     const tempo = stageTimes[s.key];
@@ -2509,7 +2551,7 @@ function renderFlowDiagram(currentKey, stageTimes, extras, perTicket, visitedKey
       ${{tempo !== undefined && tempo !== null ? `<div class="flow-time">⏱ ${{perTicket ? 'tempo' : 'media'}}: ${{fmtH(tempo)}}</div>` : ''}}
       ${{qtd !== null ? `<div class="flow-count">${{qtd}} agora</div>` : ''}}
       ${{extras[s.key] || ''}}
-      ${{flowNextPillsHtml(s.key)}}
+      ${{flowNextPillsHtml(s.key, takenNextMap[s.key])}}
     </div>`;
   }};
   const mainRow = FLOW_MAIN_STAGES.map((s,i) => boxHtml(s) + (i < FLOW_MAIN_STAGES.length - 1 ? '<div class="flow-arrow">→</div>' : '')).join('');
@@ -2550,7 +2592,19 @@ function renderFluxoAgregado() {{
     pendente_usuario: avgTimeInStatus(comHistorico, 'Aguardando Cliente'),
     encerrado: avgTimeInStatus(comHistorico, 'Resolvido'),
   }};
-  renderFlowDiagram(null, stageTimes);
+  // Tempo que o N2 leva pra agir depois do log de Validacao/Impedimento do devops — separado por
+  // desfecho (validou e colocou Pendente Usuario, ou devolveu pra fila de dev). So calculavel pra
+  // chamados com acoes completas disponiveis (hoje: abertos + tecnicos resolvidos no mes corrente).
+  const n2Reaction = computeN2ReactionStats(comHistorico.concat(openScope));
+  const extrasAgg = {{}};
+  if (n2Reaction.nValidado || n2Reaction.nRetornouDev) {{
+    extrasAgg.validacao_impedimento = `<div class="flow-sub" style="margin-top:6px;">N2 apos log do Azure: ${{n2Reaction.mediaValidado !== null ? fmtH(n2Reaction.mediaValidado) : '-'}} p/ validar (${{n2Reaction.nValidado}}) · ${{n2Reaction.mediaRetornouDev !== null ? fmtH(n2Reaction.mediaRetornouDev) : '-'}} p/ devolver ao dev (${{n2Reaction.nRetornouDev}})</div>`;
+  }}
+  renderFlowDiagram(null, stageTimes, extrasAgg);
+  renderFluxoGanttAgregado(stageTimes);
+  renderResumoEtapasHtml(stageTimes);
+  document.getElementById('fluxoTimelineSub').textContent = `Media geral (${{selClienteFluxo.value || 'todos os clientes'}}, ${{MONTH_LABELS[selMesFluxo.value]}}) — busque um chamado pra ver a linha do tempo real dele`;
+  document.getElementById('fluxoResumoEtapasSub').textContent = 'Soma de tempo por etapa (media geral)';
 
   // Entrada por canal — AO VIVO (backlog atual), respeitando o filtro de cliente.
   const porOrigem = {{}};
@@ -2618,6 +2672,41 @@ function renderFluxoGantt(hist) {{
   document.getElementById('fluxoGantt').innerHTML = `<div class="flow-gantt">${{segs}}</div><div class="flow-gantt-legend">${{legend}}</div>`;
 }}
 
+// Barra geral (sem chamado selecionado): mesma barra colorida, mas com a proporcao das MEDIAS de
+// tempo por etapa (nao o historico real de um chamado especifico).
+function renderFluxoGanttAgregado(stageTimes) {{
+  const todasEtapas = [...FLOW_MAIN_STAGES, FLOW_SECONDARY_STAGE];
+  const comTempo = todasEtapas.filter(s => stageTimes[s.key] !== undefined && stageTimes[s.key] !== null && stageTimes[s.key] > 0);
+  if (!comTempo.length) {{ document.getElementById('fluxoGantt').innerHTML = ''; return; }}
+  const total = comTempo.reduce((s,e) => s + stageTimes[e.key], 0) || 1;
+  const segs = comTempo.map(s => {{
+    const pct = (stageTimes[s.key] / total * 100).toFixed(2);
+    return `<div class="flow-gantt-seg" style="width:${{pct}}%; background:${{STAGE_COLORS[s.key] || '#82829C'}};" title="${{esc(s.title)}} — media ${{fmtH(stageTimes[s.key])}}"></div>`;
+  }}).join('');
+  const legend = comTempo.map(s => `<div class="flow-gantt-legend-item"><span class="flow-gantt-swatch" style="background:${{STAGE_COLORS[s.key]}};"></span>${{esc(s.title)}}</div>`).join('');
+  document.getElementById('fluxoGantt').innerHTML = `<div class="flow-gantt">${{segs}}</div><div class="flow-gantt-legend">${{legend}}</div>`;
+}}
+
+// Lista de barras (nao a barra unica de linha do tempo) com a SOMA de tempo por etapa — usada tanto
+// pro chamado especifico (soma o historico dele) quanto pro geral (media do periodo/cliente).
+function renderResumoEtapasHtml(stageTimes) {{
+  const todasEtapas = [...FLOW_MAIN_STAGES, FLOW_SECONDARY_STAGE];
+  const comTempo = todasEtapas
+    .filter(s => stageTimes[s.key] !== undefined && stageTimes[s.key] !== null && stageTimes[s.key] > 0)
+    .sort((a,b) => stageTimes[b.key] - stageTimes[a.key]);
+  if (!comTempo.length) {{
+    document.getElementById('fluxoResumoEtapas').innerHTML = '<div class="empty-msg">Sem dados de tempo por etapa</div>';
+    return;
+  }}
+  const top = Math.max(...comTempo.map(s => stageTimes[s.key]));
+  document.getElementById('fluxoResumoEtapas').innerHTML = comTempo.map(s => `
+    <div class="bar-row" style="cursor:default;">
+      <div class="bar-label" style="width:170px;"><span class="flow-gantt-swatch" style="background:${{STAGE_COLORS[s.key]}}; margin-right:6px;"></span>${{esc(s.title)}}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${{(stageTimes[s.key]/top*100).toFixed(0)}}%; background:${{STAGE_COLORS[s.key]}};"></div></div>
+      <div class="bar-value" style="width:auto;">${{fmtH(stageTimes[s.key])}}</div>
+    </div>`).join('');
+}}
+
 function carregarChamadoFluxo(ticket) {{
   if (!ticket) return;
   document.getElementById('fluxoErro').style.display = 'none';
@@ -2641,15 +2730,27 @@ function carregarChamadoFluxo(ticket) {{
     extras.validacao_impedimento = `<div class="flow-sub" style="margin-top:6px;"><b>${{esc(devopsSub.status)}}</b> — ${{esc(devopsSub.usuario)}} em ${{new Date(devopsSub.createdDate).toLocaleString('pt-BR')}}${{devopsSub.comentario ? `<br>"${{esc(devopsSub.comentario)}}"` : ''}}</div>`;
   }}
 
-  // Etapas ja percorridas pelo chamado ate agora (historico de status + devops, na ordem em que
-  // aconteceram) — ficam destacadas em verde no diagrama, distinguindo do card atual (rosa).
-  const visitedKeys = Array.from(new Set([
+  // Etapas ja percorridas pelo chamado ate agora, NA ORDEM em que aconteceram (historico de status +
+  // devops) — ficam destacadas em verde no diagrama (exceto a atual, que fica rosa), e viram a base
+  // pra saber qual pill de "proximo passo" foi realmente seguida em cada etapa do caminho.
+  const rawSeq = [
     'entrada',
     ...hist.map(h => stageOfStatus(h.status)),
-    ...devopsStatusLogs(ticket).map(l => l.status.toLowerCase().indexOf('valida') !== -1 || l.status.toLowerCase().indexOf('impediment') !== -1 ? 'validacao_impedimento' : null).filter(Boolean),
-  ]));
+  ];
+  devopsStatusLogs(ticket).forEach(l => {{
+    const s = l.status.toLowerCase();
+    if (s.indexOf('valida') !== -1 || s.indexOf('impediment') !== -1) rawSeq.push('validacao_impedimento');
+  }});
+  const path = [];
+  rawSeq.forEach(k => {{ if (path[path.length - 1] !== k) path.push(k); }});
+  if (path[path.length - 1] !== curStage) path.push(curStage);
+  const visitedKeys = Array.from(new Set(path));
+  const takenNextMap = {{}};
+  for (let i = 0; i < path.length - 1; i++) {{ takenNextMap[path[i]] = path[i + 1]; }}
 
-  renderFlowDiagram(curStage, stageTimes, extras, true, visitedKeys);
+  renderFlowDiagram(curStage, stageTimes, extras, true, visitedKeys, takenNextMap);
+  renderResumoEtapasHtml(stageTimes);
+  document.getElementById('fluxoResumoEtapasSub').textContent = 'Soma de tempo por etapa (deste chamado)';
   const catTag = ['Bug','Melhoria','Serviços'].indexOf(ticket.category) !== -1 ? `<span class="flow-stage-tag">${{esc(ticket.category)}}</span>` : '';
   const tempoNaEtapaAtualH = hist.length ? (new Date() - new Date(hist[hist.length-1].changedDate)) / 3600000 : null;
   document.getElementById('fluxoChamadoInfo').innerHTML =
