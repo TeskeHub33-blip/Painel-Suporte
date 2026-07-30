@@ -386,9 +386,9 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 .flow-box {{
   background: var(--surface2); border: 1.5px solid var(--panel-border); border-radius: 8px;
   padding: 10px 14px; font-size: 12px; color: var(--text-dim); min-width: 140px; flex: 1;
-  transition: all .2s ease; position: relative;
+  transition: box-shadow .2s ease, border-color .2s ease, background .2s ease; position: relative;
 }}
-.flow-box .flow-title {{ font-weight: 700; color: var(--text); font-size: 12.5px; margin-bottom: 3px; }}
+.flow-box .flow-title {{ font-weight: 700; color: var(--text); font-size: 12.5px; margin-bottom: 3px; display: flex; align-items: center; }}
 .flow-box .flow-sub {{ font-size: 10.5px; color: var(--text3); line-height: 1.4; }}
 .flow-box.flow-done {{ border-color: var(--ok-bord); background: var(--ok-dim); }}
 .flow-box.flow-done .flow-title {{ color: var(--ok); }}
@@ -399,8 +399,27 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 .flow-box.flow-clickable:focus-visible {{ outline: 2px solid var(--pink); outline-offset: 2px; }}
 .flow-time {{ font-size: 10.5px; color: var(--text-dim); margin-top: 6px; font-weight: 600; }}
 .flow-count {{ display: inline-block; margin-top: 4px; font-size: 10px; font-weight: 700; color: var(--pink); background: var(--pink-dim); border-radius: 20px; padding: 2px 8px; }}
-.flow-arrow {{ display: flex; align-items: center; justify-content: center; color: var(--text3); font-size: 18px; padding: 0 2px; flex-shrink: 0; }}
 .flow-branch {{ display: flex; flex-direction: column; gap: 6px; flex: 1; }}
+/* A seta agora e um pseudo-elemento do proprio card (nao um div separado) — assim, ao arrastar um
+   card pra outra posicao, a seta "vai junto" (sempre aparece depois de todo card que nao seja o
+   ultimo do flow-row, seja qual for a ordem atual). */
+.flow-row .flow-box {{ margin-right: 22px; }}
+.flow-row .flow-box:last-child {{ margin-right: 0; }}
+.flow-row .flow-box:not(:last-child)::after {{
+  content: '→'; position: absolute; right: -20px; top: 50%; transform: translateY(-50%);
+  color: var(--text3); font-size: 18px; pointer-events: none;
+}}
+.flow-box.resizable {{ overflow: auto; min-width: 140px; min-height: 90px; }}
+.flow-box.resizable.dragging {{ opacity: 0.35; }}
+.flow-box.resizable.drag-over {{ box-shadow: 0 0 0 2px var(--pink); }}
+.flow-box .drag-handle {{ cursor: grab; user-select: none; color: var(--text3); font-size: 12px; margin-left: 6px; flex-shrink: 0; }}
+.flow-box .drag-handle:active {{ cursor: grabbing; }}
+.flow-box .resize-handle {{
+  position: absolute; right: 0; bottom: 0; width: 16px; height: 16px;
+  cursor: nwse-resize; z-index: 5;
+  background: linear-gradient(135deg, transparent 0 50%, var(--panel-border) 50% 60%, transparent 60% 70%, var(--panel-border) 70% 80%, transparent 80%);
+}}
+.flow-box .resize-handle:hover {{ background: linear-gradient(135deg, transparent 0 50%, var(--pink) 50% 60%, transparent 60% 70%, var(--pink) 70% 80%, transparent 80%); }}
 .flow-sla-table {{ font-size: 11px; }}
 .flow-sla-table td, .flow-sla-table th {{ padding: 4px 8px; }}
 .flow-search-row {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }}
@@ -2545,7 +2564,7 @@ function renderFlowDiagram(currentKey, stageTimes, extras, perTicket, visitedKey
     const isCurrent = s.key === currentKey;
     const isDone = !isCurrent && visitedKeys.indexOf(s.key) !== -1;
     const attrs = clickavel ? `tabindex="0" role="button" onclick="abrirModalEtapaFluxo(${{jsStr(s.key)}}, ${{jsStr(s.title)}})" onkeydown="if(event.key==='Enter')abrirModalEtapaFluxo(${{jsStr(s.key)}}, ${{jsStr(s.title)}})"` : '';
-    return `<div class="flow-box ${{isCurrent ? 'flow-current' : ''}} ${{isDone ? 'flow-done' : ''}} ${{clickavel ? 'flow-clickable' : ''}}" id="flowbox-${{s.key}}" ${{attrs}} style="border-top: 3px solid ${{STAGE_COLORS[s.key]}};">
+    return `<div class="flow-box ${{isCurrent ? 'flow-current' : ''}} ${{isDone ? 'flow-done' : ''}} ${{clickavel ? 'flow-clickable' : ''}}" id="flowbox-${{s.key}}" data-pid="${{s.key}}" ${{attrs}} style="border-top: 3px solid ${{STAGE_COLORS[s.key]}};">
       <div class="flow-title">${{esc(s.title)}}</div>
       <div class="flow-sub">${{esc(s.sub)}}</div>
       ${{tempo !== undefined && tempo !== null ? `<div class="flow-time">⏱ ${{perTicket ? 'tempo' : 'media'}}: ${{fmtH(tempo)}}</div>` : ''}}
@@ -2554,11 +2573,121 @@ function renderFlowDiagram(currentKey, stageTimes, extras, perTicket, visitedKey
       ${{flowNextPillsHtml(s.key, takenNextMap[s.key])}}
     </div>`;
   }};
-  const mainRow = FLOW_MAIN_STAGES.map((s,i) => boxHtml(s) + (i < FLOW_MAIN_STAGES.length - 1 ? '<div class="flow-arrow">→</div>' : '')).join('');
+  const mainRow = FLOW_MAIN_STAGES.map(boxHtml).join('');
   document.getElementById('flowDiagram').innerHTML = `
-    <div class="flow-row">${{mainRow}}</div>
-    <div class="flow-row" style="max-width:280px;">${{boxHtml(FLOW_SECONDARY_STAGE)}}</div>
+    <div class="flow-row" id="flowRowMain">${{mainRow}}</div>
+    <div class="flow-row" id="flowRowSecundaria" style="max-width:280px;">${{boxHtml(FLOW_SECONDARY_STAGE)}}</div>
   `;
+  enhanceFlowBoxes('flowRowMain');
+  enhanceFlowBoxes('flowRowSecundaria');
+}}
+
+// Permite arrastar (reordenar) e redimensionar os cards do fluxograma, igual ao enhancePanels() usado
+// nas outras abas, mas adaptado pros .flow-box (identificados pela propria chave da etapa, que e
+// estavel entre re-renders — assim a ordem/tamanho salvos sobrevivem a toda busca/filtro novo).
+function enhanceFlowBoxes(containerId) {{
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const boxes = Array.from(container.querySelectorAll(':scope > .flow-box'));
+  boxes.forEach(p => {{
+    p.classList.add('resizable');
+    const savedSize = localStorage.getItem('flowboxsize_' + p.dataset.pid);
+    if (savedSize) {{
+      try {{
+        const s = JSON.parse(savedSize);
+        if (s.w) {{ p.style.width = s.w; p.style.flexGrow = '0'; p.style.flexShrink = '0'; }}
+        if (s.h) p.style.height = s.h;
+      }} catch(e) {{}}
+    }}
+
+    if (!p.querySelector('.resize-handle')) {{
+      const rh = document.createElement('div');
+      rh.className = 'resize-handle';
+      rh.title = 'Arrastar para redimensionar';
+      p.appendChild(rh);
+      let startX = 0, startY = 0, startW = 0, startH = 0, resizing = false;
+      const onMove = e => {{
+        if (!resizing) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const newW = Math.max(140, startW + (clientX - startX));
+        const newH = Math.max(90, startH + (clientY - startY));
+        p.style.width = newW + 'px';
+        p.style.height = newH + 'px';
+      }};
+      const onUp = () => {{
+        if (!resizing) return;
+        resizing = false;
+        document.body.style.userSelect = '';
+        localStorage.setItem('flowboxsize_' + p.dataset.pid, JSON.stringify({{w: p.style.width, h: p.style.height}}));
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('touchend', onUp);
+      }};
+      const onDown = e => {{
+        e.preventDefault();
+        e.stopPropagation();
+        resizing = true;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        startX = clientX; startY = clientY;
+        const box = p.getBoundingClientRect();
+        startW = box.width; startH = box.height;
+        p.style.flexGrow = '0';
+        p.style.flexShrink = '0';
+        document.body.style.userSelect = 'none';
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        window.addEventListener('touchmove', onMove, {{passive:false}});
+        window.addEventListener('touchend', onUp);
+      }};
+      rh.addEventListener('mousedown', onDown);
+      rh.addEventListener('touchstart', onDown, {{passive:false}});
+      rh.addEventListener('click', e => {{ e.stopPropagation(); }});
+    }}
+
+    const titleEl = p.querySelector('.flow-title');
+    if (titleEl && !titleEl.querySelector('.drag-handle')) {{
+      const handle = document.createElement('span');
+      handle.className = 'drag-handle';
+      handle.textContent = '⠿';
+      handle.title = 'Arrastar para reordenar';
+      handle.addEventListener('mousedown', e => {{ e.stopPropagation(); p.setAttribute('draggable', 'true'); }});
+      handle.addEventListener('click', e => {{ e.stopPropagation(); }});
+      titleEl.appendChild(handle);
+    }}
+    p.addEventListener('dragstart', e => {{ e.dataTransfer.setData('text/plain', p.dataset.pid); p.classList.add('dragging'); }});
+    p.addEventListener('dragend', () => {{ p.removeAttribute('draggable'); p.classList.remove('dragging'); saveFlowBoxOrder(containerId); }});
+    p.addEventListener('dragover', e => {{ e.preventDefault(); p.classList.add('drag-over'); }});
+    p.addEventListener('dragleave', () => p.classList.remove('drag-over'));
+    p.addEventListener('drop', e => {{
+      e.preventDefault();
+      p.classList.remove('drag-over');
+      const draggedId = e.dataTransfer.getData('text/plain');
+      const dragged = container.querySelector(`[data-pid="${{draggedId}}"]`);
+      if (dragged && dragged !== p) {{
+        const all = Array.from(container.children);
+        if (all.indexOf(dragged) < all.indexOf(p)) p.after(dragged); else p.before(dragged);
+        saveFlowBoxOrder(containerId);
+      }}
+    }});
+  }});
+  const savedOrder = localStorage.getItem('flowboxorder_' + containerId);
+  if (savedOrder) {{
+    try {{
+      JSON.parse(savedOrder).forEach(pid => {{
+        const el = container.querySelector(`[data-pid="${{pid}}"]`);
+        if (el) container.appendChild(el);
+      }});
+    }} catch(e) {{}}
+  }}
+}}
+function saveFlowBoxOrder(containerId) {{
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const order = Array.from(container.querySelectorAll(':scope > .flow-box')).map(p => p.dataset.pid);
+  localStorage.setItem('flowboxorder_' + containerId, JSON.stringify(order));
 }}
 
 // Barras clicaveis genericas (reaproveita o estilo .bar-row ja usado em outras abas).
