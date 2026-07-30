@@ -317,12 +317,18 @@ body, .dashboard-root {{
 .panel.resizable {{ position: relative; overflow: auto; min-width: 260px; min-height: 180px; }}
 .panel.resizable.dragging {{ opacity: 0.35; }}
 .panel.resizable.drag-over {{ box-shadow: 0 0 0 2px var(--pink); }}
-.resize-handle {{
+/* 3 alcas de redimensionar: canto (largura+altura), lateral direita (so largura) e embaixo (so
+   altura) — assim da pra aumentar so pro lado, so pra baixo, ou os dois juntos pelo canto. */
+.resize-handle-corner {{
   position: absolute; right: 0; bottom: 0; width: 18px; height: 18px;
-  cursor: nwse-resize; z-index: 5;
+  cursor: nwse-resize; z-index: 6;
   background: linear-gradient(135deg, transparent 0 50%, var(--panel-border) 50% 60%, transparent 60% 70%, var(--panel-border) 70% 80%, transparent 80%);
 }}
-.resize-handle:hover {{ background: linear-gradient(135deg, transparent 0 50%, var(--pink) 50% 60%, transparent 60% 70%, var(--pink) 70% 80%, transparent 80%); }}
+.resize-handle-corner:hover {{ background: linear-gradient(135deg, transparent 0 50%, var(--pink) 50% 60%, transparent 60% 70%, var(--pink) 70% 80%, transparent 80%); }}
+.resize-handle-r {{ position: absolute; top: 6px; right: 0; bottom: 20px; width: 7px; cursor: ew-resize; z-index: 6; border-radius: 4px; }}
+.resize-handle-r:hover {{ background: var(--pink-dim); }}
+.resize-handle-b {{ position: absolute; left: 6px; right: 20px; bottom: 0; height: 7px; cursor: ns-resize; z-index: 6; border-radius: 4px; }}
+.resize-handle-b:hover {{ background: var(--pink-dim); }}
 .drag-handle {{
   cursor: grab; user-select: none; color: var(--text3); font-size: 14px;
   padding: 0 4px; margin-left: auto; flex-shrink: 0;
@@ -414,12 +420,6 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 .flow-box.resizable.drag-over {{ box-shadow: 0 0 0 2px var(--pink); }}
 .flow-box .drag-handle {{ cursor: grab; user-select: none; color: var(--text3); font-size: 12px; margin-left: 6px; flex-shrink: 0; }}
 .flow-box .drag-handle:active {{ cursor: grabbing; }}
-.flow-box .resize-handle {{
-  position: absolute; right: 0; bottom: 0; width: 16px; height: 16px;
-  cursor: nwse-resize; z-index: 5;
-  background: linear-gradient(135deg, transparent 0 50%, var(--panel-border) 50% 60%, transparent 60% 70%, var(--panel-border) 70% 80%, transparent 80%);
-}}
-.flow-box .resize-handle:hover {{ background: linear-gradient(135deg, transparent 0 50%, var(--pink) 50% 60%, transparent 60% 70%, var(--pink) 70% 80%, transparent 80%); }}
 .flow-sla-table {{ font-size: 11px; }}
 .flow-sla-table td, .flow-sla-table th {{ padding: 4px 8px; }}
 .flow-search-row {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }}
@@ -592,7 +592,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
     </div>
     <div id="fluxoErro" style="display:none; color:var(--danger); font-size:12.5px; margin-bottom:10px;"></div>
 
-    <div class="panel">
+    <div class="panel" id="fluxoDiagramPanel">
       <h2>🧭 Fluxo de atendimento — Central de Suporte EmiteAi</h2>
       <div class="panel-sub" id="fluxoChamadoInfo">Cada etapa mostra o tempo medio do periodo/cliente selecionado e quantos chamados estao nela agora — clique numa etapa pra ver a lista, ou busque um chamado especifico pelo numero.</div>
       <div class="flow-wrap" id="flowDiagram"></div>
@@ -626,7 +626,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
       </div>
     </div>
 
-    <div class="panel" style="margin-top: 18px;">
+    <div class="panel" id="fluxoTimelinePanel" style="margin-top: 18px;">
       <h2 id="fluxoTimelineTitle">🕒 Linha do tempo</h2>
       <div class="panel-sub" id="fluxoTimelineSub">Media geral do periodo/cliente selecionado — busque um chamado pra ver a linha do tempo real dele</div>
       <div id="fluxoGantt"></div>
@@ -1619,6 +1619,52 @@ document.getElementById('gridHist').innerHTML = `
 `;
 
 // --- Redimensionar e reordenar paineis (arrastar pelo icone ⠿), salvo no navegador ---
+// Anexa 3 alcas de redimensionar num elemento: canto (largura+altura juntas), lateral direita (so
+// largura) e embaixo (so altura) — reusado tanto pelos paineis normais quanto pelos cards do
+// fluxograma. onResizeEnd(el) e chamado ao soltar o mouse, pra persistir o tamanho de cada um.
+function attachResizeHandles(el, minW, minH, onResizeEnd) {{
+  if (Array.from(el.children).some(c => c.classList.contains('resize-handle-corner'))) return;
+  const startDrag = (axis) => (e) => {{
+    e.preventDefault();
+    e.stopPropagation();
+    const clientX0 = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY0 = e.touches ? e.touches[0].clientY : e.clientY;
+    const box = el.getBoundingClientRect();
+    const startW = box.width, startH = box.height;
+    el.style.flexGrow = '0';
+    el.style.flexShrink = '0';
+    document.body.style.userSelect = 'none';
+    const onMove = e2 => {{
+      const clientX = e2.touches ? e2.touches[0].clientX : e2.clientX;
+      const clientY = e2.touches ? e2.touches[0].clientY : e2.clientY;
+      if (axis !== 'y') el.style.width = Math.max(minW, startW + (clientX - clientX0)) + 'px';
+      if (axis !== 'x') el.style.height = Math.max(minH, startH + (clientY - clientY0)) + 'px';
+    }};
+    const onUp = () => {{
+      document.body.style.userSelect = '';
+      onResizeEnd(el);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    }};
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onMove, {{passive:false}});
+    window.addEventListener('touchend', onUp);
+  }};
+  [['resize-handle-corner', 'both'], ['resize-handle-r', 'x'], ['resize-handle-b', 'y']].forEach(([cls, axis]) => {{
+    const rh = document.createElement('div');
+    rh.className = cls;
+    rh.title = axis === 'both' ? 'Arrastar para redimensionar' : (axis === 'x' ? 'Arrastar para alargar/estreitar' : 'Arrastar para aumentar/diminuir altura');
+    el.appendChild(rh);
+    const onDown = startDrag(axis);
+    rh.addEventListener('mousedown', onDown);
+    rh.addEventListener('touchstart', onDown, {{passive:false}});
+    rh.addEventListener('click', e => {{ e.stopPropagation(); }});
+  }});
+}}
+
 function saveOrder(containerId) {{
   const container = document.getElementById(containerId);
   const order = Array.from(container.children).filter(c => c.classList.contains('panel')).map(c => c.dataset.pid);
@@ -1639,52 +1685,7 @@ function enhancePanels(containerId, allowReorder) {{
         if (s.h) p.style.height = s.h;
       }} catch(e) {{}}
     }}
-
-    // Redimensionamento customizado (nao depende do resize:both nativo do navegador)
-    if (!p.querySelector('.resize-handle')) {{
-      const rh = document.createElement('div');
-      rh.className = 'resize-handle';
-      rh.title = 'Arrastar para redimensionar';
-      p.appendChild(rh);
-      let startX = 0, startY = 0, startW = 0, startH = 0, resizing = false;
-      const onMove = e => {{
-        if (!resizing) return;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const newW = Math.max(260, startW + (clientX - startX));
-        const newH = Math.max(180, startH + (clientY - startY));
-        p.style.width = newW + 'px';
-        p.style.height = newH + 'px';
-      }};
-      const onUp = () => {{
-        if (!resizing) return;
-        resizing = false;
-        document.body.style.userSelect = '';
-        localStorage.setItem('panelsize_' + p.dataset.pid, JSON.stringify({{w: p.style.width, h: p.style.height}}));
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-        window.removeEventListener('touchmove', onMove);
-        window.removeEventListener('touchend', onUp);
-      }};
-      const onDown = e => {{
-        e.preventDefault();
-        resizing = true;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        startX = clientX; startY = clientY;
-        const box = p.getBoundingClientRect();
-        startW = box.width; startH = box.height;
-        p.style.flexGrow = '0';
-        p.style.flexShrink = '0';
-        document.body.style.userSelect = 'none';
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
-        window.addEventListener('touchmove', onMove, {{passive:false}});
-        window.addEventListener('touchend', onUp);
-      }};
-      rh.addEventListener('mousedown', onDown);
-      rh.addEventListener('touchstart', onDown, {{passive:false}});
-    }}
+    attachResizeHandles(p, 260, 180, el => localStorage.setItem('panelsize_' + p.dataset.pid, JSON.stringify({{w: el.style.width, h: el.style.height}})));
 
     if (!allowReorder) return;
     const h2 = p.querySelector('h2');
@@ -1693,7 +1694,8 @@ function enhancePanels(containerId, allowReorder) {{
       handle.className = 'drag-handle';
       handle.textContent = '⠿';
       handle.title = 'Arrastar para reordenar';
-      handle.addEventListener('mousedown', () => {{ p.setAttribute('draggable', 'true'); }});
+      handle.addEventListener('mousedown', e => {{ e.stopPropagation(); p.setAttribute('draggable', 'true'); }});
+      handle.addEventListener('click', e => {{ e.stopPropagation(); }});
       h2.appendChild(handle);
     }}
     p.addEventListener('dragstart', e => {{ e.dataTransfer.setData('text/plain', p.dataset.pid); p.classList.add('dragging'); }});
@@ -2600,52 +2602,7 @@ function enhanceFlowBoxes(containerId) {{
       }} catch(e) {{}}
     }}
 
-    if (!p.querySelector('.resize-handle')) {{
-      const rh = document.createElement('div');
-      rh.className = 'resize-handle';
-      rh.title = 'Arrastar para redimensionar';
-      p.appendChild(rh);
-      let startX = 0, startY = 0, startW = 0, startH = 0, resizing = false;
-      const onMove = e => {{
-        if (!resizing) return;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const newW = Math.max(140, startW + (clientX - startX));
-        const newH = Math.max(90, startH + (clientY - startY));
-        p.style.width = newW + 'px';
-        p.style.height = newH + 'px';
-      }};
-      const onUp = () => {{
-        if (!resizing) return;
-        resizing = false;
-        document.body.style.userSelect = '';
-        localStorage.setItem('flowboxsize_' + p.dataset.pid, JSON.stringify({{w: p.style.width, h: p.style.height}}));
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-        window.removeEventListener('touchmove', onMove);
-        window.removeEventListener('touchend', onUp);
-      }};
-      const onDown = e => {{
-        e.preventDefault();
-        e.stopPropagation();
-        resizing = true;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        startX = clientX; startY = clientY;
-        const box = p.getBoundingClientRect();
-        startW = box.width; startH = box.height;
-        p.style.flexGrow = '0';
-        p.style.flexShrink = '0';
-        document.body.style.userSelect = 'none';
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
-        window.addEventListener('touchmove', onMove, {{passive:false}});
-        window.addEventListener('touchend', onUp);
-      }};
-      rh.addEventListener('mousedown', onDown);
-      rh.addEventListener('touchstart', onDown, {{passive:false}});
-      rh.addEventListener('click', e => {{ e.stopPropagation(); }});
-    }}
+    attachResizeHandles(p, 140, 90, el => localStorage.setItem('flowboxsize_' + p.dataset.pid, JSON.stringify({{w: el.style.width, h: el.style.height}})));
 
     const titleEl = p.querySelector('.flow-title');
     if (titleEl && !titleEl.querySelector('.drag-handle')) {{
@@ -2936,6 +2893,10 @@ selMesFluxo.addEventListener('change', () => {{ refreshClienteFluxoOptions(); re
 selClienteFluxo.addEventListener('change', renderFluxoAgregado);
 refreshClienteFluxoOptions();
 renderFluxoAgregado();
+enhancePanels('fluxoDiagramPanel', false);
+enhancePanels('gridFluxoEntrada', true);
+enhancePanels('gridFluxo', true);
+enhancePanels('fluxoTimelinePanel', false);
 
 function tick() {{
   const el = document.getElementById('clock');
