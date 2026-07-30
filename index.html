@@ -171,6 +171,11 @@ tr.clickable-row:hover td { background: rgba(255,255,255,0.03); }
 .flow-box.flow-done .flow-title { color: var(--ok); }
 .flow-box.flow-current { border-color: var(--pink); background: var(--pink-dim); box-shadow: 0 0 0 2px rgba(237,109,162,0.25); }
 .flow-box.flow-current .flow-title { color: var(--pink); }
+.flow-box.flow-clickable { cursor: pointer; }
+.flow-box.flow-clickable:hover { border-color: var(--navy); box-shadow: var(--shadow2); }
+.flow-box.flow-clickable:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
+.flow-time { font-size: 10.5px; color: var(--text-dim); margin-top: 6px; font-weight: 600; }
+.flow-count { display: inline-block; margin-top: 4px; font-size: 10px; font-weight: 700; color: var(--pink); background: var(--pink-dim); border-radius: 20px; padding: 2px 8px; }
 .flow-arrow { display: flex; align-items: center; justify-content: center; color: var(--text3); font-size: 18px; padding: 0 2px; flex-shrink: 0; }
 .flow-branch { display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .flow-sla-table { font-size: 11px; }
@@ -216,7 +221,7 @@ tr.clickable-row:hover td { background: rgba(255,255,255,0.03); }
     </div>
     <div class="header-right">
       <div class="clock" id="clock">--:--:--</div>
-      <div>Dados de 30/07/2026 10:48 (Brasilia)</div>
+      <div>Dados de 30/07/2026 10:59 (Brasilia)</div>
     </div>
   </div>
 
@@ -324,18 +329,15 @@ tr.clickable-row:hover td { background: rgba(255,255,255,0.03); }
 
   <div class="tab-panel" id="tabFluxo">
     <div class="flow-search-row">
-      <input id="fluxoBuscaProtocolo" class="itil-select" style="max-width:180px;" placeholder="Buscar por numero do chamado" />
+      <input id="fluxoBuscaProtocolo" class="itil-select" style="max-width:220px;" placeholder="Buscar por numero do chamado" />
       <span class="export-btn" style="padding:9px 18px; font-size:12px;" onclick="buscarChamadoFluxoPorProtocolo()">Buscar</span>
-      <span style="color:var(--text3); font-size:11px;">ou filtre por mes e cliente:</span>
-      <select id="selMesFluxo" class="itil-select" title="Mes" style="max-width:170px; font-size:12px; padding:4px 8px;"></select>
-      <select id="selClienteFluxo" class="itil-select" title="Cliente" style="max-width:220px; font-size:12px; padding:4px 8px;"></select>
-      <select id="selChamadoFluxo" class="itil-select" title="Chamado" style="max-width:320px; font-size:12px; padding:4px 8px;"></select>
+      <span id="fluxoLimparBusca" class="export-btn" style="padding:9px 18px; font-size:12px; display:none;" onclick="limparBuscaFluxo()">Limpar</span>
     </div>
     <div id="fluxoErro" style="display:none; color:var(--danger); font-size:12.5px; margin-bottom:10px;"></div>
 
     <div class="panel">
       <h2>🧭 Fluxo de atendimento — Central de Suporte EmiteAi</h2>
-      <div class="panel-sub" id="fluxoChamadoInfo">Selecione ou busque um chamado para ver em qual etapa ele esta e os proximos passos possiveis.</div>
+      <div class="panel-sub" id="fluxoChamadoInfo">Cada etapa mostra o tempo medio do mes corrente e quantos chamados estao nela agora — clique numa etapa pra ver a lista, ou busque um chamado especifico pelo numero.</div>
       <div class="flow-wrap" id="flowDiagram"></div>
     </div>
 
@@ -419,7 +421,7 @@ const RESOLVED_MONTHS = {};
 Object.keys(RESOLVED_MONTHS_RAW).forEach(k => {
   RESOLVED_MONTHS[k] = RESOLVED_MONTHS_RAW[k].filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r));
 });
-const NOW = new Date("2026-07-30T13:48:52Z");
+const NOW = new Date("2026-07-30T13:59:06Z");
 const TODAY_STR = NOW.toISOString().slice(0,10);
 
 function parseDt(s) { return s ? new Date(s.split('.')[0] + 'Z') : null; }
@@ -2072,11 +2074,55 @@ function proximosPassosTexto(status) {
   return `Aguardando retorno de terceiro ou etapa intermediaria ('${esc(status || '-')}') antes de prosseguir no fluxo de atendimento tecnico.`;
 }
 
+// Media (mes corrente) do tempo em cada etapa tecnica, reaproveitando o mesmo calculo usado no
+// ciclo de vida do Bug/indicadores N1-N2 — aqui aplicado a TODOS os chamados do mes com historico de
+// status (nao so' Bug/Melhoria/Servicos), pra dar uma visao geral do fluxo como um todo.
+const fluxoItensComHistorico = RESOLVED_MONTH.filter(r => (r.statusHistories || []).length);
+const fluxoCiclos = fluxoItensComHistorico.map(calcularCicloAtendimentoTecnico).filter(Boolean);
+const fluxoMediaRepasseN1 = avg(fluxoCiclos.filter(c => c.tempoRepasseN1H !== null).map(c => c.tempoRepasseN1H));
+const fluxoMediaAberturaTask = avg(fluxoCiclos.filter(c => c.tempoAberturaTaskH !== null).map(c => c.tempoAberturaTaskH));
+const fluxoMediaDevops = avg(fluxoCiclos.filter(c => c.devopsH !== null).map(c => c.devopsH));
+// Tempo medio (por visita ao status) em Aguardando Cliente e em Resolvido (antes de fechar/reabrir) —
+// direto do historico de status, sem depender do repasse N1->N2.
+function avgTimeInStatus(items, status) {
+  const durs = [];
+  items.forEach(r => (r.statusHistories || []).forEach(h => {
+    if (h.status === status && h.permanencyTimeFullTime) durs.push(h.permanencyTimeFullTime / 3600);
+  }));
+  return avg(durs);
+}
+const fluxoMediaPendente = avgTimeInStatus(fluxoItensComHistorico, 'Aguardando Cliente');
+const fluxoMediaEncerramento = avgTimeInStatus(fluxoItensComHistorico, 'Resolvido');
+const FLOW_STAGE_TIME = {
+  n1: fluxoMediaRepasseN1,
+  n2: fluxoMediaAberturaTask,
+  task_dev: fluxoMediaDevops,
+  pendente_usuario: fluxoMediaPendente,
+  encerrado: fluxoMediaEncerramento,
+};
+
+// Contagem AO VIVO de chamados abertos que estao em cada etapa agora — clicar na etapa abre a lista.
+function ticketsNaEtapa(key) {
+  return TICKETS.filter(t => stageOfStatus(t.status) === key);
+}
+function abrirModalEtapaFluxo(key, titulo) {
+  renderModal(`${titulo} — chamados abertos agora`, ticketsNaEtapa(key), 'open');
+}
+const FLOW_CLICKAVEL = ['n1', 'n2', 'task_dev', 'pendente_usuario', 'validacao_cliente', 'encerrado'];
+
 function renderFlowDiagram(currentKey) {
-  const boxHtml = (s) => `<div class="flow-box ${s.key === currentKey ? 'flow-current' : ''}" id="flowbox-${s.key}">
+  const boxHtml = (s) => {
+    const clickavel = FLOW_CLICKAVEL.indexOf(s.key) !== -1;
+    const tempo = FLOW_STAGE_TIME[s.key];
+    const qtd = clickavel ? ticketsNaEtapa(s.key).length : null;
+    const attrs = clickavel ? `tabindex="0" role="button" onclick="abrirModalEtapaFluxo(${jsStr(s.key)}, ${jsStr(s.title)})" onkeydown="if(event.key==='Enter')abrirModalEtapaFluxo(${jsStr(s.key)}, ${jsStr(s.title)})"` : '';
+    return `<div class="flow-box ${s.key === currentKey ? 'flow-current' : ''} ${clickavel ? 'flow-clickable' : ''}" id="flowbox-${s.key}" ${attrs}>
       <div class="flow-title">${esc(s.title)}</div>
       <div class="flow-sub">${esc(s.sub)}</div>
+      ${tempo !== undefined && tempo !== null ? `<div class="flow-time">⏱ media mes: ${fmtH(tempo)}</div>` : ''}
+      ${qtd !== null ? `<div class="flow-count">${qtd} agora</div>` : ''}
     </div>`;
+  };
   const mainRow = FLOW_MAIN_STAGES.map((s,i) => boxHtml(s) + (i < FLOW_MAIN_STAGES.length - 1 ? '<div class="flow-arrow">→</div>' : '')).join('');
   document.getElementById('flowDiagram').innerHTML = `
     <div class="flow-row">${mainRow}</div>
@@ -2102,6 +2148,7 @@ function findTicketByProtocol(protocol) {
 function carregarChamadoFluxo(ticket) {
   if (!ticket) return;
   document.getElementById('fluxoErro').style.display = 'none';
+  document.getElementById('fluxoLimparBusca').style.display = '';
   const curStage = stageOfStatus(ticket.status);
   renderFlowDiagram(curStage);
   document.getElementById('fluxoChamadoInfo').innerHTML =
@@ -2128,6 +2175,17 @@ function carregarChamadoFluxo(ticket) {
   }
 }
 
+function limparBuscaFluxo() {
+  document.getElementById('fluxoBuscaProtocolo').value = '';
+  document.getElementById('fluxoErro').style.display = 'none';
+  document.getElementById('fluxoLimparBusca').style.display = 'none';
+  document.getElementById('fluxoChamadoInfo').textContent = 'Cada etapa mostra o tempo medio do mes corrente e quantos chamados estao nela agora — clique numa etapa pra ver a lista, ou busque um chamado especifico pelo numero.';
+  document.getElementById('fluxoProximosPassos').innerHTML = '<div class="empty-msg">Nenhum chamado selecionado</div>';
+  document.getElementById('fluxoTimelineSub').textContent = 'Historico de status e tempo em cada etapa';
+  document.getElementById('fluxoTimeline').innerHTML = '<div class="empty-msg">Nenhum chamado selecionado</div>';
+  renderFlowDiagram(null);
+}
+
 function buscarChamadoFluxoPorProtocolo() {
   const val = document.getElementById('fluxoBuscaProtocolo').value;
   const found = findTicketByProtocol(val);
@@ -2140,35 +2198,6 @@ function buscarChamadoFluxoPorProtocolo() {
   carregarChamadoFluxo(found);
 }
 document.getElementById('fluxoBuscaProtocolo').addEventListener('keydown', (e) => { if (e.key === 'Enter') buscarChamadoFluxoPorProtocolo(); });
-
-const selMesFluxo = document.getElementById('selMesFluxo');
-const selClienteFluxo = document.getElementById('selClienteFluxo');
-const selChamadoFluxo = document.getElementById('selChamadoFluxo');
-populateSelect(selMesFluxo, [['aberto', 'Chamados abertos'], ...Object.keys(MONTH_LABELS).map(k => [k, MONTH_LABELS[k]])]);
-
-function itemsDoMesFluxo(mesKey) {
-  return mesKey === 'aberto' ? TICKETS : (RESOLVED_MONTHS[mesKey] || []);
-}
-function refreshClienteFluxoOptions() {
-  const items = itemsDoMesFluxo(selMesFluxo.value);
-  const clientesList = Array.from(new Set(items.map(r => r.clientOrg).filter(Boolean))).sort((a,b) => a.localeCompare(b));
-  const prev = selClienteFluxo.value;
-  populateSelect(selClienteFluxo, [['', 'Todos os clientes'], ...clientesList.map(c => [c, c])]);
-  if (clientesList.indexOf(prev) !== -1) selClienteFluxo.value = prev;
-}
-function refreshChamadoFluxoOptions() {
-  const items = itemsDoMesFluxo(selMesFluxo.value).filter(r => !selClienteFluxo.value || r.clientOrg === selClienteFluxo.value);
-  const sorted = items.slice().sort((a,b) => String(b.protocol).localeCompare(String(a.protocol)));
-  populateSelect(selChamadoFluxo, sorted.slice(0, 300).map(r => [r.protocol, `${r.protocol} — ${(r.subject || '').slice(0, 50)}`]));
-}
-selMesFluxo.addEventListener('change', () => { refreshClienteFluxoOptions(); refreshChamadoFluxoOptions(); });
-selClienteFluxo.addEventListener('change', refreshChamadoFluxoOptions);
-selChamadoFluxo.addEventListener('change', () => {
-  const found = findTicketByProtocol(selChamadoFluxo.value);
-  if (found) carregarChamadoFluxo(found);
-});
-refreshClienteFluxoOptions();
-refreshChamadoFluxoOptions();
 
 function tick() {
   const el = document.getElementById('clock');
