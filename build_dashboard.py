@@ -730,7 +730,8 @@ const FILTERS = {{
   emAtendimento: t => t.status === 'Em atendimento',
   aguardandoCliente: t => t.status === 'Aguardando Cliente',
   bouncing: t => t.ownerTeam === 'Suporte' && t.status === 'Em atendimento' && t._hoursSinceUpdate !== null && t._hoursSinceUpdate >= 48,
-  priorizados: t => t.ownerTeam === 'Suporte' && t._isPriorizado,
+  priorizados: t => t.ownerTeam === 'Suporte' && t._isPriorizado
+    && !isDevQueueStatus(t.status) && t.status !== 'Aguardando Cliente' && t.status !== 'Em atendimento - CS',
   contraturno: t => t.status === 'Em atendimento' && CONTRATURNO_TECNICOS.indexOf(t.ownerName) !== -1,
   naoAtualizadosHoje: t => (t.status === 'Em atendimento' || t.status === 'Aguardando Cliente') && !t._updatedToday,
   cargaParada: t => t.status === 'Em atendimento' && (CARGA_PARADA_RE.test(t.subject || '') || CARGA_PARADA_RE.test(t.description || '')),
