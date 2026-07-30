@@ -411,6 +411,18 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 .flow-timeline-status {{ font-weight: 700; font-size: 12px; color: var(--text); min-width: 220px; }}
 .flow-timeline-dur {{ font-size: 11.5px; color: var(--text-dim); }}
 .flow-next-steps {{ background: var(--surface2); border-radius: 8px; padding: 12px 16px; font-size: 12.5px; color: var(--text); margin-top: 4px; border-left: 3px solid var(--pink); }}
+.flow-next-options {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }}
+.flow-next-pill {{
+  background: var(--panel); border: 1.25px solid #878799; color: var(--text); font-size: 11.5px; font-weight: 600;
+  padding: 6px 14px; border-radius: 20px; cursor: pointer; transition: all .15s ease;
+}}
+.flow-next-pill:hover {{ background: var(--pink-dim); border-color: var(--pink); color: var(--pink); }}
+.flow-gantt {{ display: flex; width: 100%; height: 30px; border-radius: 6px; overflow: hidden; margin: 10px 0 6px; }}
+.flow-gantt-seg {{ height: 100%; min-width: 3px; }}
+.flow-gantt-legend {{ display: flex; flex-wrap: wrap; gap: 12px; font-size: 10.5px; color: var(--text-dim); margin-bottom: 6px; }}
+.flow-gantt-legend-item {{ display: flex; align-items: center; gap: 5px; }}
+.flow-gantt-swatch {{ width: 10px; height: 10px; border-radius: 3px; display: inline-block; }}
+.flow-stage-tag {{ display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 8px; border-radius: 4px; background: var(--surface2); color: var(--text-dim); margin-left: 6px; }}
 
 .modal-overlay {{
   position: fixed; inset: 0; background: rgba(26,26,44,0.45);
@@ -555,38 +567,51 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
       <input id="fluxoBuscaProtocolo" class="itil-select" style="max-width:220px;" placeholder="Buscar por numero do chamado" />
       <span class="export-btn" style="padding:9px 18px; font-size:12px;" onclick="buscarChamadoFluxoPorProtocolo()">Buscar</span>
       <span id="fluxoLimparBusca" class="export-btn" style="padding:9px 18px; font-size:12px; display:none;" onclick="limparBuscaFluxo()">Limpar</span>
+      <span style="color:var(--text3); font-size:11px; margin-left:6px;">dados gerais de:</span>
+      <select id="selMesFluxo" class="itil-select" title="Mes" style="max-width:160px; font-size:12px; padding:4px 8px;"></select>
+      <select id="selClienteFluxo" class="itil-select" title="Cliente" style="max-width:220px; font-size:12px; padding:4px 8px;"></select>
     </div>
     <div id="fluxoErro" style="display:none; color:var(--danger); font-size:12.5px; margin-bottom:10px;"></div>
 
     <div class="panel">
       <h2>🧭 Fluxo de atendimento — Central de Suporte EmiteAi</h2>
-      <div class="panel-sub" id="fluxoChamadoInfo">Cada etapa mostra o tempo medio do mes corrente e quantos chamados estao nela agora — clique numa etapa pra ver a lista, ou busque um chamado especifico pelo numero.</div>
+      <div class="panel-sub" id="fluxoChamadoInfo">Cada etapa mostra o tempo medio do periodo/cliente selecionado e quantos chamados estao nela agora — clique numa etapa pra ver a lista, ou busque um chamado especifico pelo numero.</div>
       <div class="flow-wrap" id="flowDiagram"></div>
+    </div>
+
+    <div class="grid" id="gridFluxoEntrada" style="grid-template-columns: 1fr 1fr; margin-top: 18px;">
+      <div class="panel">
+        <h2>📥 Entrada — por canal</h2>
+        <div class="panel-sub" id="fluxoEntradaSub">Chamados abertos agora, por forma de abertura</div>
+        <div id="fluxoEntradaBars"></div>
+      </div>
+      <div class="panel">
+        <h2>🐞 Em desenvolvimento — por categoria</h2>
+        <div class="panel-sub">Chamados abertos agora na fila de desenvolvimento, por categoria</div>
+        <div id="fluxoDevBars"></div>
+      </div>
     </div>
 
     <div class="grid" id="gridFluxo" style="grid-template-columns: 1fr 1fr; margin-top: 18px;">
       <div class="panel">
         <h2>⏱️ SLA de repasse para N2</h2>
-        <div class="panel-sub">Prazo a partir do momento em que o N1 aciona o N2</div>
+        <div class="panel-sub">Prazo a partir do momento em que o N1 aciona o N2 · tempo medio observado no periodo/cliente selecionado</div>
         <table class="flow-sla-table">
-          <thead><tr><th>Classificacao</th><th>Prazo (SLA)</th><th>Observacao</th></tr></thead>
-          <tbody>
-            <tr><td>Urgente</td><td>15 minutos</td><td>Atendimento imediato</td></tr>
-            <tr><td>Bug alto</td><td>1 hora</td><td>Atendimento prioritario</td></tr>
-            <tr><td>Bug medio</td><td>8 horas</td><td>Desde que fornecida solucao de contorno ao usuario</td></tr>
-          </tbody>
+          <thead><tr><th>Classificacao</th><th>Prazo (SLA)</th><th>Tempo medio observado</th><th>Observacao</th></tr></thead>
+          <tbody id="fluxoSlaTbody"></tbody>
         </table>
       </div>
       <div class="panel">
         <h2>📍 Chamado selecionado — proximos passos</h2>
-        <div id="fluxoProximosPassos"><div class="empty-msg">Nenhum chamado selecionado</div></div>
+        <div id="fluxoProximosPassos"><div class="empty-msg">Nenhum chamado selecionado — dados gerais acima</div></div>
       </div>
     </div>
 
     <div class="panel" style="margin-top: 18px;">
       <h2>🕒 Linha do tempo do chamado</h2>
-      <div class="panel-sub" id="fluxoTimelineSub">Historico de status e tempo em cada etapa</div>
-      <div class="flow-timeline" id="fluxoTimeline"><div class="empty-msg">Nenhum chamado selecionado</div></div>
+      <div class="panel-sub" id="fluxoTimelineSub">Busque um chamado para ver a linha do tempo por status</div>
+      <div id="fluxoGantt"></div>
+      <div class="flow-timeline" id="fluxoTimeline"></div>
     </div>
   </div>
 
@@ -2241,8 +2266,9 @@ function initReuniaoMensal() {{
 
 // ============================================================
 // Aba Fluxograma — fluxo de atendimento (Entrada -> Triagem -> N1 -> N2 -> Task/Dev -> Validacao
-// cliente -> Encerramento), com busca de chamado (por numero, ou por mes+cliente) que mostra em qual
-// etapa o chamado esta agora, os proximos passos possiveis e a linha do tempo por status.
+// cliente -> Encerramento), com filtro por mes+cliente pros dados gerais, busca de chamado por numero
+// (mostra em qual etapa esta, proximos passos clicaveis e linha do tempo por status), e paineis de
+// Entrada (por canal) e Desenvolvimento (por categoria) — tudo interativo (clique abre a lista).
 // ============================================================
 const FLOW_MAIN_STAGES = [
   {{ key: 'entrada', title: 'Entrada', sub: 'E-mail, WhatsApp/chat ou portal Movidesk' }},
@@ -2254,12 +2280,26 @@ const FLOW_MAIN_STAGES = [
   {{ key: 'encerrado', title: 'Encerramento', sub: 'Manual (cliente confirma) ou automatico em 3 dias' }},
 ];
 const FLOW_SECONDARY_STAGE = {{ key: 'pendente_usuario', title: 'Pendente Usuario', sub: "'Aguardando Cliente' — volta ao N1 quando o cliente responde, ou encerra em 3 dias sem resposta" }};
+// Cor de cada etapa — usada tanto nas etiquetas quanto na barra de linha do tempo (gantt) do chamado.
+const STAGE_COLORS = {{
+  entrada: '#82829C', triagem: '#F87171', n1: '#ED6DA2', n2: '#F59E0B',
+  task_dev: '#8B5CF6', pendente_usuario: '#38BDF8', validacao_cliente: '#34D399', encerrado: '#6B7280',
+}};
+// Mapeamento aproximado do codigo "origin" do Movidesk pra um rotulo legivel — o unico 100% confirmado
+// no codigo e o 24 (Chat, ja usado nas metricas de chat existentes); os demais seguem a documentacao
+// publica do Movidesk. Editar aqui caso algum codigo apareca com o rotulo errado.
+const ORIGIN_LABELS = {{ 1: 'E-mail', 2: 'Portal', 3: 'Telefone', 9: 'WhatsApp', 10: 'Rede social', 24: 'Chat' }};
+function originLabel(origin) {{
+  if (origin === null || origin === undefined) return 'Nao informado';
+  return ORIGIN_LABELS[origin] || `Outro (codigo ${{origin}})`;
+}}
 
 // Mapeia o status atual do Movidesk pra uma etapa do fluxo (aproximado — o Movidesk nao tem um campo
 // proprio de "etapa do fluxo", so status; alguns status de espera especificos, tipo Aguardando
 // Terceiros/Sefaz-ANTT/Squad GNRE, ficam agrupados dentro da etapa tecnica corrente por simplicidade).
 function stageOfStatus(status) {{
-  if (status === 'Novo' || status === 'Em atendimento') return 'n1';
+  if (status === 'Novo') return 'triagem';
+  if (status === 'Em atendimento') return 'n1';
   if (status === 'Aguardando Cliente') return 'pendente_usuario';
   if (status === N2_HANDOFF_STATUS) return 'n2';
   if (isDevQueueStatus(status)) return 'task_dev';
@@ -2269,8 +2309,23 @@ function stageOfStatus(status) {{
   return 'n1';
 }}
 
+// Proximas opcoes possiveis a partir de cada ETAPA (nao status) — usadas tanto no texto quanto nos
+// pills clicaveis (cada pill abre a lista de chamados que estao hoje na etapa de destino).
+const FLOW_NEXT_OPTIONS = {{
+  triagem: [['n1', 'N1 (Suporte)']],
+  n1: [['n2', 'N2'], ['pendente_usuario', 'Pendente Usuario'], ['validacao_cliente', 'Resolver (Validacao cliente)']],
+  pendente_usuario: [['n1', 'Volta ao N1'], ['encerrado', 'Encerramento automatico (3 dias)']],
+  n2: [['n1', 'Resolve e devolve ao N1'], ['task_dev', 'Abre task (Desenvolvimento)']],
+  task_dev: [['n2', 'Volta ao N2 (validacao/impedimento)']],
+  validacao_cliente: [['encerrado', 'Encerramento']],
+  encerrado: [],
+}};
+
 function proximosPassosTexto(status) {{
-  if (status === 'Novo' || status === 'Em atendimento') {{
+  if (status === 'Novo') {{
+    return "Chamado na fila, aguardando o N1 iniciar a analise (ou o N3 apoiar, se necessario).";
+  }}
+  if (status === 'Em atendimento') {{
     return "O N1 pode: <b>resolver diretamente</b> (o chamado segue para validacao do cliente), <b>colocar Aguardando Cliente</b> (Pendente Usuario, quando falta informacao do cliente), ou <b>repassar para 'Em atendimento - N2'</b> quando o caso exige um nivel tecnico mais aprofundado. O N3 (Multiplicador) pode apoiar o N1 em qualquer uma dessas etapas.";
   }}
   if (status === 'Aguardando Cliente') {{
@@ -2297,16 +2352,7 @@ function proximosPassosTexto(status) {{
   return `Aguardando retorno de terceiro ou etapa intermediaria ('${{esc(status || '-')}}') antes de prosseguir no fluxo de atendimento tecnico.`;
 }}
 
-// Media (mes corrente) do tempo em cada etapa tecnica, reaproveitando o mesmo calculo usado no
-// ciclo de vida do Bug/indicadores N1-N2 — aqui aplicado a TODOS os chamados do mes com historico de
-// status (nao so' Bug/Melhoria/Servicos), pra dar uma visao geral do fluxo como um todo.
-const fluxoItensComHistorico = RESOLVED_MONTH.filter(r => (r.statusHistories || []).length);
-const fluxoCiclos = fluxoItensComHistorico.map(calcularCicloAtendimentoTecnico).filter(Boolean);
-const fluxoMediaRepasseN1 = avg(fluxoCiclos.filter(c => c.tempoRepasseN1H !== null).map(c => c.tempoRepasseN1H));
-const fluxoMediaAberturaTask = avg(fluxoCiclos.filter(c => c.tempoAberturaTaskH !== null).map(c => c.tempoAberturaTaskH));
-const fluxoMediaDevops = avg(fluxoCiclos.filter(c => c.devopsH !== null).map(c => c.devopsH));
-// Tempo medio (por visita ao status) em Aguardando Cliente e em Resolvido (antes de fechar/reabrir) —
-// direto do historico de status, sem depender do repasse N1->N2.
+// Tempo medio (por visita ao status) em um status especifico — direto do historico de status.
 function avgTimeInStatus(items, status) {{
   const durs = [];
   items.forEach(r => (r.statusHistories || []).forEach(h => {{
@@ -2314,35 +2360,49 @@ function avgTimeInStatus(items, status) {{
   }}));
   return avg(durs);
 }}
-const fluxoMediaPendente = avgTimeInStatus(fluxoItensComHistorico, 'Aguardando Cliente');
-const fluxoMediaEncerramento = avgTimeInStatus(fluxoItensComHistorico, 'Resolvido');
-const FLOW_STAGE_TIME = {{
-  n1: fluxoMediaRepasseN1,
-  n2: fluxoMediaAberturaTask,
-  task_dev: fluxoMediaDevops,
-  pendente_usuario: fluxoMediaPendente,
-  encerrado: fluxoMediaEncerramento,
-}};
 
-// Contagem AO VIVO de chamados abertos que estao em cada etapa agora — clicar na etapa abre a lista.
+// --- Filtros de mes/cliente para os dados GERAIS da aba (times/contagens agregadas) ---
+const selMesFluxo = document.getElementById('selMesFluxo');
+const selClienteFluxo = document.getElementById('selClienteFluxo');
+populateSelect(selMesFluxo, Object.keys(MONTH_LABELS).map(k => [k, MONTH_LABELS[k]]));
+
+function fluxoResolvedScope() {{
+  const items = RESOLVED_MONTHS[selMesFluxo.value] || [];
+  return selClienteFluxo.value ? items.filter(r => r.clientOrg === selClienteFluxo.value) : items;
+}}
+function fluxoOpenScope() {{
+  return selClienteFluxo.value ? TICKETS.filter(t => t.clientOrg === selClienteFluxo.value) : TICKETS;
+}}
+function refreshClienteFluxoOptions() {{
+  const clientes = new Set([
+    ...(RESOLVED_MONTHS[selMesFluxo.value] || []).map(r => r.clientOrg),
+    ...TICKETS.map(t => t.clientOrg),
+  ].filter(Boolean));
+  const clientesList = Array.from(clientes).sort((a,b) => a.localeCompare(b));
+  const prev = selClienteFluxo.value;
+  populateSelect(selClienteFluxo, [['', 'Todos os clientes'], ...clientesList.map(c => [c, c])]);
+  if (clientesList.indexOf(prev) !== -1) selClienteFluxo.value = prev;
+}}
+
+// Contagem AO VIVO (respeitando o filtro de cliente) de chamados abertos em cada etapa — clicar abre a lista.
 function ticketsNaEtapa(key) {{
-  return TICKETS.filter(t => stageOfStatus(t.status) === key);
+  return fluxoOpenScope().filter(t => stageOfStatus(t.status) === key);
 }}
 function abrirModalEtapaFluxo(key, titulo) {{
   renderModal(`${{titulo}} — chamados abertos agora`, ticketsNaEtapa(key), 'open');
 }}
-const FLOW_CLICKAVEL = ['n1', 'n2', 'task_dev', 'pendente_usuario', 'validacao_cliente', 'encerrado'];
+const FLOW_CLICKAVEL = ['n1', 'n2', 'task_dev', 'pendente_usuario', 'validacao_cliente', 'encerrado', 'triagem'];
 
-function renderFlowDiagram(currentKey) {{
+function renderFlowDiagram(currentKey, stageTimes) {{
   const boxHtml = (s) => {{
     const clickavel = FLOW_CLICKAVEL.indexOf(s.key) !== -1;
-    const tempo = FLOW_STAGE_TIME[s.key];
+    const tempo = stageTimes[s.key];
     const qtd = clickavel ? ticketsNaEtapa(s.key).length : null;
     const attrs = clickavel ? `tabindex="0" role="button" onclick="abrirModalEtapaFluxo(${{jsStr(s.key)}}, ${{jsStr(s.title)}})" onkeydown="if(event.key==='Enter')abrirModalEtapaFluxo(${{jsStr(s.key)}}, ${{jsStr(s.title)}})"` : '';
-    return `<div class="flow-box ${{s.key === currentKey ? 'flow-current' : ''}} ${{clickavel ? 'flow-clickable' : ''}}" id="flowbox-${{s.key}}" ${{attrs}}>
+    return `<div class="flow-box ${{s.key === currentKey ? 'flow-current' : ''}} ${{clickavel ? 'flow-clickable' : ''}}" id="flowbox-${{s.key}}" ${{attrs}} style="border-top: 3px solid ${{STAGE_COLORS[s.key]}};">
       <div class="flow-title">${{esc(s.title)}}</div>
       <div class="flow-sub">${{esc(s.sub)}}</div>
-      ${{tempo !== undefined && tempo !== null ? `<div class="flow-time">⏱ media mes: ${{fmtH(tempo)}}</div>` : ''}}
+      ${{tempo !== undefined && tempo !== null ? `<div class="flow-time">⏱ media: ${{fmtH(tempo)}}</div>` : ''}}
       ${{qtd !== null ? `<div class="flow-count">${{qtd}} agora</div>` : ''}}
     </div>`;
   }};
@@ -2352,7 +2412,63 @@ function renderFlowDiagram(currentKey) {{
     <div class="flow-row" style="max-width:280px;">${{boxHtml(FLOW_SECONDARY_STAGE)}}</div>
   `;
 }}
-renderFlowDiagram(null);
+
+// Barras clicaveis genericas (reaproveita o estilo .bar-row ja usado em outras abas).
+function fluxoBarsHtml(grupos, onclickFor) {{
+  if (!grupos.length) return '<div class="empty-msg">Sem dados no periodo/cliente selecionado</div>';
+  const top = Math.max(...grupos.map(([,items]) => items.length), 1);
+  return grupos.map(([label, items]) => `
+    <div class="bar-row" onclick="${{onclickFor(label, items)}}">
+      <div class="bar-label" style="width:auto; flex:1;">${{esc(label)}}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${{(items.length/top*100).toFixed(0)}}%"></div></div>
+      <div class="bar-value">${{items.length}}</div>
+    </div>`).join('');
+}}
+
+// ---- Renderiza os dados GERAIS da aba (nada selecionado) — respeitando mes+cliente ----
+function renderFluxoAgregado() {{
+  const resolvedScope = fluxoResolvedScope();
+  const openScope = fluxoOpenScope();
+  const comHistorico = resolvedScope.filter(r => (r.statusHistories || []).length);
+  const ciclos = comHistorico.map(calcularCicloAtendimentoTecnico).filter(Boolean);
+  const stageTimes = {{
+    triagem: avgTimeInStatus(comHistorico, 'Novo'),
+    n1: avg(ciclos.filter(c => c.tempoRepasseN1H !== null).map(c => c.tempoRepasseN1H)),
+    n2: avg(ciclos.filter(c => c.tempoAberturaTaskH !== null).map(c => c.tempoAberturaTaskH)),
+    task_dev: avg(ciclos.filter(c => c.devopsH !== null).map(c => c.devopsH)),
+    pendente_usuario: avgTimeInStatus(comHistorico, 'Aguardando Cliente'),
+    encerrado: avgTimeInStatus(comHistorico, 'Resolvido'),
+  }};
+  renderFlowDiagram(null, stageTimes);
+
+  // Entrada por canal — AO VIVO (backlog atual), respeitando o filtro de cliente.
+  const porOrigem = {{}};
+  openScope.forEach(t => {{ const l = originLabel(t.origin); (porOrigem[l] = porOrigem[l] || []).push(t); }});
+  const gruposOrigem = Object.entries(porOrigem).sort((a,b) => b[1].length - a[1].length);
+  document.getElementById('fluxoEntradaSub').textContent = `${{openScope.length}} chamados abertos agora, por forma de abertura`;
+  document.getElementById('fluxoEntradaBars').innerHTML = fluxoBarsHtml(gruposOrigem,
+    (label) => `renderModal(${{jsStr(label + ' — chamados abertos agora')}}, TICKETS.filter(t=>originLabel(t.origin)===${{jsStr(label)}}${{selClienteFluxo.value ? ' && t.clientOrg===' + jsStr(selClienteFluxo.value) : ''}}), 'open')`);
+
+  // Em desenvolvimento por categoria — AO VIVO, respeitando o filtro de cliente.
+  const emDev = ticketsNaEtapa('task_dev');
+  const porCategoria = {{}};
+  emDev.forEach(t => {{ const c = (t.category || 'Sem categoria').toUpperCase(); (porCategoria[c] = porCategoria[c] || []).push(t); }});
+  const gruposCategoria = Object.entries(porCategoria).sort((a,b) => b[1].length - a[1].length);
+  document.getElementById('fluxoDevBars').innerHTML = fluxoBarsHtml(gruposCategoria,
+    (label) => `renderModal(${{jsStr(label + ' em desenvolvimento')}}, ticketsNaEtapa('task_dev').filter(t=>(t.category||'Sem categoria').toUpperCase()===${{jsStr(label)}}), 'open')`);
+
+  // SLA de repasse N2 — tempo medio observado (repasse N1) por classificacao, no escopo selecionado.
+  const slaLinhas = [
+    {{ nome: 'Urgente', prazo: '15 minutos', obs: 'Atendimento imediato', filtro: r => r.urgency === 'Urgente' }},
+    {{ nome: 'Bug alto', prazo: '1 hora', obs: 'Atendimento prioritario', filtro: r => r.category === 'Bug' && r.urgency === 'Alta' }},
+    {{ nome: 'Bug medio', prazo: '8 horas', obs: 'Desde que fornecida solucao de contorno ao usuario', filtro: r => r.category === 'Bug' && r.urgency === 'Média' }},
+  ];
+  document.getElementById('fluxoSlaTbody').innerHTML = slaLinhas.map(l => {{
+    const subset = ciclos.filter((c,i) => l.filtro(comHistorico[i]) && c.tempoRepasseN1H !== null);
+    const media = avg(subset.map(c => c.tempoRepasseN1H));
+    return `<tr><td>${{l.nome}}</td><td>${{l.prazo}}</td><td>${{media !== null ? fmtH(media) + ` (${{subset.length}})` : '-'}}</td><td>${{l.obs}}</td></tr>`;
+  }}).join('');
+}}
 
 function findTicketByProtocol(protocol) {{
   protocol = String(protocol || '').trim();
@@ -2368,18 +2484,48 @@ function findTicketByProtocol(protocol) {{
   return null;
 }}
 
+// Barra colorida (gantt) com o tempo em cada etapa do historico de status do chamado.
+function renderFluxoGantt(hist) {{
+  if (!hist.length) {{ document.getElementById('fluxoGantt').innerHTML = ''; return; }}
+  const now = new Date();
+  const dursH = hist.map((h,i) => {{
+    if (h.permanencyTimeFullTime) return h.permanencyTimeFullTime / 3600;
+    if (i === hist.length - 1) return Math.max(0.1, (now - new Date(h.changedDate)) / 3600000);
+    return 0.1;
+  }});
+  const total = dursH.reduce((s,v) => s+v, 0) || 1;
+  const segs = hist.map((h,i) => {{
+    const key = stageOfStatus(h.status);
+    const pct = (dursH[i] / total * 100).toFixed(2);
+    return `<div class="flow-gantt-seg" style="width:${{pct}}%; background:${{STAGE_COLORS[key] || '#82829C'}};" title="${{esc(h.status)}} — ${{fmtH(dursH[i])}}"></div>`;
+  }}).join('');
+  const legendKeys = Array.from(new Set(hist.map(h => stageOfStatus(h.status))));
+  const legend = legendKeys.map(k => {{
+    const def = [...FLOW_MAIN_STAGES, FLOW_SECONDARY_STAGE].find(s => s.key === k);
+    return `<div class="flow-gantt-legend-item"><span class="flow-gantt-swatch" style="background:${{STAGE_COLORS[k]}};"></span>${{esc(def ? def.title : k)}}</div>`;
+  }}).join('');
+  document.getElementById('fluxoGantt').innerHTML = `<div class="flow-gantt">${{segs}}</div><div class="flow-gantt-legend">${{legend}}</div>`;
+}}
+
 function carregarChamadoFluxo(ticket) {{
   if (!ticket) return;
   document.getElementById('fluxoErro').style.display = 'none';
   document.getElementById('fluxoLimparBusca').style.display = '';
   const curStage = stageOfStatus(ticket.status);
-  renderFlowDiagram(curStage);
-  document.getElementById('fluxoChamadoInfo').innerHTML =
-    `Chamado <b>${{ticketLink(ticket.id, ticket.protocol)}}</b> — ${{esc(ticket.subject || '')}} · categoria: ${{esc(ticket.category || '-')}} · status atual: <b>${{esc(ticket.status || '-')}}</b> · tecnico: ${{esc(ticket.ownerName || '-')}} · cliente: ${{esc(ticket.clientOrg || '-')}}`;
-  document.getElementById('fluxoProximosPassos').innerHTML = `<div class="flow-next-steps">${{proximosPassosTexto(ticket.status)}}</div>`;
-
+  const stageTimesVazio = {{}};
+  renderFlowDiagram(curStage, stageTimesVazio);
+  const catTag = ['Bug','Melhoria','Serviços'].indexOf(ticket.category) !== -1 ? `<span class="flow-stage-tag">${{esc(ticket.category)}}</span>` : '';
   const hist = (ticket.statusHistories || []).slice().sort((a,b) => new Date(a.changedDate) - new Date(b.changedDate));
+  const tempoNaEtapaAtualH = hist.length ? (new Date() - new Date(hist[hist.length-1].changedDate)) / 3600000 : null;
+  document.getElementById('fluxoChamadoInfo').innerHTML =
+    `Chamado <b>${{ticketLink(ticket.id, ticket.protocol)}}</b> — ${{esc(ticket.subject || '')}} · categoria: ${{esc(ticket.category || '-')}}${{catTag}} · status atual: <b>${{esc(ticket.status || '-')}}</b>${{tempoNaEtapaAtualH !== null ? ` (ha ${{fmtH(tempoNaEtapaAtualH)}} nesta etapa)` : ''}} · tecnico: ${{esc(ticket.ownerName || '-')}} · cliente: ${{esc(ticket.clientOrg || '-')}} · entrada: ${{esc(originLabel(ticket.origin))}}`;
+
+  const opcoes = FLOW_NEXT_OPTIONS[curStage] || [];
+  const pillsHtml = opcoes.length ? `<div class="flow-next-options">${{opcoes.map(([key, label]) => `<span class="flow-next-pill" onclick="abrirModalEtapaFluxo(${{jsStr(key)}}, ${{jsStr(label)}})">→ ${{esc(label)}}</span>`).join('')}}</div>` : '';
+  document.getElementById('fluxoProximosPassos').innerHTML = `<div class="flow-next-steps">${{proximosPassosTexto(ticket.status)}}</div>${{pillsHtml}}`;
+
   if (hist.length) {{
+    renderFluxoGantt(hist);
     document.getElementById('fluxoTimelineSub').textContent = 'Historico de status e tempo em cada etapa (tempo corrido)';
     document.getElementById('fluxoTimeline').innerHTML = hist.map((h,i) => {{
       const durH = (h.permanencyTimeFullTime || 0) / 3600;
@@ -2390,6 +2536,7 @@ function carregarChamadoFluxo(ticket) {{
       </div>`;
     }}).join('');
   }} else {{
+    document.getElementById('fluxoGantt').innerHTML = '';
     document.getElementById('fluxoTimelineSub').textContent = 'Historico detalhado de status nao disponivel para este chamado (so e mantido para chamados abertos e resolvidos no mes corrente)';
     document.getElementById('fluxoTimeline').innerHTML = `<div class="flow-timeline-item is-last">
         <div class="flow-timeline-status">${{esc(ticket.status || '-')}}</div>
@@ -2402,11 +2549,12 @@ function limparBuscaFluxo() {{
   document.getElementById('fluxoBuscaProtocolo').value = '';
   document.getElementById('fluxoErro').style.display = 'none';
   document.getElementById('fluxoLimparBusca').style.display = 'none';
-  document.getElementById('fluxoChamadoInfo').textContent = 'Cada etapa mostra o tempo medio do mes corrente e quantos chamados estao nela agora — clique numa etapa pra ver a lista, ou busque um chamado especifico pelo numero.';
-  document.getElementById('fluxoProximosPassos').innerHTML = '<div class="empty-msg">Nenhum chamado selecionado</div>';
-  document.getElementById('fluxoTimelineSub').textContent = 'Historico de status e tempo em cada etapa';
-  document.getElementById('fluxoTimeline').innerHTML = '<div class="empty-msg">Nenhum chamado selecionado</div>';
-  renderFlowDiagram(null);
+  document.getElementById('fluxoChamadoInfo').textContent = 'Cada etapa mostra o tempo medio do periodo/cliente selecionado e quantos chamados estao nela agora — clique numa etapa pra ver a lista, ou busque um chamado especifico pelo numero.';
+  document.getElementById('fluxoProximosPassos').innerHTML = '<div class="empty-msg">Nenhum chamado selecionado — dados gerais acima</div>';
+  document.getElementById('fluxoGantt').innerHTML = '';
+  document.getElementById('fluxoTimelineSub').textContent = 'Busque um chamado para ver a linha do tempo por status';
+  document.getElementById('fluxoTimeline').innerHTML = '';
+  renderFluxoAgregado();
 }}
 
 function buscarChamadoFluxoPorProtocolo() {{
@@ -2421,6 +2569,10 @@ function buscarChamadoFluxoPorProtocolo() {{
   carregarChamadoFluxo(found);
 }}
 document.getElementById('fluxoBuscaProtocolo').addEventListener('keydown', (e) => {{ if (e.key === 'Enter') buscarChamadoFluxoPorProtocolo(); }});
+selMesFluxo.addEventListener('change', () => {{ refreshClienteFluxoOptions(); renderFluxoAgregado(); }});
+selClienteFluxo.addEventListener('change', renderFluxoAgregado);
+refreshClienteFluxoOptions();
+renderFluxoAgregado();
 
 function tick() {{
   const el = document.getElementById('clock');
