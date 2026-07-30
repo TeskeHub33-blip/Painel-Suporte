@@ -88,6 +88,27 @@ def main():
         data = fetch_month(target.year, target.month)
         save(f"resolved_month_{offset}.json", data)
 
+    # 4. Acoes/notas dos chamados tecnicos (Bug/Melhoria/Servicos) resolvidos no mes corrente — usadas
+    # pra achar, no log do DevOps/Azure, o comentario que marca quando a task foi para validacao ou
+    # ficou em impedimento (o Movidesk nao tem um status proprio pra isso, e uma info que vem via nota).
+    target = now_utc
+    start, mid, end = month_window(target.year, target.month)
+
+    def fetch_actions_window(a, b):
+        return fetch({
+            "$select": "id,protocol",
+            "$expand": "actions($select=description,createdDate,type)",
+            "$filter": (
+                f"resolvedIn ge {a.strftime('%Y-%m-%d')}T00:00:00Z and resolvedIn lt {b.strftime('%Y-%m-%d')}T00:00:00Z"
+                " and ownerTeam eq 'Suporte'"
+                " and (category eq 'Bug' or category eq 'Melhoria' or category eq 'Serviços')"
+            ),
+            "$top": 1000,
+        })
+
+    bug_actions = fetch_actions_window(start, mid) + fetch_actions_window(mid, end)
+    save("resolved_month_0_actions.json", bug_actions)
+
 
 if __name__ == "__main__":
     main()

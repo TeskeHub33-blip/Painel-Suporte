@@ -35,6 +35,17 @@ def clean_status_histories(raw_list):
             'status': h.get('status'),
             'changedDate': h.get('changedDate'),
             'permanencyTimeFullTime': h.get('permanencyTimeFullTime'),
+            'permanencyTimeWorkingTime': h.get('permanencyTimeWorkingTime'),
+        })
+    return out
+
+def clean_actions(raw_list):
+    out = []
+    for a in (raw_list or []):
+        out.append({
+            'description': a.get('description') or '',
+            'createdDate': a.get('createdDate'),
+            'type': a.get('type'),
         })
     return out
 
@@ -169,11 +180,22 @@ for offset in range(3):
 
 clean_resolved_month = resolved_months_clean['0']  # mantem nome usado no resto do script (mes corrente)
 
+# Acoes/notas dos chamados tecnicos (Bug/Melhoria/Servicos) resolvidos no mes corrente — usadas so'
+# pra achar, no log do DevOps/Azure, o comentario que marca task em validacao/impedimento. So existe
+# pro mes corrente (mesma limitacao do statusHistories).
+try:
+    with open(os.path.join(BASE_DIR, "resolved_month_0_actions.json"), encoding='utf-8-sig') as f:
+        raw_bug_actions = json.load(f)
+except FileNotFoundError:
+    raw_bug_actions = []
+actions_by_id = {str(t.get('id')): clean_actions(t.get('actions')) for t in raw_bug_actions if t.get('id') is not None}
+
 tickets_json = json.dumps(clean, ensure_ascii=False)
 resolved_json = json.dumps(clean_resolved, ensure_ascii=False)
 resolved_month_json = json.dumps(clean_resolved_month, ensure_ascii=False)
 resolved_months_json = json.dumps(resolved_months_clean, ensure_ascii=False)
 month_labels_json = json.dumps(month_labels, ensure_ascii=False)
+actions_by_id_json = json.dumps(actions_by_id, ensure_ascii=False)
 
 html = rf"""<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -511,6 +533,10 @@ let RESOLVED_MONTH = RESOLVED_MONTH_ALL;
 let chatsMes = [];
 const RESOLVED_MONTHS_RAW = {resolved_months_json};
 const MONTH_LABELS = {month_labels_json};
+// Notas/acoes dos chamados tecnicos (Bug/Melhoria/Servicos) resolvidos no mes corrente, indexadas por
+// id do chamado — usadas so' pra achar, no log do DevOps/Azure, o comentario que marca a task em
+// validacao/impedimento (o Movidesk nao tem status proprio pra isso).
+const ACTIONS_BY_ID = {actions_by_id_json};
 // Todos os 3 meses, ja restritos ao time de Suporte, sem chamados Cancelados, e sem chamados
 // reabertos INDEVIDAMENTE pelo Azure (reaberturas legitimas continuam contando normalmente).
 // Esse filtro fica aqui na origem dos dados porque TODAS as abas (Historico, Clientes, One-on-One,
@@ -542,15 +568,33 @@ const CONTRATURNO_TECNICOS = ['Alife Caetano dos Santos', 'Vinicius Campestrini'
 const CARGA_PARADA_RE = /carga\s*(trava|parad)|travad|\bciot\b|\bmdf[-\s]?e\b|\bct[-\s]?e\b/i;
 
 // Classificacao incorreta: Melhoria, Bug e (alguns) Servicos legitimamente tem task associada
-// (passam pela fila de Bugs/dev). Duvida, Erro Operacional e Terceiros NAO deveriam ter task —
-// se um desses tiver passado pela fila de Bugs, e sinal real de categoria errada.
-const BUG_QUEUE_STATUS = 'Aguardando Desenvolvimento - fila Bugs';
+// (passam pela fila de dev). Duvida, Erro Operacional e Terceiros NAO deveriam ter task —
+// se um desses tiver passado pela fila de dev, e sinal real de categoria errada.
+// O Movidesk unificou os status "Aguardando Desenvolvimento" (produto/bug/GNRE etc.) em um so —
+// mantemos tambem o nome antigo ('...- fila Bugs') pra continuar reconhecendo chamados historicos.
+function isDevQueueStatus(status) {{
+  return status === 'Aguardando Desenvolvimento' || status === 'Aguardando Desenvolvimento - fila Bugs';
+}}
+// Status criado para o repasse N1 -> N2: quando o N1 (ou CS/Implantacao) muda o chamado pra este
+// status, o N2 passa a monitorar a fila; o chamado so muda de dono quando o N2 efetivamente assume.
+const N2_HANDOFF_STATUS = 'Em atendimento - N2';
+// A partir desta troca de status, o SLA fica pausado enquanto o chamado depende de orgao governamental
+// (SEFAZ, ANTT, Portal Nacional da GNRE) — conforme contrato com o cliente.
+function isGovWaitStatus(status) {{
+  return /sefaz|antt/i.test(status || '');
+}}
 const CATEGORIAS_SEM_TASK = ['Dúvida', 'Erro Operacional', 'Terceiros'];
 TICKETS.forEach(t => {{
-  const passouPorFilaBugs = (t.statusHistories||[]).some(h => h.status === BUG_QUEUE_STATUS);
+  const passouPorFilaBugs = (t.statusHistories||[]).some(h => isDevQueueStatus(h.status));
   t._classificacaoIncorreta = CATEGORIAS_SEM_TASK.indexOf(t.category) !== -1 && passouPorFilaBugs;
-  t._motivoClassificacao = 'categoria "' + t.category + '" com task associada (fila de Bugs)';
+  t._motivoClassificacao = 'categoria "' + t.category + '" com task associada (fila de dev)';
 }});
+// Chamados resolvidos que passaram pelo status de espera de orgao governamental (SEFAZ/ANTT/GNRE) tem
+// o tempo nesse status excluido do calculo de SLA — so detectavel via historico de status, disponivel
+// apenas para o mes corrente (RESOLVED_MONTHS['0']).
+function aguardouOrgaoGovernamental(r) {{
+  return (r.statusHistories || []).some(h => isGovWaitStatus(h.status));
+}}
 
 const FILTERS = {{
   novos: t => t.status === 'Novo',
@@ -587,7 +631,7 @@ const TIER_INFO = {{
   1: {{ label: 'Bloqueio operacional', cls: 'tier-1' }},
   2: {{ label: 'Risco fiscal (multas)', cls: 'tier-2' }},
 }};
-const ATIVOS = TICKETS.filter(t => t.status !== 'Aguardando Time CS' || true); // todos os TICKETS ja sao nao-fechados
+const ATIVOS = TICKETS; // todos os TICKETS ja sao nao-fechados (o filtro antigo era um no-op)
 ATIVOS.forEach(t => {{ t._tier = priorityTier(t); }});
 const filaPriorizada = ATIVOS.filter(t => t._tier !== null).slice().sort((a,b) => {{
   if (a._tier !== b._tier) return a._tier - b._tier;
@@ -822,14 +866,14 @@ function abrirModalRecorrencia(idx) {{
   renderModalHist(`Recorrencia — ${{g.subject}}`, items);
 }}
 function openModalHistCategoria(cat) {{
-  const items = RESOLVED_MONTH.filter(r => (r.category || 'Sem categoria') === cat && r.slaSolutionDate && !reaberturaIndevidaAzure(r));
+  const items = RESOLVED_MONTH.filter(r => (r.category || 'Sem categoria') === cat && r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r));
   renderModalHist(`SLA — ${{cat}} (mes)`, items);
 }}
 function openModalHistSimple(kind) {{
   if (kind === 'primeiraRespostaHoje') renderModalHist('Resolvidos c/ 1a resposta (hoje)', RESOLVED_TODAY.filter(isPrimeiraResposta));
   else if (kind === 'primeiraRespostaMes') renderModalHist('Resolvidos c/ 1a resposta (mes)', RESOLVED_MONTH.filter(isPrimeiraResposta));
   else if (kind === 'slaNoPrazoMes') renderModalHist('Fora do SLA (mes) — todas categorias', RESOLVED_MONTH.filter(r => {{
-    if (!r.slaSolutionDate || reaberturaIndevidaAzure(r)) return false;
+    if (!r.slaSolutionDate || reaberturaIndevidaAzure(r) || aguardouOrgaoGovernamental(r)) return false;
     const resolvedIn = parseDt(r.resolvedIn); const slaDate = parseDt(r.slaSolutionDate);
     return resolvedIn && slaDate && resolvedIn > slaDate;
   }}));
@@ -939,7 +983,7 @@ const pctPrimeiraRespostaMes = resolvidosMes ? Math.round(resolvidosPrimeiraResp
 // comparando data de resolucao contra o prazo de SLA (slaSolutionDate).
 // So exclui os reabertos INDEVIDAMENTE (integracao do Azure) — reaberturas legitimas contam normalmente.
 const slaPorCategoria = {{}};
-RESOLVED_MONTH.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r)).forEach(r => {{
+RESOLVED_MONTH.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r)).forEach(r => {{
   const cat = r.category || 'Sem categoria';
   if (!slaPorCategoria[cat]) slaPorCategoria[cat] = {{ total: 0, noPrazo: 0 }};
   slaPorCategoria[cat].total++;
@@ -965,45 +1009,73 @@ function byTecnicoResolved(items) {{
   return Object.entries(agg).sort((a,b) => b[1]-a[1]);
 }}
 
-// --- Ciclo de vida do Bug (chamados categoria Bug, resolvidos no mes) ---
-// Baseado no historico de status (statusHistories) de cada chamado:
-// - "tempo para abrir bug": tempo UTIL (permanencyTimeWorkingTime, nao tempo corrido) em fila ate o bug
-//   ser movimentado pra fila de Bugs — desconsidera qualquer periodo em 'Aguardando Cliente' antes disso.
-// - "tempo em devops": soma do tempo (todas as passagens) no status 'Aguardando Desenvolvimento - fila Bugs'
-// - "tempo em validacao": tempo em 'Em atendimento'/'Aguardando Cliente' APOS a ultima saida da fila de Bugs, ate resolver
-// bugsMes/bugMetrics ficam mutaveis (let) porque a aba Historico pode filtrar por cliente e reatribui-los
-// em renderHistoricoMes() — assim o clique nos cards (abrirModalBugMetrica) sempre reflete o filtro atual.
-let bugsMes = RESOLVED_MONTH.filter(r => r.category === 'Bug' && (r.statusHistories||[]).length);
-function calcularCicloVidaBug(r) {{
+// --- Ciclo de atendimento tecnico (N1 -> N2 -> dev), usado no ciclo de vida do Bug (Historico) e
+// nos indicadores tecnicos N1/N2 (One-on-One) ---
+// Baseado no historico de status (statusHistories) de cada chamado, com 3 etapas:
+// - "tempo de repasse - N1": tempo UTIL (permanencyTimeWorkingTime, exclui 'Aguardando Cliente') desde
+//   a abertura do chamado ate ele ser passado pro status 'Em atendimento - N2' (repasse do N1 pro N2).
+// - "tempo abertura task": tempo (corrido) desde o repasse pro N2 ate o chamado entrar na fila de
+//   desenvolvimento ('Aguardando Desenvolvimento') — ou seja, ate a task ser de fato aberta/vinculada.
+// - "tempo aberto no devops": desde a task aberta ate o devops registrar (via nota/comentario do
+//   Azure, buscada em ACTIONS_BY_ID) que o chamado foi pra validacao ou ficou em impedimento; quando
+//   nao ha essa nota (integracao nao logou, ou chamado antigo), cai no fallback de somar o tempo
+//   corrido em todas as passagens pela fila de desenvolvimento (comportamento anterior a este ajuste).
+function calcularCicloAtendimentoTecnico(r) {{
+  if (!(r.statusHistories || []).length) return null;
   const hist = r.statusHistories.map(h => ({{ ...h, _d: parseDt(h.changedDate) }})).sort((a,b) => a._d - b._d);
-  const firstBugQueue = hist.find(h => h.status === BUG_QUEUE_STATUS);
-  const idxBugQueue = firstBugQueue ? hist.indexOf(firstBugQueue) : -1;
-  const tempoParaAbrirH = idxBugQueue > 0
-    ? hist.slice(0, idxBugQueue).filter(h => h.status !== 'Aguardando Cliente').reduce((s,h) => s + (h.permanencyTimeWorkingTime || 0), 0) / 3600
-    : (idxBugQueue === 0 ? 0 : null);
 
-  const devopsSeconds = hist.filter(h => h.status === BUG_QUEUE_STATUS)
-    .reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0);
+  const idxN2 = hist.findIndex(h => h.status === N2_HANDOFF_STATUS);
+  const tempoRepasseN1H = idxN2 > 0
+    ? hist.slice(0, idxN2).filter(h => h.status !== 'Aguardando Cliente').reduce((s,h) => s + (h.permanencyTimeWorkingTime || 0), 0) / 3600
+    : (idxN2 === 0 ? 0 : null);
 
-  let lastBugQueueIdx = -1;
-  hist.forEach((h,i) => {{ if (h.status === BUG_QUEUE_STATUS) lastBugQueueIdx = i; }});
-  const validacaoSeconds = lastBugQueueIdx >= 0
-    ? hist.slice(lastBugQueueIdx+1)
-        .filter(h => h.status === 'Em atendimento' || h.status === 'Aguardando Cliente')
-        .reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0)
+  // "passou por task" (gerou task de dev) nao depende do repasse pro N2 ter acontecido — chamados do
+  // fluxo antigo (antes do status 'Em atendimento - N2' existir) tambem geram task normalmente.
+  const idxDevQueueAny = hist.findIndex(h => isDevQueueStatus(h.status));
+  // Ja o "tempo abertura task" (repasse -> task) so faz sentido quando existe o repasse pro N2 —
+  // usamos a primeira entrada na fila de dev QUE VEM DEPOIS do repasse.
+  let idxDevQueueAposN2 = -1;
+  if (idxN2 !== -1) {{
+    for (let i = idxN2; i < hist.length; i++) {{
+      if (isDevQueueStatus(hist[i].status)) {{ idxDevQueueAposN2 = i; break; }}
+    }}
+  }}
+  const tempoAberturaTaskH = (idxN2 !== -1 && idxDevQueueAposN2 !== -1)
+    ? hist.slice(idxN2, idxDevQueueAposN2).reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0) / 3600
     : null;
+
+  // Ancora do tempo em devops: prefere a entrada na fila de dev POS-repasse (fluxo novo); se nao houver
+  // repasse pro N2 registrado (chamado do fluxo antigo), usa a primeira entrada na fila de dev, igual
+  // ao calculo anterior a este ajuste.
+  const idxDevQueueAncora = idxDevQueueAposN2 !== -1 ? idxDevQueueAposN2 : idxDevQueueAny;
+  let devopsSeconds = null;
+  if (idxDevQueueAncora !== -1) {{
+    const devEntryDate = hist[idxDevQueueAncora]._d;
+    const acoes = ACTIONS_BY_ID[String(r.id)] || [];
+    const logDevops = acoes
+      .map(a => ({{ ...a, _d: parseDt(a.createdDate) }}))
+      .filter(a => a._d && devEntryDate && a._d > devEntryDate && /valida|impedimento/i.test(a.description || ''))
+      .sort((a,b) => a._d - b._d)[0];
+    devopsSeconds = logDevops
+      ? (logDevops._d - devEntryDate) / 1000
+      : hist.filter(h => isDevQueueStatus(h.status)).reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0);
+  }}
 
   return {{
     protocol: r.protocol,
     urgency: r.urgency,
     ownerName: r.ownerName,
-    tempoParaAbrirH,
-    devopsH: devopsSeconds / 3600,
-    validacaoH: validacaoSeconds !== null ? validacaoSeconds / 3600 : null,
-    passouPorDevops: lastBugQueueIdx >= 0,
+    tempoRepasseN1H,
+    tempoAberturaTaskH,
+    devopsH: devopsSeconds !== null ? devopsSeconds / 3600 : null,
+    passouPorN2: idxN2 !== -1,
+    passouPorTask: idxDevQueueAny !== -1,
   }};
 }}
-let bugMetrics = bugsMes.map(calcularCicloVidaBug);
+// bugsMes/bugMetrics ficam mutaveis (let) porque a aba Historico pode filtrar por cliente e reatribui-los
+// em renderHistoricoMes() — assim o clique nos cards (abrirModalBugMetrica) sempre reflete o filtro atual.
+let bugsMes = RESOLVED_MONTH.filter(r => r.category === 'Bug' && (r.statusHistories||[]).length);
+let bugMetrics = bugsMes.map(calcularCicloAtendimentoTecnico).filter(Boolean);
 function avg(arr) {{ return arr.length ? arr.reduce((s,v)=>s+v,0) / arr.length : null; }}
 
 // Meta = 10% de melhoria ao mes sobre a media dos ultimos 3 meses.
@@ -1050,7 +1122,7 @@ function statsForMonth(items) {{
   const pctPrimeira = total ? Math.round(primeira / total * 100) : 0;
   // So exclui do SLA os chamados reabertos INDEVIDAMENTE (pela integracao do Azure, apos ja estarem
   // Resolvido/Fechado) — reaberturas legitimas (cliente/agente) continuam contando normalmente.
-  const comSla = items.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r));
+  const comSla = items.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r));
   const noPrazo = comSla.filter(r => parseDt(r.resolvedIn) <= parseDt(r.slaSolutionDate)).length;
   const pctSla = comSla.length ? Math.round(noPrazo / comSla.length * 100) : 0;
   const chats = items.filter(r => r.origin === 24).length;
@@ -1069,15 +1141,15 @@ const comparativoMttr = statsPorMes3.map(s => `${{MONTH_LABELS[s.key].split('/')
 
 function bugMetricsFor(urgency) {{
   const subset = urgency ? bugMetrics.filter(b => b.urgency === urgency) : bugMetrics;
-  const comAbertura = subset.filter(b => b.tempoParaAbrirH !== null).map(b => b.tempoParaAbrirH);
-  const comDevops = subset.filter(b => b.passouPorDevops).map(b => b.devopsH);
-  const comValidacao = subset.filter(b => b.validacaoH !== null).map(b => b.validacaoH);
+  const comRepasse = subset.filter(b => b.tempoRepasseN1H !== null).map(b => b.tempoRepasseN1H);
+  const comAberturaTask = subset.filter(b => b.tempoAberturaTaskH !== null).map(b => b.tempoAberturaTaskH);
+  const comDevops = subset.filter(b => b.devopsH !== null).map(b => b.devopsH);
   return {{
     total: subset.length,
-    comAbertura, comDevops, comValidacao,
-    mediaParaAbrirBug: avg(comAbertura),
+    comRepasse, comAberturaTask, comDevops,
+    mediaRepasseN1: avg(comRepasse),
+    mediaAberturaTask: avg(comAberturaTask),
     mediaDevops: avg(comDevops),
-    mediaValidacao: avg(comValidacao),
   }};
 }}
 const bugMetricsMedia = bugMetricsFor('Média');
@@ -1091,52 +1163,34 @@ const N2_TECNICOS = ['Alife Caetano dos Santos', 'Vinicius Campestrini', 'Vitor 
 function tierDoTecnico(tecnico) {{ return N2_TECNICOS.indexOf(tecnico) !== -1 ? 'N2' : 'N1'; }}
 
 const CATEGORIAS_TECNICAS_N2 = ['Bug', 'Melhoria', 'Serviços'];
-function cicloVidaTecnicaPorItem(r) {{
-  if (!(r.statusHistories || []).length) return null;
-  const hist = r.statusHistories.map(h => ({{ ...h, _d: parseDt(h.changedDate) }})).sort((a,b) => a._d - b._d);
-  const firstBugQueue = hist.find(h => h.status === BUG_QUEUE_STATUS);
-  const idxBugQueue = firstBugQueue ? hist.indexOf(firstBugQueue) : -1;
-  // Tempo que o N1 fica com o chamado ate acionar o N2 (movimentar pra fila de Bugs) — mesma logica
-  // do "tempo para abrir bug": tempo UTIL (exclui Aguardando Cliente), nao tempo corrido.
-  const tempoAteAcionarN2H = idxBugQueue > 0
-    ? hist.slice(0, idxBugQueue).filter(h => h.status !== 'Aguardando Cliente').reduce((s,h) => s + (h.permanencyTimeWorkingTime || 0), 0) / 3600
-    : (idxBugQueue === 0 ? 0 : null);
-  const devopsSeconds = hist.filter(h => h.status === BUG_QUEUE_STATUS).reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0);
-  let lastIdx = -1;
-  hist.forEach((h,i) => {{ if (h.status === BUG_QUEUE_STATUS) lastIdx = i; }});
-  const validacaoSeconds = lastIdx >= 0
-    ? hist.slice(lastIdx+1).filter(h => h.status === 'Em atendimento' || h.status === 'Aguardando Cliente').reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0)
-    : null;
-  return {{ passouPorTask: lastIdx >= 0, tempoAteAcionarN2H, devopsH: devopsSeconds / 3600, validacaoH: validacaoSeconds !== null ? validacaoSeconds / 3600 : null }};
-}}
 // So' disponivel para o mes corrente (offset 0) — statusHistories nao e mantido nos meses anteriores.
 function computeN2Metrics(tecnico, periodoKey) {{
   if (periodoKey !== '0') return null;
   const items = (RESOLVED_MONTHS['0'] || []).filter(r => r.ownerName === tecnico && CATEGORIAS_TECNICAS_N2.indexOf(r.category) !== -1);
-  const ciclos = items.map(cicloVidaTecnicaPorItem).filter(Boolean);
+  const ciclos = items.map(calcularCicloAtendimentoTecnico).filter(Boolean);
   const total = items.length;
   const comTask = ciclos.filter(c => c.passouPorTask).length;
   return {{
     total,
     pctTask: total ? Math.round(comTask / total * 100) : null,
-    devopsMedio: avg(ciclos.filter(c => c.passouPorTask).map(c => c.devopsH)),
-    validacaoMedio: avg(ciclos.filter(c => c.validacaoH !== null).map(c => c.validacaoH)),
+    devopsMedio: avg(ciclos.filter(c => c.devopsH !== null).map(c => c.devopsH)),
+    validacaoMedio: avg(ciclos.filter(c => c.tempoAberturaTaskH !== null).map(c => c.tempoAberturaTaskH)),
   }};
 }}
-// Indicador N1: tempo desde que o N1 assumiu o chamado ate acionar o N2 (movimentar pra fila de Bugs).
-// APROXIMACAO: nao existe no Movidesk um evento de "troca de responsavel" — usamos o momento em que
-// o chamado entra na fila de Bugs como proxy do "repasse para o N2", igual a metrica de ciclo de vida
-// do bug ja usada na aba Historico. So' disponivel para o mes corrente (statusHistories).
+// Indicador N1: tempo desde que o chamado foi aberto ate ser repassado pro status 'Em atendimento - N2'.
+// Antes disso existir no Movidesk, esta metrica usava a entrada na fila de Bugs como proxy (aproximacao);
+// agora usa o repasse real de status, criado especificamente pra marcar quando o N1 aciona o N2. So'
+// disponivel para o mes corrente (statusHistories).
 function computeN1Metrics(tecnico, periodoKey) {{
   if (periodoKey !== '0') return null;
   const items = (RESOLVED_MONTHS['0'] || []).filter(r => r.ownerName === tecnico && CATEGORIAS_TECNICAS_N2.indexOf(r.category) !== -1);
-  const ciclos = items.map(cicloVidaTecnicaPorItem).filter(Boolean);
+  const ciclos = items.map(calcularCicloAtendimentoTecnico).filter(Boolean);
   const total = items.length;
-  const acionaramN2 = ciclos.filter(c => c.passouPorTask);
+  const acionaramN2 = ciclos.filter(c => c.passouPorN2);
   return {{
     total,
     qtdAcionouN2: acionaramN2.length,
-    tempoAteAcionarN2Medio: avg(acionaramN2.filter(c => c.tempoAteAcionarN2H !== null).map(c => c.tempoAteAcionarN2H)),
+    tempoAteAcionarN2Medio: avg(acionaramN2.filter(c => c.tempoRepasseN1H !== null).map(c => c.tempoRepasseN1H)),
   }};
 }}
 
@@ -1268,24 +1322,24 @@ const mttrBateMeta = bateMeta(mttrMesAtual, metaMttr, true);
 document.getElementById('kpiRowHistMttr').innerHTML =
   kpiTileStatic(mttrBateMeta === null ? 'warn' : (mttrBateMeta ? 'ok' : 'danger'), mttrMesAtual !== null ? fmtH(mttrMesAtual) : '-', 'Tempo medio de atendimento (MTTR)', `mes corrente: ${{MONTH_LABELS['0']}} · exclui Melhoria · media 3m: ${{mttrMedia3Meses !== null ? fmtH(mttrMedia3Meses) : '-'}} · meta (10% menor que a media 3m): ${{metaMttr !== null ? fmtH(metaMttr) : '-'}} · ultimos 3 meses: ${{comparativoMttrSemMelhoria}}`);
 
-// Abre a lista de chamados (bugs) por tras de um dos 3 cards de ciclo de vida do bug.
+// Abre a lista de chamados (bugs) por tras de um dos 3 cards de ciclo de atendimento tecnico.
 function abrirModalBugMetrica(urgency, metrica) {{
   const subset = bugMetrics.filter(b => b.urgency === urgency);
   let elegiveis;
-  if (metrica === 'abrir') elegiveis = subset.filter(b => b.tempoParaAbrirH !== null);
-  else if (metrica === 'devops') elegiveis = subset.filter(b => b.passouPorDevops);
-  else elegiveis = subset.filter(b => b.validacaoH !== null);
+  if (metrica === 'repasse') elegiveis = subset.filter(b => b.tempoRepasseN1H !== null);
+  else if (metrica === 'task') elegiveis = subset.filter(b => b.tempoAberturaTaskH !== null);
+  else elegiveis = subset.filter(b => b.devopsH !== null);
   const protocolos = new Set(elegiveis.map(b => b.protocol));
   const items = bugsMes.filter(r => protocolos.has(r.protocol));
-  const NOMES = {{ abrir: 'Tempo para abrir bug', devops: 'Tempo em devops', validacao: 'Tempo em validacao' }};
+  const NOMES = {{ repasse: 'Tempo de repasse - N1', task: 'Tempo abertura task', devops: 'Tempo aberto no devops' }};
   renderModalHist(`Bugs — ${{NOMES[metrica]}} (${{urgency}})`, items);
 }}
 function renderBugMetricsRow(elId, m, urgency) {{
   // Sem meta/limite definido para estes 3 tempos — cor neutra (nao ha "bom"/"ruim" estabelecido ainda).
   document.getElementById(elId).innerHTML =
-    kpiTileClick('neutral', m.mediaParaAbrirBug!==null ? fmtH(m.mediaParaAbrirBug) : '-', 'Tempo medio para abrir bug', `abrirModalBugMetrica(${{jsStr(urgency)}}, 'abrir')`, `media sobre ${{m.comAbertura.length}} de ${{m.total}} bugs · tempo util em fila, exclui Aguardando Cliente`) +
-    kpiTileClick('neutral', m.mediaDevops!==null ? fmtH(m.mediaDevops) : '-', 'Tempo medio aberto no devops', `abrirModalBugMetrica(${{jsStr(urgency)}}, 'devops')`, `media sobre ${{m.comDevops.length}} bugs que passaram pela fila`) +
-    kpiTileClick('neutral', m.mediaValidacao!==null ? fmtH(m.mediaValidacao) : '-', 'Tempo medio em validacao', `abrirModalBugMetrica(${{jsStr(urgency)}}, 'validacao')`, `media sobre ${{m.comValidacao.length}} bugs pos-devops`);
+    kpiTileClick('neutral', m.mediaRepasseN1!==null ? fmtH(m.mediaRepasseN1) : '-', 'Tempo de repasse - N1', `abrirModalBugMetrica(${{jsStr(urgency)}}, 'repasse')`, `media sobre ${{m.comRepasse.length}} de ${{m.total}} bugs · tempo util (exclui Aguardando Cliente) da abertura ate 'Em atendimento - N2'`) +
+    kpiTileClick('neutral', m.mediaAberturaTask!==null ? fmtH(m.mediaAberturaTask) : '-', 'Tempo abertura task', `abrirModalBugMetrica(${{jsStr(urgency)}}, 'task')`, `media sobre ${{m.comAberturaTask.length}} bugs · de 'Em atendimento - N2' ate entrar na fila de desenvolvimento`) +
+    kpiTileClick('neutral', m.mediaDevops!==null ? fmtH(m.mediaDevops) : '-', 'Tempo aberto no devops', `abrirModalBugMetrica(${{jsStr(urgency)}}, 'devops')`, `media sobre ${{m.comDevops.length}} bugs · ate log de validacao/impedimento do devops (ou, se nao houver log, tempo total na fila)`);
 }}
 renderBugMetricsRow('kpiRowHistBugMedia', bugMetricsMedia, 'Média');
 renderBugMetricsRow('kpiRowHistBugAlta', bugMetricsAlta, 'Alta');
@@ -1341,7 +1395,7 @@ document.getElementById('gridBottom').innerHTML = `
   </div>
   <div class="panel">
     <h2>⚠️ Possivel classificacao incorreta${{exportButtonHtml("exportLiveList(classificacaoIncorreta, 'classificacao_incorreta.txt')")}}</h2>
-    <div class="panel-sub">${{classificacaoIncorreta.length}} chamados abertos com categoria diferente de Bug, mas que ja passaram pela fila de Bugs ou tem assunto de bug</div>
+    <div class="panel-sub">${{classificacaoIncorreta.length}} chamados abertos com categoria diferente de Bug, mas que ja passaram pela fila de desenvolvimento ou tem assunto de bug</div>
     <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Categoria atual</th><th>Motivo</th><th>Tecnico</th></tr></thead>
       <tbody>${{tableHtmlMisclass(classificacaoIncorreta, 14)}}</tbody></table>
   </div>
@@ -1349,7 +1403,7 @@ document.getElementById('gridBottom').innerHTML = `
 
 document.getElementById('gridHist').innerHTML = `
   <div class="panel">
-    <h2>⏱️ SLA por categoria (resolvidos no mes)${{exportButtonHtml("exportHistListToExcel(RESOLVED_MONTH.filter(r=>r.slaSolutionDate && !reaberturaIndevidaAzure(r)), 'sla_por_categoria.txt')")}}</h2>
+    <h2>⏱️ SLA por categoria (resolvidos no mes)${{exportButtonHtml("exportHistListToExcel(RESOLVED_MONTH.filter(r=>r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r)), 'sla_por_categoria.txt')")}}</h2>
     <div class="panel-sub">${{totalSlaNoPrazo}} de ${{totalComSla}} chamados resolvidos este mes com SLA definido foram resolvidos dentro do prazo (${{pctSlaNoPrazoGeral}}%)</div>
     <div class="sla-cat-row head"><div>Categoria</div><div>Resolvidos</div><div>No prazo</div><div>% no prazo</div></div>
     ${{slaCategoriasOrdenadas.map(([cat, v]) => {{
@@ -1525,7 +1579,7 @@ function renderHistoricoMes(clienteFiltro) {{
   const pctPrimeiraRespostaMes = resolvidosMes ? Math.round(resolvidosPrimeiraRespostaMes / resolvidosMes * 100) : 0;
 
   const slaPorCategoria = {{}};
-  RESOLVED_MONTH.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r)).forEach(r => {{
+  RESOLVED_MONTH.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r)).forEach(r => {{
     const cat = r.category || 'Sem categoria';
     if (!slaPorCategoria[cat]) slaPorCategoria[cat] = {{ total: 0, noPrazo: 0 }};
     slaPorCategoria[cat].total++;
@@ -1544,7 +1598,7 @@ function renderHistoricoMes(clienteFiltro) {{
   const resolvidosPorTecnicoMes = byTecnicoResolved(RESOLVED_MONTH);
 
   bugsMes = RESOLVED_MONTH.filter(r => r.category === 'Bug' && (r.statusHistories||[]).length);
-  bugMetrics = bugsMes.map(calcularCicloVidaBug);
+  bugMetrics = bugsMes.map(calcularCicloAtendimentoTecnico).filter(Boolean);
   const bugMetricsMediaF = bugMetricsFor('Média');
   const bugMetricsAltaF = bugMetricsFor('Alta');
 
@@ -1588,7 +1642,7 @@ function renderHistoricoMes(clienteFiltro) {{
 
   document.getElementById('gridHist').innerHTML = `
     <div class="panel">
-      <h2>⏱️ SLA por categoria (resolvidos no mes)${{exportButtonHtml("exportHistListToExcel(RESOLVED_MONTH.filter(r=>r.slaSolutionDate && !reaberturaIndevidaAzure(r)), 'sla_por_categoria.txt')")}}</h2>
+      <h2>⏱️ SLA por categoria (resolvidos no mes)${{exportButtonHtml("exportHistListToExcel(RESOLVED_MONTH.filter(r=>r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r)), 'sla_por_categoria.txt')")}}</h2>
       <div class="panel-sub">${{totalSlaNoPrazo}} de ${{totalComSla}} chamados resolvidos este mes com SLA definido foram resolvidos dentro do prazo (${{pctSlaNoPrazoGeral}}%)${{filtroSufixo}}</div>
       <div class="sla-cat-row head"><div>Categoria</div><div>Resolvidos</div><div>No prazo</div><div>% no prazo</div></div>
       ${{slaCategoriasOrdenadas.map(([cat, v]) => {{
@@ -1658,7 +1712,7 @@ function computeIndicadores(items) {{
   const mttrH = avg(comTempo);
   // So exclui do SLA os chamados reabertos INDEVIDAMENTE (integracao do Azure, apos ja estarem
   // Resolvido/Fechado) — reaberturas legitimas (cliente/agente) continuam contando normalmente.
-  const comSla = items.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r));
+  const comSla = items.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r));
   const noPrazo = comSla.filter(r => parseDt(r.resolvedIn) <= parseDt(r.slaSolutionDate)).length;
   const pctSla = comSla.length ? Math.round(noPrazo / comSla.length * 100) : null;
   const reincidencia = items.filter(r => r.reopenedIn).length;
@@ -1852,22 +1906,22 @@ function initOneOnOne() {{
       if (n2) {{
         document.getElementById('kpiOneOnOneN2').innerHTML =
           kpiTileStatic('neutral', n2.total, 'Chamados tecnicos (Bug/Melhoria/Servicos)', 'resolvidos no mes corrente') +
-          kpiTileStatic('neutral', n2.pctTask !== null ? `${{n2.pctTask}}%` : '-', '% com task associada (fila de Bugs)', 'de chamados tecnicos que geraram task de dev') +
-          kpiTileStatic('warn', n2.devopsMedio !== null ? fmtH(n2.devopsMedio) : '-', 'Tempo medio em devops/validacao', `devops: ${{n2.devopsMedio !== null ? fmtH(n2.devopsMedio) : '-'}} · validacao: ${{n2.validacaoMedio !== null ? fmtH(n2.validacaoMedio) : '-'}}`);
+          kpiTileStatic('neutral', n2.pctTask !== null ? `${{n2.pctTask}}%` : '-', '% com task associada (fila de dev)', 'de chamados tecnicos que geraram task de dev') +
+          kpiTileStatic('warn', n2.devopsMedio !== null ? fmtH(n2.devopsMedio) : '-', 'Tempo medio devops / abertura task', `devops: ${{n2.devopsMedio !== null ? fmtH(n2.devopsMedio) : '-'}} · abertura task: ${{n2.validacaoMedio !== null ? fmtH(n2.validacaoMedio) : '-'}}`);
       }} else {{
         document.getElementById('kpiOneOnOneN2').innerHTML =
           kpiTileStatic('neutral', '-', 'Indicadores tecnicos (N2)', 'so disponivel para o mes corrente (o historico de status nao e mantido para meses anteriores)');
       }}
     }} else {{
-      // Indicador N1 — tempo desde que assumiu o chamado ate acionar o N2 (proxy: entrada na fila de
-      // Bugs), nos mesmos chamados tecnicos (Bug/Melhoria/Servicos). So' calculavel no mes corrente.
+      // Indicador N1 — tempo desde a abertura ate o repasse pro status 'Em atendimento - N2', nos
+      // mesmos chamados tecnicos (Bug/Melhoria/Servicos). So' calculavel no mes corrente.
       const n1 = computeN1Metrics(tecnico, periodoKey);
       document.getElementById('kpiOneOnOneN2').style.display = '';
       if (n1) {{
         document.getElementById('kpiOneOnOneN2').innerHTML =
           kpiTileStatic('neutral', n1.total, 'Chamados tecnicos (Bug/Melhoria/Servicos)', 'atribuidos ao tecnico no mes corrente') +
-          kpiTileStatic('neutral', n1.qtdAcionouN2, 'Acionaram o N2 (fila de Bugs)', `de ${{n1.total}} chamados tecnicos`) +
-          kpiTileStatic('warn', n1.tempoAteAcionarN2Medio !== null ? fmtH(n1.tempoAteAcionarN2Medio) : '-', 'Tempo medio ate acionar N2', 'tempo util (exclui Aguardando Cliente) desde a atribuicao ate entrar na fila de Bugs');
+          kpiTileStatic('neutral', n1.qtdAcionouN2, "Repassados p/ 'Em atendimento - N2'", `de ${{n1.total}} chamados tecnicos`) +
+          kpiTileStatic('warn', n1.tempoAteAcionarN2Medio !== null ? fmtH(n1.tempoAteAcionarN2Medio) : '-', 'Tempo de repasse - N1', "tempo util (exclui Aguardando Cliente) da abertura ate 'Em atendimento - N2'");
       }} else {{
         document.getElementById('kpiOneOnOneN2').innerHTML =
           kpiTileStatic('neutral', '-', 'Indicadores tecnicos (N1)', 'so disponivel para o mes corrente (o historico de status nao e mantido para meses anteriores)');
