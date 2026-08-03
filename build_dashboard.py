@@ -444,6 +444,59 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 .flow-gantt-swatch {{ width: 10px; height: 10px; border-radius: 3px; display: inline-block; }}
 .flow-stage-tag {{ display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 8px; border-radius: 4px; background: var(--surface2); color: var(--text-dim); margin-left: 6px; }}
 
+/* ── Grade de cards de chamado no estilo visual EmiteAi (claro), independente do tema escuro do
+   resto do painel — cada chamado e um card com a etapa dele, igual a grade de cargas do sistema. */
+.ea-cards-note {{ font-size: 11.5px; color: var(--text-dim); margin-bottom: 10px; }}
+.ea-cards-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }}
+.ea-card {{
+  background: #FFFFFF; border-radius: 8px; box-shadow: rgba(0,0,0,0.14) 0px 2px 6px 0px;
+  overflow: hidden; display: flex; flex-direction: column; cursor: pointer;
+  transition: box-shadow .15s, transform .1s;
+  color: #1A1A2C; font-family: 'Inter', 'Poppins', sans-serif;
+}}
+.ea-card:hover {{ box-shadow: rgba(0,0,0,0.22) 0px 4px 14px 0px; }}
+.ea-card.ea-selected {{ outline: 3px solid #ED6DA2; outline-offset: 1px; }}
+.ea-card-head {{ padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }}
+.ea-head-green {{ background: #10B981; }}
+.ea-head-amber {{ background: #F5A623; }}
+.ea-head-red {{ background: #E23744; }}
+.ea-card-head-left {{ font-size: 11.5px; color: rgba(255,255,255,0.92); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+.ea-card-head-left b {{ color: #fff; font-weight: 700; }}
+.ea-card-status {{ font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap; flex-shrink: 0; }}
+.ea-card-body {{ padding: 10px 12px 12px; flex: 1; }}
+.ea-stage-cols {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 3px; }}
+.ea-stage-cols.ea-row2 {{ grid-template-columns: repeat(4, 1fr); margin-top: 8px; }}
+.ea-stage-col-label {{ font-size: 8.5px; font-weight: 700; color: #1A1A2C; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.ea-stage-box {{
+  border: 1.75px solid #D8DAE0; border-radius: 5px; background: #fff;
+  padding: 3px 2px; text-align: center; min-height: 26px;
+  display: flex; align-items: center; justify-content: center;
+}}
+.ea-stage-box .ea-mark {{ font-size: 13px; font-weight: 700; color: #A6A9B4; line-height: 1; }}
+.ea-stage-box.ea-done {{ border-color: #4ADE9A; }}
+.ea-stage-box.ea-done .ea-mark {{ color: #10B981; }}
+.ea-stage-box.ea-current {{ border-color: #F5A623; background: #FFF6E0; }}
+.ea-stage-box.ea-current .ea-mark {{ color: #F5A623; }}
+.ea-stage-box.ea-blocked {{ border-color: #F3A3AA; background: #FEECEE; }}
+.ea-stage-box.ea-blocked .ea-mark {{ color: #E23744; }}
+.ea-card-foot {{ display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; padding-top: 9px; border-top: 1px solid rgba(135,135,153,0.20); font-size: 11px; }}
+.ea-foot-left, .ea-foot-right {{ color: #595974; line-height: 1.5; }}
+.ea-foot-left b, .ea-foot-right b {{ color: #1A1A2C; }}
+.ea-foot-right {{ text-align: right; }}
+.ea-card-note {{
+  display: flex; align-items: flex-start; gap: 6px; padding: 8px 12px;
+  background: #F7F8FA; border-top: 1px solid rgba(135,135,153,0.16);
+  font-size: 10.5px; color: #595974; line-height: 1.35;
+}}
+.ea-card-note b {{ color: #1A1A2C; }}
+.ea-legend {{ display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-dim); margin-top: 14px; }}
+.ea-legend-item {{ display: flex; align-items: center; gap: 6px; }}
+.ea-legend-swatch {{ width: 14px; height: 14px; border-radius: 4px; border: 1.75px solid; background: #fff; }}
+.ea-legend-swatch.ea-done {{ border-color: #4ADE9A; }}
+.ea-legend-swatch.ea-current {{ border-color: #F5A623; background: #FFF6E0; }}
+.ea-legend-swatch.ea-blocked {{ border-color: #F3A3AA; background: #FEECEE; }}
+.ea-legend-swatch.ea-pending {{ border-color: #D8DAE0; }}
+
 .modal-overlay {{
   position: fixed; inset: 0; background: rgba(26,26,44,0.45);
   display: none; align-items: center; justify-content: center; z-index: 50;
@@ -593,13 +646,13 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
     </div>
     <div id="fluxoErro" style="display:none; color:var(--danger); font-size:12.5px; margin-bottom:10px;"></div>
 
-    <div class="panel" id="fluxoDiagramPanel">
-      <h2>🧭 Fluxo de atendimento — Central de Suporte EmiteAi</h2>
-      <div class="panel-sub" id="fluxoChamadoInfo">Cada etapa mostra o tempo medio do periodo/cliente selecionado e quantos chamados estao nela agora — clique numa etapa pra ver a lista, ou busque um chamado especifico pelo numero.</div>
-      <div class="flow-wrap" id="flowDiagram"></div>
-    </div>
+    <div class="grid" id="fluxoCardsContainer" style="margin-top: 18px;">
+      <div class="panel" id="fluxoDiagramPanel" style="flex-basis:100%; width:100%;">
+        <h2>🧭 Fluxo de atendimento — Central de Suporte EmiteAi</h2>
+        <div class="panel-sub" id="fluxoChamadoInfo">Cada card e um chamado aberto, com a etapa dele destacada — clique num card ou busque pelo numero pra ver detalhes.</div>
+        <div class="flow-wrap" id="flowDiagram"></div>
+      </div>
 
-    <div class="grid" id="gridFluxoEntrada" style="grid-template-columns: 1fr 1fr; margin-top: 18px;">
       <div class="panel">
         <h2>📥 Entrada — por canal</h2>
         <div class="panel-sub" id="fluxoEntradaSub">Chamados abertos agora, por forma de abertura</div>
@@ -610,9 +663,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
         <div class="panel-sub">Chamados abertos agora na fila de desenvolvimento, por categoria</div>
         <div id="fluxoDevBars"></div>
       </div>
-    </div>
 
-    <div class="grid" id="gridFluxo" style="grid-template-columns: 1fr 1fr; margin-top: 18px;">
       <div class="panel">
         <h2>⏱️ SLA de repasse para N2</h2>
         <div class="panel-sub">Prazo a partir do momento em que o N1 aciona o N2 · tempo medio observado no periodo/cliente selecionado</div>
@@ -625,15 +676,15 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
         <h2>📍 Chamado selecionado — proximos passos</h2>
         <div id="fluxoProximosPassos"><div class="empty-msg">Nenhum chamado selecionado — dados gerais acima</div></div>
       </div>
-    </div>
 
-    <div class="panel" id="fluxoTimelinePanel" style="margin-top: 18px;">
-      <h2 id="fluxoTimelineTitle">🕒 Linha do tempo</h2>
-      <div class="panel-sub" id="fluxoTimelineSub">Media geral do periodo/cliente selecionado — busque um chamado pra ver a linha do tempo real dele</div>
-      <div id="fluxoGantt"></div>
-      <div class="flow-timeline" id="fluxoTimeline"></div>
-      <div class="panel-sub" id="fluxoResumoEtapasSub" style="margin-top:14px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700;">Soma de tempo por etapa</div>
-      <div id="fluxoResumoEtapas"></div>
+      <div class="panel" id="fluxoTimelinePanel" style="flex-basis:100%; width:100%;">
+        <h2 id="fluxoTimelineTitle">🕒 Linha do tempo</h2>
+        <div class="panel-sub" id="fluxoTimelineSub">Media geral do periodo/cliente selecionado — busque um chamado pra ver a linha do tempo real dele</div>
+        <div id="fluxoGantt"></div>
+        <div class="flow-timeline" id="fluxoTimeline"></div>
+        <div class="panel-sub" id="fluxoResumoEtapasSub" style="margin-top:14px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700;">Soma de tempo por etapa</div>
+        <div id="fluxoResumoEtapas"></div>
+      </div>
     </div>
   </div>
 
@@ -1677,7 +1728,7 @@ function attachResizeHandles(el, minW, minH, onResizeEnd) {{
   }};
   const cursorFor = {{ se: 'nwse-resize', e: 'ew-resize', s: 'ns-resize', w: 'ew-resize', n: 'ns-resize' }};
   const titleFor = {{ se: 'Arrastar para redimensionar', e: 'Arrastar para alargar/estreitar pela direita', s: 'Arrastar para aumentar/diminuir altura por baixo', w: 'Arrastar para alargar/estreitar pela esquerda', n: 'Arrastar para aumentar/diminuir altura por cima' }};
-  [['resize-handle-corner', 'se'], ['resize-handle-r', 'e'], ['resize-handle-b', 's'], ['resize-handle-l', 'w'], ['resize-handle-t', 'n']].forEach(([cls, dir]) => {{
+  [['resize-handle-corner', 'se'], ['resize-handle-r', 'e'], ['resize-handle-l', 'w'], ['resize-handle-t', 'n']].forEach(([cls, dir]) => {{
     const rh = document.createElement('div');
     rh.className = cls;
     rh.title = titleFor[dir];
@@ -2561,7 +2612,6 @@ function ticketsNaEtapa(key) {{
 function abrirModalEtapaFluxo(key, titulo) {{
   renderModal(`${{titulo}} — chamados abertos agora`, ticketsNaEtapa(key), 'open');
 }}
-const FLOW_CLICKAVEL = ['n1', 'n2', 'task_dev', 'validacao_impedimento', 'pendente_usuario', 'validacao_cliente', 'encerrado', 'triagem'];
 
 // Pills com as proximas etapas possiveis a partir de uma etapa — aparecem em TODOS os cards, com ou
 // sem chamado selecionado (sem chamado: mostra o fluxo generico; com chamado: os pills continuam
@@ -2582,98 +2632,107 @@ function flowNextPillsHtml(key, takenKey) {{
 // extras[key] = HTML adicional pra anexar dentro do card daquela etapa (ex.: canal de entrada + tempo
 // no chat, ou o comentario do devops) — so preenchido quando ha um chamado especifico carregado.
 // takenNextMap[key] = etapa de destino que o chamado selecionado realmente seguiu a partir de "key".
-function renderFlowDiagram(currentKey, stageTimes, extras, perTicket, visitedKeys, takenNextMap) {{
-  extras = extras || {{}};
-  visitedKeys = visitedKeys || [];
-  takenNextMap = takenNextMap || {{}};
-  const boxHtml = (s) => {{
-    const clickavel = FLOW_CLICKAVEL.indexOf(s.key) !== -1;
-    const tempo = stageTimes[s.key];
-    const qtd = clickavel ? ticketsNaEtapa(s.key).length : null;
-    const isCurrent = s.key === currentKey;
-    const isDone = !isCurrent && visitedKeys.indexOf(s.key) !== -1;
-    const attrs = clickavel ? `tabindex="0" role="button" onclick="abrirModalEtapaFluxo(${{jsStr(s.key)}}, ${{jsStr(s.title)}})" onkeydown="if(event.key==='Enter')abrirModalEtapaFluxo(${{jsStr(s.key)}}, ${{jsStr(s.title)}})"` : '';
-    return `<div class="flow-box ${{isCurrent ? 'flow-current' : ''}} ${{isDone ? 'flow-done' : ''}} ${{clickavel ? 'flow-clickable' : ''}}" id="flowbox-${{s.key}}" data-pid="${{s.key}}" ${{attrs}} style="border-top: 3px solid ${{STAGE_COLORS[s.key]}};">
-      <div class="flow-title">${{esc(s.title)}}</div>
-      <div class="flow-sub">${{esc(s.sub)}}</div>
-      ${{tempo !== undefined && tempo !== null ? `<div class="flow-time">⏱ ${{perTicket ? 'tempo' : 'media'}}: ${{fmtH(tempo)}}</div>` : ''}}
-      ${{qtd !== null ? `<div class="flow-count">${{qtd}} agora</div>` : ''}}
-      ${{extras[s.key] || ''}}
-      ${{flowNextPillsHtml(s.key, takenNextMap[s.key])}}
-    </div>`;
-  }};
-  const mainRow = FLOW_MAIN_STAGES.map(boxHtml).join('');
-  document.getElementById('flowDiagram').innerHTML = `
-    <div class="flow-row" id="flowRowMain">${{mainRow}}</div>
-    <div class="flow-row" id="flowRowSecundaria" style="max-width:280px;">${{boxHtml(FLOW_SECONDARY_STAGE)}}</div>
-  `;
-  enhanceFlowBoxes('flowRowMain');
-  enhanceFlowBoxes('flowRowSecundaria');
-}}
-
-// Permite arrastar (reordenar) e redimensionar os cards do fluxograma, igual ao enhancePanels() usado
-// nas outras abas, mas adaptado pros .flow-box (identificados pela propria chave da etapa, que e
-// estavel entre re-renders — assim a ordem/tamanho salvos sobrevivem a toda busca/filtro novo).
-function enhanceFlowBoxes(containerId) {{
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  const boxes = Array.from(container.querySelectorAll(':scope > .flow-box'));
-  boxes.forEach(p => {{
-    p.classList.add('resizable');
-    const savedSize = localStorage.getItem('flowboxsize_' + p.dataset.pid);
-    if (savedSize) {{
-      try {{
-        const s = JSON.parse(savedSize);
-        if (s.w) {{ p.style.width = s.w; p.style.flexGrow = '0'; p.style.flexShrink = '0'; p.style.flexBasis = 'auto'; }}
-        if (s.h) p.style.height = s.h;
-        if (s.ml) p.style.marginLeft = s.ml;
-        if (s.mt) p.style.marginTop = s.mt;
-      }} catch(e) {{}}
-    }}
-
-    attachResizeHandles(p, 140, 90, el => localStorage.setItem('flowboxsize_' + p.dataset.pid, JSON.stringify({{w: el.style.width, h: el.style.height, ml: el.style.marginLeft, mt: el.style.marginTop}})));
-
-    const titleEl = p.querySelector('.flow-title');
-    if (titleEl && !titleEl.querySelector('.drag-handle')) {{
-      const handle = document.createElement('span');
-      handle.className = 'drag-handle';
-      handle.textContent = '⠿';
-      handle.title = 'Arrastar para reordenar';
-      handle.addEventListener('mousedown', e => {{ e.stopPropagation(); p.setAttribute('draggable', 'true'); }});
-      handle.addEventListener('click', e => {{ e.stopPropagation(); }});
-      titleEl.appendChild(handle);
-    }}
-    p.addEventListener('dragstart', e => {{ e.dataTransfer.setData('text/plain', p.dataset.pid); p.classList.add('dragging'); }});
-    p.addEventListener('dragend', () => {{ p.removeAttribute('draggable'); p.classList.remove('dragging'); saveFlowBoxOrder(containerId); }});
-    p.addEventListener('dragover', e => {{ e.preventDefault(); p.classList.add('drag-over'); }});
-    p.addEventListener('dragleave', () => p.classList.remove('drag-over'));
-    p.addEventListener('drop', e => {{
-      e.preventDefault();
-      p.classList.remove('drag-over');
-      const draggedId = e.dataTransfer.getData('text/plain');
-      const dragged = container.querySelector(`[data-pid="${{draggedId}}"]`);
-      if (dragged && dragged !== p) {{
-        const all = Array.from(container.children);
-        if (all.indexOf(dragged) < all.indexOf(p)) p.after(dragged); else p.before(dragged);
-        saveFlowBoxOrder(containerId);
-      }}
-    }});
+// Reconstroi, pra UM chamado, o caminho de etapas ja percorridas (na ordem em que aconteceram) e a
+// etapa efetiva atual — mesma logica usada em varios pontos, isolada aqui pra ser reaproveitada tanto
+// no card individual quanto na grade inteira.
+function computeTicketFlowPath(ticket) {{
+  const curStage = effectiveStageForTicket(ticket);
+  const devopsSub = devopsSubStatusForTicket(ticket);
+  const hist = (ticket.statusHistories || []).slice().sort((a,b) => new Date(a.changedDate) - new Date(b.changedDate));
+  const rawSeq = ['entrada', ...hist.map(h => stageOfStatus(h.status))];
+  devopsStatusLogs(ticket).forEach(l => {{
+    const s = l.status.toLowerCase();
+    if (s.indexOf('valida') !== -1 || s.indexOf('impediment') !== -1) rawSeq.push('validacao_impedimento');
   }});
-  const savedOrder = localStorage.getItem('flowboxorder_' + containerId);
-  if (savedOrder) {{
-    try {{
-      JSON.parse(savedOrder).forEach(pid => {{
-        const el = container.querySelector(`[data-pid="${{pid}}"]`);
-        if (el) container.appendChild(el);
-      }});
-    }} catch(e) {{}}
-  }}
+  const path = [];
+  rawSeq.forEach(k => {{ if (path[path.length - 1] !== k) path.push(k); }});
+  if (path[path.length - 1] !== curStage) path.push(curStage);
+  return {{ curStage, devopsSub, hist, path: Array.from(new Set(path)) }};
 }}
-function saveFlowBoxOrder(containerId) {{
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  const order = Array.from(container.querySelectorAll(':scope > .flow-box')).map(p => p.dataset.pid);
-  localStorage.setItem('flowboxorder_' + containerId, JSON.stringify(order));
+
+// Card individual no visual claro do EmiteAi (mesmo padrao da grade de cargas): barra de status
+// colorida no topo, grade de etapas (uma caixinha por etapa, borda colorida conforme o estado), e
+// rodape com dados do chamado.
+function ticketCardHtml(ticket, selected) {{
+  const {{ curStage, devopsSub }} = computeTicketFlowPath(ticket);
+  const isBlocked = devopsSub && devopsSub.status.toLowerCase().indexOf('impediment') !== -1 && curStage === 'validacao_impedimento';
+  const isStalled = ticket._hoursSinceUpdate !== null && ticket._hoursSinceUpdate >= 48;
+  const headCls = isBlocked ? 'ea-head-red' : (isStalled ? 'ea-head-amber' : 'ea-head-green');
+  const statusLabel = isBlocked ? 'Impedimento' : esc(ticket.status || '-');
+
+  const stageBoxHtml = (s) => {{
+    const cls = s.key === curStage ? (isBlocked ? 'ea-blocked' : 'ea-current') : (FLOW_MAIN_STAGES.indexOf(s) < FLOW_MAIN_STAGES.findIndex(x => x.key === curStage) ? 'ea-done' : '');
+    const mark = cls === 'ea-current' ? '●' : (cls === 'ea-blocked' ? '✕' : (cls === 'ea-done' ? '✓' : '–'));
+    return `<div class="ea-stage-box ${{cls}}"><div class="ea-mark">${{mark}}</div></div>`;
+  }};
+  const labelsRow1 = FLOW_MAIN_STAGES.slice(0, 5).map(s => `<div class="ea-stage-col-label">${{esc(s.title.split(' ')[0].slice(0,7))}}</div>`).join('');
+  const boxesRow1 = FLOW_MAIN_STAGES.slice(0, 5).map(stageBoxHtml).join('');
+  const row2Stages = [FLOW_SECONDARY_STAGE, ...FLOW_MAIN_STAGES.slice(5)];
+  const labelsRow2 = row2Stages.map(s => `<div class="ea-stage-col-label">${{esc(s.title.split(' ')[0].slice(0,9))}}</div>`).join('');
+  const boxesRow2 = row2Stages.map(s => {{
+    const cls = s.key === curStage ? (isBlocked ? 'ea-blocked' : 'ea-current') : (s.key === 'pendente_usuario' ? '' : (FLOW_MAIN_STAGES.findIndex(x => x.key === s.key) < FLOW_MAIN_STAGES.findIndex(x => x.key === curStage) ? 'ea-done' : ''));
+    const mark = cls === 'ea-current' ? '●' : (cls === 'ea-blocked' ? '✕' : (cls === 'ea-done' ? '✓' : '–'));
+    return `<div class="ea-stage-box ${{cls}}"><div class="ea-mark">${{mark}}</div></div>`;
+  }}).join('');
+
+  const chatH = tempoNoChatH(ticket);
+  const notaHtml = devopsSub
+    ? `<div class="ea-card-note">🛠️ <b>${{esc(devopsSub.usuario)}}:</b> ${{devopsSub.comentario ? `"${{esc(devopsSub.comentario)}}"` : esc(devopsSub.status)}}</div>`
+    : '';
+
+  return `<div class="ea-card ${{selected ? 'ea-selected' : ''}}" onclick="carregarChamadoFluxo(findTicketByProtocol(${{jsStr(ticket.protocol)}}))">
+    <div class="ea-card-head ${{headCls}}">
+      <div class="ea-card-head-left">Chamado: <b>${{esc(ticket.protocol)}}</b></div>
+      <div class="ea-card-status">${{statusLabel}}</div>
+    </div>
+    <div class="ea-card-body">
+      <div class="ea-stage-cols">${{labelsRow1}}</div>
+      <div class="ea-stage-cols">${{boxesRow1}}</div>
+      <div class="ea-stage-cols ea-row2">${{labelsRow2}}</div>
+      <div class="ea-stage-cols ea-row2">${{boxesRow2}}</div>
+      <div class="ea-card-foot">
+        <div class="ea-foot-left">${{esc(ticket.clientOrg || 'Sem cliente')}}<br><b>${{esc(ticket.category || 'Sem categoria')}}</b></div>
+        <div class="ea-foot-right">${{esc(originLabel(ticket.origin))}}${{chatH !== null ? ` · ${{fmtH(chatH)}}` : ''}}<br><b>${{ticket._hoursOpen !== null ? fmtH(ticket._hoursOpen) + ' aberto' : '-'}}</b></div>
+      </div>
+    </div>
+    ${{notaHtml}}
+  </div>`;
+}}
+
+// Grade de cards — um por chamado aberto, respeitando o filtro de mes/cliente. Ordenado do mais
+// parado pro mais recente (o que precisa de atencao primeiro), com um teto de cards renderizados por
+// custo de performance — o filtro de cliente ou a busca por numero reduz o conjunto quando precisar.
+const FLUXO_CARDS_LIMIT = 60;
+function renderFluxoCardsGrid(highlightProtocol) {{
+  const scope = fluxoOpenScope();
+  const ordenado = scope.slice().sort((a,b) => (b._hoursSinceUpdate||0) - (a._hoursSinceUpdate||0));
+  let mostrar = ordenado.slice(0, FLUXO_CARDS_LIMIT);
+  // Se o chamado buscado nao estiver entre os mais "parados" (fora do teto), garante que ele apareca
+  // mesmo assim — senao a busca por numero podia nao mostrar nada.
+  if (highlightProtocol && !mostrar.some(t => t.protocol === highlightProtocol)) {{
+    const buscado = scope.find(t => t.protocol === highlightProtocol);
+    if (buscado) mostrar = [buscado, ...mostrar.slice(0, FLUXO_CARDS_LIMIT - 1)];
+  }}
+  const notaLimite = scope.length > FLUXO_CARDS_LIMIT
+    ? `<div class="ea-cards-note">Mostrando ${{mostrar.length}} de ${{scope.length}} chamados abertos (os mais parados primeiro) — use o filtro de cliente ou a busca por numero pra refinar.</div>`
+    : `<div class="ea-cards-note">${{scope.length}} chamado(s) aberto(s) no filtro atual.</div>`;
+  const cardsHtml = mostrar.length
+    ? mostrar.map(t => ticketCardHtml(t, t.protocol === highlightProtocol)).join('')
+    : '<div class="empty-msg">Nenhum chamado aberto no filtro atual.</div>';
+  document.getElementById('flowDiagram').innerHTML = `
+    ${{notaLimite}}
+    <div class="ea-cards-grid">${{cardsHtml}}</div>
+    <div class="ea-legend">
+      <div class="ea-legend-item"><span class="ea-legend-swatch ea-done"></span> Concluido</div>
+      <div class="ea-legend-item"><span class="ea-legend-swatch ea-current"></span> Etapa atual</div>
+      <div class="ea-legend-item"><span class="ea-legend-swatch ea-blocked"></span> Impedimento</div>
+      <div class="ea-legend-item"><span class="ea-legend-swatch ea-pending"></span> Ainda nao chegou</div>
+    </div>
+  `;
+  if (highlightProtocol) {{
+    const el = document.querySelector('.ea-card.ea-selected');
+    if (el) el.scrollIntoView({{behavior: 'smooth', block: 'nearest'}});
+  }}
 }}
 
 // Barras clicaveis genericas (reaproveita o estilo .bar-row ja usado em outras abas).
@@ -2711,11 +2770,7 @@ function renderFluxoAgregado() {{
   // desfecho (validou e colocou Pendente Usuario, ou devolveu pra fila de dev). So calculavel pra
   // chamados com acoes completas disponiveis (hoje: abertos + tecnicos resolvidos no mes corrente).
   const n2Reaction = computeN2ReactionStats(comHistorico.concat(openScope));
-  const extrasAgg = {{}};
-  if (n2Reaction.nValidado || n2Reaction.nRetornouDev) {{
-    extrasAgg.validacao_impedimento = `<div class="flow-sub" style="margin-top:6px;">N2 apos log do Azure: ${{n2Reaction.mediaValidado !== null ? fmtH(n2Reaction.mediaValidado) : '-'}} p/ validar (${{n2Reaction.nValidado}}) · ${{n2Reaction.mediaRetornouDev !== null ? fmtH(n2Reaction.mediaRetornouDev) : '-'}} p/ devolver ao dev (${{n2Reaction.nRetornouDev}})</div>`;
-  }}
-  renderFlowDiagram(null, stageTimes, extrasAgg);
+  renderFluxoCardsGrid(null);
   renderFluxoGanttAgregado(stageTimes);
   renderResumoEtapasHtml(stageTimes);
   document.getElementById('fluxoTimelineSub').textContent = `Media geral (${{selClienteFluxo.value || 'todos os clientes'}}, ${{MONTH_LABELS[selMesFluxo.value]}}) — busque um chamado pra ver a linha do tempo real dele`;
@@ -2743,11 +2798,15 @@ function renderFluxoAgregado() {{
     {{ nome: 'Bug alto', prazo: '1 hora', obs: 'Atendimento prioritario', filtro: r => r.category === 'Bug' && r.urgency === 'Alta' }},
     {{ nome: 'Bug medio', prazo: '8 horas', obs: 'Desde que fornecida solucao de contorno ao usuario', filtro: r => r.category === 'Bug' && r.urgency === 'Média' }},
   ];
-  document.getElementById('fluxoSlaTbody').innerHTML = slaLinhas.map(l => {{
+  const slaRows = slaLinhas.map(l => {{
     const subset = ciclos.filter((c,i) => l.filtro(comHistorico[i]) && c.tempoRepasseN1H !== null);
     const media = avg(subset.map(c => c.tempoRepasseN1H));
     return `<tr><td>${{l.nome}}</td><td>${{l.prazo}}</td><td>${{media !== null ? fmtH(media) + ` (${{subset.length}})` : '-'}}</td><td>${{l.obs}}</td></tr>`;
-  }}).join('');
+  }});
+  if (n2Reaction.nValidado || n2Reaction.nRetornouDev) {{
+    slaRows.push(`<tr><td>N2 apos log do Azure</td><td>—</td><td>${{n2Reaction.mediaValidado !== null ? fmtH(n2Reaction.mediaValidado) : '-'}} p/ validar (${{n2Reaction.nValidado}})</td><td>${{n2Reaction.mediaRetornouDev !== null ? fmtH(n2Reaction.mediaRetornouDev) : '-'}} p/ devolver ao dev (${{n2Reaction.nRetornouDev}})</td></tr>`);
+  }}
+  document.getElementById('fluxoSlaTbody').innerHTML = slaRows.join('');
 }}
 
 function findTicketByProtocol(protocol) {{
@@ -2826,44 +2885,16 @@ function carregarChamadoFluxo(ticket) {{
   if (!ticket) return;
   document.getElementById('fluxoErro').style.display = 'none';
   document.getElementById('fluxoLimparBusca').style.display = '';
-  const curStage = effectiveStageForTicket(ticket);
-  const devopsSub = devopsSubStatusForTicket(ticket);
-  const hist = (ticket.statusHistories || []).slice().sort((a,b) => new Date(a.changedDate) - new Date(b.changedDate));
+  const {{ curStage, hist }} = computeTicketFlowPath(ticket);
 
-  // Anota cada card com o tempo REAL deste chamado naquela etapa (nao a media geral).
+  // Anota o resumo de etapas com o tempo REAL deste chamado (nao a media geral).
   const stageTimes = hist.length ? stageDurationsForTicket(hist) : {{}};
-  if (devopsSub && (curStage === 'validacao_impedimento')) {{
+  const devopsSub = devopsSubStatusForTicket(ticket);
+  if (devopsSub && curStage === 'validacao_impedimento') {{
     stageTimes.validacao_impedimento = devopsSubStatusDurationH(devopsSub);
   }}
 
-  // Extras por card: Entrada mostra o canal e o tempo no chat; Em Validacao/Impedimento mostra o log
-  // do devops (quem, quando, comentario).
-  const extras = {{}};
-  const chatH = tempoNoChatH(ticket);
-  extras.entrada = `<div class="flow-sub" style="margin-top:6px;"><b>${{esc(originLabel(ticket.origin))}}</b>${{chatH !== null ? ` · ${{fmtH(chatH)}} no chat` : ''}}</div>`;
-  if (devopsSub) {{
-    extras.validacao_impedimento = `<div class="flow-sub" style="margin-top:6px;"><b>${{esc(devopsSub.status)}}</b> — ${{esc(devopsSub.usuario)}} em ${{new Date(devopsSub.createdDate).toLocaleString('pt-BR')}}${{devopsSub.comentario ? `<br>"${{esc(devopsSub.comentario)}}"` : ''}}</div>`;
-  }}
-
-  // Etapas ja percorridas pelo chamado ate agora, NA ORDEM em que aconteceram (historico de status +
-  // devops) — ficam destacadas em verde no diagrama (exceto a atual, que fica rosa), e viram a base
-  // pra saber qual pill de "proximo passo" foi realmente seguida em cada etapa do caminho.
-  const rawSeq = [
-    'entrada',
-    ...hist.map(h => stageOfStatus(h.status)),
-  ];
-  devopsStatusLogs(ticket).forEach(l => {{
-    const s = l.status.toLowerCase();
-    if (s.indexOf('valida') !== -1 || s.indexOf('impediment') !== -1) rawSeq.push('validacao_impedimento');
-  }});
-  const path = [];
-  rawSeq.forEach(k => {{ if (path[path.length - 1] !== k) path.push(k); }});
-  if (path[path.length - 1] !== curStage) path.push(curStage);
-  const visitedKeys = Array.from(new Set(path));
-  const takenNextMap = {{}};
-  for (let i = 0; i < path.length - 1; i++) {{ takenNextMap[path[i]] = path[i + 1]; }}
-
-  renderFlowDiagram(curStage, stageTimes, extras, true, visitedKeys, takenNextMap);
+  renderFluxoCardsGrid(ticket.protocol);
   renderResumoEtapasHtml(stageTimes);
   document.getElementById('fluxoResumoEtapasSub').textContent = 'Soma de tempo por etapa (deste chamado)';
   const catTag = ['Bug','Melhoria','Serviços'].indexOf(ticket.category) !== -1 ? `<span class="flow-stage-tag">${{esc(ticket.category)}}</span>` : '';
@@ -2898,7 +2929,7 @@ function limparBuscaFluxo() {{
   document.getElementById('fluxoBuscaProtocolo').value = '';
   document.getElementById('fluxoErro').style.display = 'none';
   document.getElementById('fluxoLimparBusca').style.display = 'none';
-  document.getElementById('fluxoChamadoInfo').textContent = 'Cada etapa mostra o tempo medio do periodo/cliente selecionado e quantos chamados estao nela agora — clique numa etapa pra ver a lista, ou busque um chamado especifico pelo numero.';
+  document.getElementById('fluxoChamadoInfo').textContent = 'Cada card e um chamado aberto, com a etapa dele destacada — clique num card ou busque pelo numero pra ver detalhes.';
   document.getElementById('fluxoProximosPassos').innerHTML = '<div class="empty-msg">Nenhum chamado selecionado — dados gerais acima</div>';
   document.getElementById('fluxoGantt').innerHTML = '';
   document.getElementById('fluxoTimelineSub').textContent = 'Busque um chamado para ver a linha do tempo por status';
@@ -2922,10 +2953,7 @@ selMesFluxo.addEventListener('change', () => {{ refreshClienteFluxoOptions(); re
 selClienteFluxo.addEventListener('change', renderFluxoAgregado);
 refreshClienteFluxoOptions();
 renderFluxoAgregado();
-enhancePanels('fluxoDiagramPanel', false);
-enhancePanels('gridFluxoEntrada', true);
-enhancePanels('gridFluxo', true);
-enhancePanels('fluxoTimelinePanel', false);
+enhancePanels('fluxoCardsContainer', true);
 
 function tick() {{
   const el = document.getElementById('clock');
