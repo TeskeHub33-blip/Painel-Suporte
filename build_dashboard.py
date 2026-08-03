@@ -390,22 +390,27 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 
 .flow-wrap {{ display: flex; flex-direction: column; gap: 10px; }}
 .flow-row {{ display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; }}
+/* Cards do diagrama central no visual claro do EmiteAi (mesma paleta da grade de cargas do sistema
+   real), mesmo o resto do painel sendo escuro — contraste proposital, os cards "flutuam" como
+   elementos de outro produto embutido. */
 .flow-box {{
-  background: var(--surface2); border: 1.5px solid var(--panel-border); border-radius: 8px;
-  padding: 10px 14px; font-size: 12px; color: var(--text-dim); min-width: 140px; flex: 1;
+  background: #FFFFFF; border: 1.75px solid #D8DAE0; border-radius: 8px;
+  padding: 10px 14px; font-size: 12px; color: #595974; min-width: 140px; flex: 1;
   transition: box-shadow .2s ease, border-color .2s ease, background .2s ease; position: relative;
 }}
-.flow-box .flow-title {{ font-weight: 700; color: var(--text); font-size: 12.5px; margin-bottom: 3px; display: flex; align-items: center; }}
-.flow-box .flow-sub {{ font-size: 10.5px; color: var(--text3); line-height: 1.4; }}
-.flow-box.flow-done {{ border-color: var(--ok-bord); background: var(--ok-dim); }}
-.flow-box.flow-done .flow-title {{ color: var(--ok); }}
-.flow-box.flow-current {{ border-color: var(--pink); background: var(--pink-dim); box-shadow: 0 0 0 2px rgba(237,109,162,0.25); }}
-.flow-box.flow-current .flow-title {{ color: var(--pink); }}
+.flow-box .flow-title {{ font-weight: 700; color: #1A1A2C; font-size: 12.5px; margin-bottom: 3px; display: flex; align-items: center; }}
+.flow-box .flow-sub {{ font-size: 10.5px; color: #878799; line-height: 1.4; }}
+.flow-box.flow-done {{ border-color: #4ADE9A; background: #EAFBF3; }}
+.flow-box.flow-done .flow-title {{ color: #10B981; }}
+.flow-box.flow-current {{ border-color: #F5A623; background: #FFF6E0; box-shadow: 0 0 0 2px rgba(245,166,35,0.25); }}
+.flow-box.flow-current .flow-title {{ color: #C97A00; }}
+.flow-box.flow-blocked {{ border-color: #F3A3AA; background: #FEECEE; box-shadow: 0 0 0 2px rgba(226,55,68,0.2); }}
+.flow-box.flow-blocked .flow-title {{ color: #E23744; }}
 .flow-box.flow-clickable {{ cursor: pointer; }}
-.flow-box.flow-clickable:hover {{ border-color: var(--navy); box-shadow: var(--shadow2); }}
-.flow-box.flow-clickable:focus-visible {{ outline: 2px solid var(--pink); outline-offset: 2px; }}
-.flow-time {{ font-size: 10.5px; color: var(--text-dim); margin-top: 6px; font-weight: 600; }}
-.flow-count {{ display: inline-block; margin-top: 4px; font-size: 10px; font-weight: 700; color: var(--pink); background: var(--pink-dim); border-radius: 20px; padding: 2px 8px; }}
+.flow-box.flow-clickable:hover {{ border-color: #24243E; box-shadow: rgba(0,0,0,0.18) 0px 4px 12px 0px; }}
+.flow-box.flow-clickable:focus-visible {{ outline: 2px solid #ED6DA2; outline-offset: 2px; }}
+.flow-time {{ font-size: 10.5px; color: #595974; margin-top: 6px; font-weight: 600; }}
+.flow-count {{ display: inline-block; margin-top: 4px; font-size: 10px; font-weight: 700; color: #ED6DA2; background: rgba(237,109,162,0.12); border-radius: 20px; padding: 2px 8px; }}
 .flow-branch {{ display: flex; flex-direction: column; gap: 6px; flex: 1; }}
 /* A seta agora e um pseudo-elemento do proprio card (nao um div separado) — assim, ao arrastar um
    card pra outra posicao, a seta "vai junto" (sempre aparece depois de todo card que nao seja o
@@ -414,13 +419,16 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 .flow-row .flow-box:last-child {{ margin-right: 0; }}
 .flow-row .flow-box:not(:last-child)::after {{
   content: '→'; position: absolute; right: -20px; top: 50%; transform: translateY(-50%);
-  color: var(--text3); font-size: 18px; pointer-events: none;
+  color: var(--text-dim); font-size: 18px; pointer-events: none;
 }}
 .flow-box.resizable {{ overflow: auto; min-width: 140px; min-height: 90px; }}
 .flow-box.resizable.dragging {{ opacity: 0.35; }}
-.flow-box.resizable.drag-over {{ box-shadow: 0 0 0 2px var(--pink); }}
-.flow-box .drag-handle {{ cursor: grab; user-select: none; color: var(--text3); font-size: 12px; margin-left: 6px; flex-shrink: 0; }}
+.flow-box.resizable.drag-over {{ box-shadow: 0 0 0 2px #ED6DA2; }}
+.flow-box .drag-handle {{ cursor: grab; user-select: none; color: #878799; font-size: 12px; margin-left: 6px; flex-shrink: 0; }}
 .flow-box .drag-handle:active {{ cursor: grabbing; }}
+.flow-box .resize-handle-corner {{ background: linear-gradient(135deg, transparent 0 50%, #D8DAE0 50% 60%, transparent 60% 70%, #D8DAE0 70% 80%, transparent 80%); }}
+.flow-box .resize-handle-corner:hover {{ background: linear-gradient(135deg, transparent 0 50%, #ED6DA2 50% 60%, transparent 60% 70%, #ED6DA2 70% 80%, transparent 80%); }}
+.flow-box .resize-handle-r:hover, .flow-box .resize-handle-l:hover, .flow-box .resize-handle-b:hover, .flow-box .resize-handle-t:hover {{ background: rgba(237,109,162,0.18); }}
 .flow-sla-table {{ font-size: 11px; }}
 .flow-sla-table td, .flow-sla-table th {{ padding: 4px 8px; }}
 .flow-search-row {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }}
@@ -433,69 +441,16 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 .flow-next-steps {{ background: var(--surface2); border-radius: 8px; padding: 12px 16px; font-size: 12.5px; color: var(--text); margin-top: 4px; border-left: 3px solid var(--pink); }}
 .flow-next-options {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }}
 .flow-next-pill {{
-  background: var(--panel); border: 1.25px solid #878799; color: var(--text); font-size: 11.5px; font-weight: 600;
+  background: #F7F8FA; border: 1.25px solid #D8DAE0; color: #1A1A2C; font-size: 11.5px; font-weight: 600;
   padding: 6px 14px; border-radius: 20px; cursor: pointer; transition: all .15s ease;
 }}
-.flow-next-pill:hover {{ background: var(--pink-dim); border-color: var(--pink); color: var(--pink); }}
+.flow-next-pill:hover {{ background: #FDE8F2; border-color: #ED6DA2; color: #ED6DA2; }}
 .flow-gantt {{ display: flex; width: 100%; height: 30px; border-radius: 6px; overflow: hidden; margin: 10px 0 6px; }}
 .flow-gantt-seg {{ height: 100%; min-width: 3px; }}
 .flow-gantt-legend {{ display: flex; flex-wrap: wrap; gap: 12px; font-size: 10.5px; color: var(--text-dim); margin-bottom: 6px; }}
 .flow-gantt-legend-item {{ display: flex; align-items: center; gap: 5px; }}
 .flow-gantt-swatch {{ width: 10px; height: 10px; border-radius: 3px; display: inline-block; }}
 .flow-stage-tag {{ display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 8px; border-radius: 4px; background: var(--surface2); color: var(--text-dim); margin-left: 6px; }}
-
-/* ── Grade de cards de chamado no estilo visual EmiteAi (claro), independente do tema escuro do
-   resto do painel — cada chamado e um card com a etapa dele, igual a grade de cargas do sistema. */
-.ea-cards-note {{ font-size: 11.5px; color: var(--text-dim); margin-bottom: 10px; }}
-.ea-cards-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }}
-.ea-card {{
-  background: #FFFFFF; border-radius: 8px; box-shadow: rgba(0,0,0,0.14) 0px 2px 6px 0px;
-  overflow: hidden; display: flex; flex-direction: column; cursor: pointer;
-  transition: box-shadow .15s, transform .1s;
-  color: #1A1A2C; font-family: 'Inter', 'Poppins', sans-serif;
-}}
-.ea-card:hover {{ box-shadow: rgba(0,0,0,0.22) 0px 4px 14px 0px; }}
-.ea-card.ea-selected {{ outline: 3px solid #ED6DA2; outline-offset: 1px; }}
-.ea-card-head {{ padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }}
-.ea-head-green {{ background: #10B981; }}
-.ea-head-amber {{ background: #F5A623; }}
-.ea-head-red {{ background: #E23744; }}
-.ea-card-head-left {{ font-size: 11.5px; color: rgba(255,255,255,0.92); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
-.ea-card-head-left b {{ color: #fff; font-weight: 700; }}
-.ea-card-status {{ font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap; flex-shrink: 0; }}
-.ea-card-body {{ padding: 10px 12px 12px; flex: 1; }}
-.ea-stage-cols {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 3px; }}
-.ea-stage-cols.ea-row2 {{ grid-template-columns: repeat(4, 1fr); margin-top: 8px; }}
-.ea-stage-col-label {{ font-size: 8.5px; font-weight: 700; color: #1A1A2C; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-.ea-stage-box {{
-  border: 1.75px solid #D8DAE0; border-radius: 5px; background: #fff;
-  padding: 3px 2px; text-align: center; min-height: 26px;
-  display: flex; align-items: center; justify-content: center;
-}}
-.ea-stage-box .ea-mark {{ font-size: 13px; font-weight: 700; color: #A6A9B4; line-height: 1; }}
-.ea-stage-box.ea-done {{ border-color: #4ADE9A; }}
-.ea-stage-box.ea-done .ea-mark {{ color: #10B981; }}
-.ea-stage-box.ea-current {{ border-color: #F5A623; background: #FFF6E0; }}
-.ea-stage-box.ea-current .ea-mark {{ color: #F5A623; }}
-.ea-stage-box.ea-blocked {{ border-color: #F3A3AA; background: #FEECEE; }}
-.ea-stage-box.ea-blocked .ea-mark {{ color: #E23744; }}
-.ea-card-foot {{ display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; padding-top: 9px; border-top: 1px solid rgba(135,135,153,0.20); font-size: 11px; }}
-.ea-foot-left, .ea-foot-right {{ color: #595974; line-height: 1.5; }}
-.ea-foot-left b, .ea-foot-right b {{ color: #1A1A2C; }}
-.ea-foot-right {{ text-align: right; }}
-.ea-card-note {{
-  display: flex; align-items: flex-start; gap: 6px; padding: 8px 12px;
-  background: #F7F8FA; border-top: 1px solid rgba(135,135,153,0.16);
-  font-size: 10.5px; color: #595974; line-height: 1.35;
-}}
-.ea-card-note b {{ color: #1A1A2C; }}
-.ea-legend {{ display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-dim); margin-top: 14px; }}
-.ea-legend-item {{ display: flex; align-items: center; gap: 6px; }}
-.ea-legend-swatch {{ width: 14px; height: 14px; border-radius: 4px; border: 1.75px solid; background: #fff; }}
-.ea-legend-swatch.ea-done {{ border-color: #4ADE9A; }}
-.ea-legend-swatch.ea-current {{ border-color: #F5A623; background: #FFF6E0; }}
-.ea-legend-swatch.ea-blocked {{ border-color: #F3A3AA; background: #FEECEE; }}
-.ea-legend-swatch.ea-pending {{ border-color: #D8DAE0; }}
 
 .modal-overlay {{
   position: fixed; inset: 0; background: rgba(26,26,44,0.45);
@@ -649,7 +604,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
     <div class="grid" id="fluxoCardsContainer" style="margin-top: 18px;">
       <div class="panel" id="fluxoDiagramPanel" style="flex-basis:100%; width:100%;">
         <h2>🧭 Fluxo de atendimento — Central de Suporte EmiteAi</h2>
-        <div class="panel-sub" id="fluxoChamadoInfo">Cada card e um chamado aberto, com a etapa dele destacada — clique num card ou busque pelo numero pra ver detalhes.</div>
+        <div class="panel-sub" id="fluxoChamadoInfo">Dados gerais (nenhum chamado selecionado) — busque pelo numero do protocolo ou clique num card do fluxo pra ver os chamados naquela etapa.</div>
         <div class="flow-wrap" id="flowDiagram"></div>
       </div>
 
@@ -2650,89 +2605,106 @@ function computeTicketFlowPath(ticket) {{
   return {{ curStage, devopsSub, hist, path: Array.from(new Set(path)) }};
 }}
 
-// Card individual no visual claro do EmiteAi (mesmo padrao da grade de cargas): barra de status
-// colorida no topo, grade de etapas (uma caixinha por etapa, borda colorida conforme o estado), e
-// rodape com dados do chamado.
-function ticketCardHtml(ticket, selected) {{
-  const {{ curStage, devopsSub }} = computeTicketFlowPath(ticket);
-  const isBlocked = devopsSub && devopsSub.status.toLowerCase().indexOf('impediment') !== -1 && curStage === 'validacao_impedimento';
-  const isStalled = ticket._hoursSinceUpdate !== null && ticket._hoursSinceUpdate >= 48;
-  const headCls = isBlocked ? 'ea-head-red' : (isStalled ? 'ea-head-amber' : 'ea-head-green');
-  const statusLabel = isBlocked ? 'Impedimento' : esc(ticket.status || '-');
+const FLOW_CLICKAVEL = ['n1', 'n2', 'task_dev', 'validacao_impedimento', 'pendente_usuario', 'validacao_cliente', 'encerrado', 'triagem'];
 
-  const stageBoxHtml = (s) => {{
-    const cls = s.key === curStage ? (isBlocked ? 'ea-blocked' : 'ea-current') : (FLOW_MAIN_STAGES.indexOf(s) < FLOW_MAIN_STAGES.findIndex(x => x.key === curStage) ? 'ea-done' : '');
-    const mark = cls === 'ea-current' ? '●' : (cls === 'ea-blocked' ? '✕' : (cls === 'ea-done' ? '✓' : '–'));
-    return `<div class="ea-stage-box ${{cls}}"><div class="ea-mark">${{mark}}</div></div>`;
+// Diagrama central — um card por etapa (nao por chamado), no visual claro do EmiteAi (mesma paleta
+// da grade de cargas do sistema real): verde = ja passou, ambar = etapa atual, vermelho = impedimento,
+// cinza = ainda nao chegou. extras[key] = HTML extra pra anexar dentro do card daquela etapa (ex.:
+// canal de entrada + tempo no chat, ou o comentario do devops) — so preenchido com chamado carregado.
+// takenNextMap[key] = etapa de destino que o chamado selecionado realmente seguiu a partir de "key".
+function renderFlowDiagram(currentKey, stageTimes, extras, perTicket, visitedKeys, takenNextMap, blockedKey) {{
+  extras = extras || {{}};
+  visitedKeys = visitedKeys || [];
+  takenNextMap = takenNextMap || {{}};
+  const boxHtml = (s) => {{
+    const clickavel = FLOW_CLICKAVEL.indexOf(s.key) !== -1;
+    const tempo = stageTimes[s.key];
+    const qtd = clickavel ? ticketsNaEtapa(s.key).length : null;
+    const isCurrent = s.key === currentKey;
+    const isBlocked = isCurrent && s.key === blockedKey;
+    const isDone = !isCurrent && visitedKeys.indexOf(s.key) !== -1;
+    const attrs = clickavel ? `tabindex="0" role="button" onclick="abrirModalEtapaFluxo(${{jsStr(s.key)}}, ${{jsStr(s.title)}})" onkeydown="if(event.key==='Enter')abrirModalEtapaFluxo(${{jsStr(s.key)}}, ${{jsStr(s.title)}})"` : '';
+    return `<div class="flow-box ${{isBlocked ? 'flow-blocked' : (isCurrent ? 'flow-current' : '')}} ${{isDone ? 'flow-done' : ''}} ${{clickavel ? 'flow-clickable' : ''}}" id="flowbox-${{s.key}}" data-pid="${{s.key}}" ${{attrs}}>
+      <div class="flow-title">${{esc(s.title)}}</div>
+      <div class="flow-sub">${{esc(s.sub)}}</div>
+      ${{tempo !== undefined && tempo !== null ? `<div class="flow-time">⏱ ${{perTicket ? 'tempo' : 'media'}}: ${{fmtH(tempo)}}</div>` : ''}}
+      ${{qtd !== null ? `<div class="flow-count">${{qtd}} agora</div>` : ''}}
+      ${{extras[s.key] || ''}}
+      ${{flowNextPillsHtml(s.key, takenNextMap[s.key])}}
+    </div>`;
   }};
-  const labelsRow1 = FLOW_MAIN_STAGES.slice(0, 5).map(s => `<div class="ea-stage-col-label">${{esc(s.title.split(' ')[0].slice(0,7))}}</div>`).join('');
-  const boxesRow1 = FLOW_MAIN_STAGES.slice(0, 5).map(stageBoxHtml).join('');
-  const row2Stages = [FLOW_SECONDARY_STAGE, ...FLOW_MAIN_STAGES.slice(5)];
-  const labelsRow2 = row2Stages.map(s => `<div class="ea-stage-col-label">${{esc(s.title.split(' ')[0].slice(0,9))}}</div>`).join('');
-  const boxesRow2 = row2Stages.map(s => {{
-    const cls = s.key === curStage ? (isBlocked ? 'ea-blocked' : 'ea-current') : (s.key === 'pendente_usuario' ? '' : (FLOW_MAIN_STAGES.findIndex(x => x.key === s.key) < FLOW_MAIN_STAGES.findIndex(x => x.key === curStage) ? 'ea-done' : ''));
-    const mark = cls === 'ea-current' ? '●' : (cls === 'ea-blocked' ? '✕' : (cls === 'ea-done' ? '✓' : '–'));
-    return `<div class="ea-stage-box ${{cls}}"><div class="ea-mark">${{mark}}</div></div>`;
-  }}).join('');
-
-  const chatH = tempoNoChatH(ticket);
-  const notaHtml = devopsSub
-    ? `<div class="ea-card-note">🛠️ <b>${{esc(devopsSub.usuario)}}:</b> ${{devopsSub.comentario ? `"${{esc(devopsSub.comentario)}}"` : esc(devopsSub.status)}}</div>`
-    : '';
-
-  return `<div class="ea-card ${{selected ? 'ea-selected' : ''}}" onclick="carregarChamadoFluxo(findTicketByProtocol(${{jsStr(ticket.protocol)}}))">
-    <div class="ea-card-head ${{headCls}}">
-      <div class="ea-card-head-left">Chamado: <b>${{esc(ticket.protocol)}}</b></div>
-      <div class="ea-card-status">${{statusLabel}}</div>
-    </div>
-    <div class="ea-card-body">
-      <div class="ea-stage-cols">${{labelsRow1}}</div>
-      <div class="ea-stage-cols">${{boxesRow1}}</div>
-      <div class="ea-stage-cols ea-row2">${{labelsRow2}}</div>
-      <div class="ea-stage-cols ea-row2">${{boxesRow2}}</div>
-      <div class="ea-card-foot">
-        <div class="ea-foot-left">${{esc(ticket.clientOrg || 'Sem cliente')}}<br><b>${{esc(ticket.category || 'Sem categoria')}}</b></div>
-        <div class="ea-foot-right">${{esc(originLabel(ticket.origin))}}${{chatH !== null ? ` · ${{fmtH(chatH)}}` : ''}}<br><b>${{ticket._hoursOpen !== null ? fmtH(ticket._hoursOpen) + ' aberto' : '-'}}</b></div>
-      </div>
-    </div>
-    ${{notaHtml}}
-  </div>`;
+  const mainRow = FLOW_MAIN_STAGES.map(boxHtml).join('');
+  document.getElementById('flowDiagram').innerHTML = `
+    <div class="flow-row" id="flowRowMain">${{mainRow}}</div>
+    <div class="flow-row" id="flowRowSecundaria" style="max-width:280px;">${{boxHtml(FLOW_SECONDARY_STAGE)}}</div>
+  `;
+  enhanceFlowBoxes('flowRowMain');
+  enhanceFlowBoxes('flowRowSecundaria');
 }}
 
-// Grade de cards — um por chamado aberto, respeitando o filtro de mes/cliente. Ordenado do mais
-// parado pro mais recente (o que precisa de atencao primeiro), com um teto de cards renderizados por
-// custo de performance — o filtro de cliente ou a busca por numero reduz o conjunto quando precisar.
-const FLUXO_CARDS_LIMIT = 60;
-function renderFluxoCardsGrid(highlightProtocol) {{
-  const scope = fluxoOpenScope();
-  const ordenado = scope.slice().sort((a,b) => (b._hoursSinceUpdate||0) - (a._hoursSinceUpdate||0));
-  let mostrar = ordenado.slice(0, FLUXO_CARDS_LIMIT);
-  // Se o chamado buscado nao estiver entre os mais "parados" (fora do teto), garante que ele apareca
-  // mesmo assim — senao a busca por numero podia nao mostrar nada.
-  if (highlightProtocol && !mostrar.some(t => t.protocol === highlightProtocol)) {{
-    const buscado = scope.find(t => t.protocol === highlightProtocol);
-    if (buscado) mostrar = [buscado, ...mostrar.slice(0, FLUXO_CARDS_LIMIT - 1)];
+// Permite arrastar (reordenar) e redimensionar os cards do fluxograma, igual ao enhancePanels() usado
+// nas outras abas, mas adaptado pros .flow-box (identificados pela propria chave da etapa, que e
+// estavel entre re-renders — assim a ordem/tamanho salvos sobrevivem a toda busca/filtro novo).
+function enhanceFlowBoxes(containerId) {{
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const boxes = Array.from(container.querySelectorAll(':scope > .flow-box'));
+  boxes.forEach(p => {{
+    p.classList.add('resizable');
+    const savedSize = localStorage.getItem('flowboxsize_' + p.dataset.pid);
+    if (savedSize) {{
+      try {{
+        const s = JSON.parse(savedSize);
+        if (s.w) {{ p.style.width = s.w; p.style.flexGrow = '0'; p.style.flexShrink = '0'; p.style.flexBasis = 'auto'; }}
+        if (s.h) p.style.height = s.h;
+        if (s.ml) p.style.marginLeft = s.ml;
+        if (s.mt) p.style.marginTop = s.mt;
+      }} catch(e) {{}}
+    }}
+
+    attachResizeHandles(p, 140, 90, el => localStorage.setItem('flowboxsize_' + p.dataset.pid, JSON.stringify({{w: el.style.width, h: el.style.height, ml: el.style.marginLeft, mt: el.style.marginTop}})));
+
+    const titleEl = p.querySelector('.flow-title');
+    if (titleEl && !titleEl.querySelector('.drag-handle')) {{
+      const handle = document.createElement('span');
+      handle.className = 'drag-handle';
+      handle.textContent = '⠿';
+      handle.title = 'Arrastar para reordenar';
+      handle.addEventListener('mousedown', e => {{ e.stopPropagation(); p.setAttribute('draggable', 'true'); }});
+      handle.addEventListener('click', e => {{ e.stopPropagation(); }});
+      titleEl.appendChild(handle);
+    }}
+    p.addEventListener('dragstart', e => {{ e.dataTransfer.setData('text/plain', p.dataset.pid); p.classList.add('dragging'); }});
+    p.addEventListener('dragend', () => {{ p.removeAttribute('draggable'); p.classList.remove('dragging'); saveFlowBoxOrder(containerId); }});
+    p.addEventListener('dragover', e => {{ e.preventDefault(); p.classList.add('drag-over'); }});
+    p.addEventListener('dragleave', () => p.classList.remove('drag-over'));
+    p.addEventListener('drop', e => {{
+      e.preventDefault();
+      p.classList.remove('drag-over');
+      const draggedId = e.dataTransfer.getData('text/plain');
+      const dragged = container.querySelector(`[data-pid="${{draggedId}}"]`);
+      if (dragged && dragged !== p) {{
+        const all = Array.from(container.children);
+        if (all.indexOf(dragged) < all.indexOf(p)) p.after(dragged); else p.before(dragged);
+        saveFlowBoxOrder(containerId);
+      }}
+    }});
+  }});
+  const savedOrder = localStorage.getItem('flowboxorder_' + containerId);
+  if (savedOrder) {{
+    try {{
+      JSON.parse(savedOrder).forEach(pid => {{
+        const el = container.querySelector(`[data-pid="${{pid}}"]`);
+        if (el) container.appendChild(el);
+      }});
+    }} catch(e) {{}}
   }}
-  const notaLimite = scope.length > FLUXO_CARDS_LIMIT
-    ? `<div class="ea-cards-note">Mostrando ${{mostrar.length}} de ${{scope.length}} chamados abertos (os mais parados primeiro) — use o filtro de cliente ou a busca por numero pra refinar.</div>`
-    : `<div class="ea-cards-note">${{scope.length}} chamado(s) aberto(s) no filtro atual.</div>`;
-  const cardsHtml = mostrar.length
-    ? mostrar.map(t => ticketCardHtml(t, t.protocol === highlightProtocol)).join('')
-    : '<div class="empty-msg">Nenhum chamado aberto no filtro atual.</div>';
-  document.getElementById('flowDiagram').innerHTML = `
-    ${{notaLimite}}
-    <div class="ea-cards-grid">${{cardsHtml}}</div>
-    <div class="ea-legend">
-      <div class="ea-legend-item"><span class="ea-legend-swatch ea-done"></span> Concluido</div>
-      <div class="ea-legend-item"><span class="ea-legend-swatch ea-current"></span> Etapa atual</div>
-      <div class="ea-legend-item"><span class="ea-legend-swatch ea-blocked"></span> Impedimento</div>
-      <div class="ea-legend-item"><span class="ea-legend-swatch ea-pending"></span> Ainda nao chegou</div>
-    </div>
-  `;
-  if (highlightProtocol) {{
-    const el = document.querySelector('.ea-card.ea-selected');
-    if (el) el.scrollIntoView({{behavior: 'smooth', block: 'nearest'}});
-  }}
+}}
+function saveFlowBoxOrder(containerId) {{
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const order = Array.from(container.querySelectorAll(':scope > .flow-box')).map(p => p.dataset.pid);
+  localStorage.setItem('flowboxorder_' + containerId, JSON.stringify(order));
 }}
 
 // Barras clicaveis genericas (reaproveita o estilo .bar-row ja usado em outras abas).
@@ -2770,7 +2742,7 @@ function renderFluxoAgregado() {{
   // desfecho (validou e colocou Pendente Usuario, ou devolveu pra fila de dev). So calculavel pra
   // chamados com acoes completas disponiveis (hoje: abertos + tecnicos resolvidos no mes corrente).
   const n2Reaction = computeN2ReactionStats(comHistorico.concat(openScope));
-  renderFluxoCardsGrid(null);
+  renderFlowDiagram(null, stageTimes, {{}});
   renderFluxoGanttAgregado(stageTimes);
   renderResumoEtapasHtml(stageTimes);
   document.getElementById('fluxoTimelineSub').textContent = `Media geral (${{selClienteFluxo.value || 'todos os clientes'}}, ${{MONTH_LABELS[selMesFluxo.value]}}) — busque um chamado pra ver a linha do tempo real dele`;
@@ -2885,16 +2857,32 @@ function carregarChamadoFluxo(ticket) {{
   if (!ticket) return;
   document.getElementById('fluxoErro').style.display = 'none';
   document.getElementById('fluxoLimparBusca').style.display = '';
-  const {{ curStage, hist }} = computeTicketFlowPath(ticket);
+  const {{ curStage, hist, path }} = computeTicketFlowPath(ticket);
 
-  // Anota o resumo de etapas com o tempo REAL deste chamado (nao a media geral).
+  // Anota cada card com o tempo REAL deste chamado naquela etapa (nao a media geral).
   const stageTimes = hist.length ? stageDurationsForTicket(hist) : {{}};
   const devopsSub = devopsSubStatusForTicket(ticket);
+  const isBlocked = devopsSub && devopsSub.status.toLowerCase().indexOf('impediment') !== -1 && curStage === 'validacao_impedimento';
   if (devopsSub && curStage === 'validacao_impedimento') {{
     stageTimes.validacao_impedimento = devopsSubStatusDurationH(devopsSub);
   }}
 
-  renderFluxoCardsGrid(ticket.protocol);
+  // Extras por card: Entrada mostra o canal e o tempo no chat; Em Validacao/Impedimento mostra o log
+  // do devops (quem, quando, comentario).
+  const extras = {{}};
+  const chatH = tempoNoChatH(ticket);
+  extras.entrada = `<div class="flow-sub" style="margin-top:6px;"><b>${{esc(originLabel(ticket.origin))}}</b>${{chatH !== null ? ` · ${{fmtH(chatH)}} no chat` : ''}}</div>`;
+  if (devopsSub) {{
+    extras.validacao_impedimento = `<div class="flow-sub" style="margin-top:6px;"><b>${{esc(devopsSub.status)}}</b> — ${{esc(devopsSub.usuario)}} em ${{new Date(devopsSub.createdDate).toLocaleString('pt-BR')}}${{devopsSub.comentario ? `<br>"${{esc(devopsSub.comentario)}}"` : ''}}</div>`;
+  }}
+
+  // Etapas ja percorridas pelo chamado ate agora (verde no diagrama, exceto a atual que fica ambar ou
+  // vermelha se em impedimento) — base pra saber qual pill de "proximo passo" foi realmente seguida.
+  const visitedKeys = path;
+  const takenNextMap = {{}};
+  for (let i = 0; i < path.length - 1; i++) {{ takenNextMap[path[i]] = path[i + 1]; }}
+
+  renderFlowDiagram(curStage, stageTimes, extras, true, visitedKeys, takenNextMap, isBlocked ? curStage : null);
   renderResumoEtapasHtml(stageTimes);
   document.getElementById('fluxoResumoEtapasSub').textContent = 'Soma de tempo por etapa (deste chamado)';
   const catTag = ['Bug','Melhoria','Serviços'].indexOf(ticket.category) !== -1 ? `<span class="flow-stage-tag">${{esc(ticket.category)}}</span>` : '';
@@ -2929,7 +2917,7 @@ function limparBuscaFluxo() {{
   document.getElementById('fluxoBuscaProtocolo').value = '';
   document.getElementById('fluxoErro').style.display = 'none';
   document.getElementById('fluxoLimparBusca').style.display = 'none';
-  document.getElementById('fluxoChamadoInfo').textContent = 'Cada card e um chamado aberto, com a etapa dele destacada — clique num card ou busque pelo numero pra ver detalhes.';
+  document.getElementById('fluxoChamadoInfo').textContent = 'Dados gerais (nenhum chamado selecionado) — busque pelo numero do protocolo ou clique num card do fluxo pra ver os chamados naquela etapa.';
   document.getElementById('fluxoProximosPassos').innerHTML = '<div class="empty-msg">Nenhum chamado selecionado — dados gerais acima</div>';
   document.getElementById('fluxoGantt').innerHTML = '';
   document.getElementById('fluxoTimelineSub').textContent = 'Busque um chamado para ver a linha do tempo por status';
