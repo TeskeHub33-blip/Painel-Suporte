@@ -390,27 +390,27 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 
 .flow-wrap {{ display: flex; flex-direction: column; gap: 10px; }}
 .flow-row {{ display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; }}
-/* Cards do diagrama central no visual claro do EmiteAi (mesma paleta da grade de cargas do sistema
-   real), mesmo o resto do painel sendo escuro — contraste proposital, os cards "flutuam" como
-   elementos de outro produto embutido. */
+/* Cards do diagrama central no tema escuro do painel, com a identidade de cores EmiteAi (verde/
+   ambar/vermelho iguais aos da grade de cargas) aplicada como acento translucido, nao como card
+   branco — mantem o card consistente com o resto do dashboard (modo escuro). */
 .flow-box {{
-  background: #FFFFFF; border: 1.75px solid #D8DAE0; border-radius: 8px;
-  padding: 10px 14px; font-size: 12px; color: #595974; min-width: 140px; flex: 1;
+  background: var(--surface2); border: 1.75px solid var(--panel-border); border-radius: 8px;
+  padding: 10px 14px; font-size: 12px; color: var(--text-dim); min-width: 140px; flex: 1;
   transition: box-shadow .2s ease, border-color .2s ease, background .2s ease; position: relative;
 }}
-.flow-box .flow-title {{ font-weight: 700; color: #1A1A2C; font-size: 12.5px; margin-bottom: 3px; display: flex; align-items: center; }}
-.flow-box .flow-sub {{ font-size: 10.5px; color: #878799; line-height: 1.4; }}
-.flow-box.flow-done {{ border-color: #4ADE9A; background: #EAFBF3; }}
-.flow-box.flow-done .flow-title {{ color: #10B981; }}
-.flow-box.flow-current {{ border-color: #F5A623; background: #FFF6E0; box-shadow: 0 0 0 2px rgba(245,166,35,0.25); }}
-.flow-box.flow-current .flow-title {{ color: #C97A00; }}
-.flow-box.flow-blocked {{ border-color: #F3A3AA; background: #FEECEE; box-shadow: 0 0 0 2px rgba(226,55,68,0.2); }}
-.flow-box.flow-blocked .flow-title {{ color: #E23744; }}
+.flow-box .flow-title {{ font-weight: 700; color: var(--text); font-size: 12.5px; margin-bottom: 3px; display: flex; align-items: center; }}
+.flow-box .flow-sub {{ font-size: 10.5px; color: var(--text3); line-height: 1.4; }}
+.flow-box.flow-done {{ border-color: rgba(74,222,154,0.55); background: rgba(16,185,129,0.12); }}
+.flow-box.flow-done .flow-title {{ color: #4ADE9A; }}
+.flow-box.flow-current {{ border-color: rgba(245,166,35,0.65); background: rgba(245,166,35,0.14); box-shadow: 0 0 0 2px rgba(245,166,35,0.22); }}
+.flow-box.flow-current .flow-title {{ color: #F5A623; }}
+.flow-box.flow-blocked {{ border-color: rgba(226,55,68,0.6); background: rgba(226,55,68,0.14); box-shadow: 0 0 0 2px rgba(226,55,68,0.22); }}
+.flow-box.flow-blocked .flow-title {{ color: #F3707E; }}
 .flow-box.flow-clickable {{ cursor: pointer; }}
-.flow-box.flow-clickable:hover {{ border-color: #24243E; box-shadow: rgba(0,0,0,0.18) 0px 4px 12px 0px; }}
-.flow-box.flow-clickable:focus-visible {{ outline: 2px solid #ED6DA2; outline-offset: 2px; }}
-.flow-time {{ font-size: 10.5px; color: #595974; margin-top: 6px; font-weight: 600; }}
-.flow-count {{ display: inline-block; margin-top: 4px; font-size: 10px; font-weight: 700; color: #ED6DA2; background: rgba(237,109,162,0.12); border-radius: 20px; padding: 2px 8px; }}
+.flow-box.flow-clickable:hover {{ border-color: var(--pink); box-shadow: var(--shadow2); }}
+.flow-box.flow-clickable:focus-visible {{ outline: 2px solid var(--pink); outline-offset: 2px; }}
+.flow-time {{ font-size: 10.5px; color: var(--text-dim); margin-top: 6px; font-weight: 600; }}
+.flow-count {{ display: inline-block; margin-top: 4px; font-size: 10px; font-weight: 700; color: var(--pink); background: var(--pink-dim); border-radius: 20px; padding: 2px 8px; }}
 .flow-branch {{ display: flex; flex-direction: column; gap: 6px; flex: 1; }}
 /* A seta agora e um pseudo-elemento do proprio card (nao um div separado) — assim, ao arrastar um
    card pra outra posicao, a seta "vai junto" (sempre aparece depois de todo card que nao seja o
@@ -419,16 +419,16 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 .flow-row .flow-box:last-child {{ margin-right: 0; }}
 .flow-row .flow-box:not(:last-child)::after {{
   content: '→'; position: absolute; right: -20px; top: 50%; transform: translateY(-50%);
-  color: var(--text-dim); font-size: 18px; pointer-events: none;
+  color: var(--text3); font-size: 18px; pointer-events: none;
 }}
 .flow-box.resizable {{ overflow: auto; min-width: 140px; min-height: 90px; }}
 .flow-box.resizable.dragging {{ opacity: 0.35; }}
-.flow-box.resizable.drag-over {{ box-shadow: 0 0 0 2px #ED6DA2; }}
-.flow-box .drag-handle {{ cursor: grab; user-select: none; color: #878799; font-size: 12px; margin-left: 6px; flex-shrink: 0; }}
+.flow-box.resizable.drag-over {{ box-shadow: 0 0 0 2px var(--pink); }}
+.flow-box .drag-handle {{ cursor: grab; user-select: none; color: var(--text3); font-size: 12px; margin-left: 6px; flex-shrink: 0; }}
 .flow-box .drag-handle:active {{ cursor: grabbing; }}
-.flow-box .resize-handle-corner {{ background: linear-gradient(135deg, transparent 0 50%, #D8DAE0 50% 60%, transparent 60% 70%, #D8DAE0 70% 80%, transparent 80%); }}
-.flow-box .resize-handle-corner:hover {{ background: linear-gradient(135deg, transparent 0 50%, #ED6DA2 50% 60%, transparent 60% 70%, #ED6DA2 70% 80%, transparent 80%); }}
-.flow-box .resize-handle-r:hover, .flow-box .resize-handle-l:hover, .flow-box .resize-handle-b:hover, .flow-box .resize-handle-t:hover {{ background: rgba(237,109,162,0.18); }}
+.flow-box .resize-handle-corner {{ background: linear-gradient(135deg, transparent 0 50%, var(--panel-border) 50% 60%, transparent 60% 70%, var(--panel-border) 70% 80%, transparent 80%); }}
+.flow-box .resize-handle-corner:hover {{ background: linear-gradient(135deg, transparent 0 50%, var(--pink) 50% 60%, transparent 60% 70%, var(--pink) 70% 80%, transparent 80%); }}
+.flow-box .resize-handle-r:hover, .flow-box .resize-handle-l:hover, .flow-box .resize-handle-b:hover, .flow-box .resize-handle-t:hover {{ background: var(--pink-dim); }}
 .flow-sla-table {{ font-size: 11px; }}
 .flow-sla-table td, .flow-sla-table th {{ padding: 4px 8px; }}
 .flow-search-row {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }}
@@ -441,10 +441,10 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 .flow-next-steps {{ background: var(--surface2); border-radius: 8px; padding: 12px 16px; font-size: 12.5px; color: var(--text); margin-top: 4px; border-left: 3px solid var(--pink); }}
 .flow-next-options {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }}
 .flow-next-pill {{
-  background: #F7F8FA; border: 1.25px solid #D8DAE0; color: #1A1A2C; font-size: 11.5px; font-weight: 600;
+  background: var(--panel); border: 1.25px solid var(--panel-border); color: var(--text-dim); font-size: 11.5px; font-weight: 600;
   padding: 6px 14px; border-radius: 20px; cursor: pointer; transition: all .15s ease;
 }}
-.flow-next-pill:hover {{ background: #FDE8F2; border-color: #ED6DA2; color: #ED6DA2; }}
+.flow-next-pill:hover {{ background: var(--pink-dim); border-color: var(--pink); color: var(--pink); }}
 .flow-gantt {{ display: flex; width: 100%; height: 30px; border-radius: 6px; overflow: hidden; margin: 10px 0 6px; }}
 .flow-gantt-seg {{ height: 100%; min-width: 3px; }}
 .flow-gantt-legend {{ display: flex; flex-wrap: wrap; gap: 12px; font-size: 10.5px; color: var(--text-dim); margin-bottom: 6px; }}
