@@ -421,7 +421,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
   content: '→'; position: absolute; right: -20px; top: 50%; transform: translateY(-50%);
   color: var(--text3); font-size: 18px; pointer-events: none;
 }}
-.flow-box.resizable {{ overflow: auto; min-width: 140px; min-height: 90px; }}
+.flow-box.resizable {{ overflow: hidden; min-width: 140px; min-height: 90px; }}
 .flow-box.resizable.dragging {{ opacity: 0.35; }}
 .flow-box.resizable.drag-over {{ box-shadow: 0 0 0 2px var(--pink); }}
 .flow-box .drag-handle {{ cursor: grab; user-select: none; color: var(--text3); font-size: 12px; margin-left: 6px; flex-shrink: 0; }}

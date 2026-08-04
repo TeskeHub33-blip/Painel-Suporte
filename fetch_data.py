@@ -6,6 +6,7 @@ rodar tanto localmente quanto no GitHub Actions (via repository secret).
 """
 import json
 import os
+import time
 from datetime import datetime, timedelta
 
 import requests
@@ -18,12 +19,37 @@ MONTH_SELECT = "id,protocol,category,urgency,resolvedIn,slaSolutionDate,status,o
 MONTH_EXPAND = "owner($select=businessName),clients,statusHistories"
 
 
-def fetch(params):
+def fetch(params, retries=3):
     params = dict(params)
     params["token"] = TOKEN
-    resp = requests.get(BASE_URL, params=params, timeout=90)
-    resp.raise_for_status()
-    return resp.json()
+    last_exc = None
+    for attempt in range(retries):
+        try:
+            resp = requests.get(BASE_URL, params=params, timeout=90)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.RequestException as exc:
+            last_exc = exc
+            if attempt < retries - 1:
+                time.sleep(3 * (attempt + 1))
+    raise last_exc
+
+
+def fetch_page_resilient(base_params, skip, top):
+    """Busca uma pagina ($skip/$top); se a API devolver erro (ex.: 500 por um registro
+    corrompido especifico numa das paginas — o que vinha travando TODA a sincronizacao desde
+    2026-08-03 ~19h), particiona a pagina em blocos menores pra isolar e pular so' o(s) registro(s)
+    problematicos, em vez de abortar a busca inteira dos chamados abertos."""
+    try:
+        return fetch({**base_params, "$top": top, "$skip": skip})
+    except requests.exceptions.RequestException:
+        if top <= 1:
+            print(f"[aviso] pulando registro problematico em $skip={skip} (a API rejeitou mesmo isolado)")
+            return []
+        half = top // 2
+        first = fetch_page_resilient(base_params, skip, half)
+        second = fetch_page_resilient(base_params, skip + half, top - half)
+        return first + second
 
 
 def save(filename, data):
@@ -69,17 +95,16 @@ def main():
     # silenciosamente os chamados abertos mais recentes assim que o backlog passa desse numero
     # (foi o que aconteceu: com $top=500 e ~744 chamados abertos, os ~244 mais novos sumiam do
     # painel inteiro, nao so' da busca do Fluxograma).
+    open_tickets_base_params = {
+        "$select": "id,protocol,subject,category,urgency,status,ownerTeam,createdDate,lastUpdate,tags,slaSolutionDate,reopenedIn,origin",
+        "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1)",
+        "$filter": "status ne 'Fechado' and status ne 'Cancelado' and status ne 'Resolvido'",
+    }
     open_tickets = []
     page_size = 500
     skip = 0
     while True:
-        page = fetch({
-            "$select": "id,protocol,subject,category,urgency,status,ownerTeam,createdDate,lastUpdate,tags,slaSolutionDate,reopenedIn,origin",
-            "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1)",
-            "$filter": "status ne 'Fechado' and status ne 'Cancelado' and status ne 'Resolvido'",
-            "$top": page_size,
-            "$skip": skip,
-        })
+        page = fetch_page_resilient(open_tickets_base_params, skip, page_size)
         open_tickets += page
         if len(page) < page_size:
             break
