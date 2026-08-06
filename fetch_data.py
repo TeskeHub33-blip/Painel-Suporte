@@ -19,7 +19,7 @@ MONTH_SELECT = "id,protocol,category,urgency,resolvedIn,slaSolutionDate,status,o
 MONTH_EXPAND = "owner($select=businessName),clients,statusHistories"
 
 
-def fetch(params, retries=3):
+def fetch(params, retries=2):
     params = dict(params)
     params["token"] = TOKEN
     last_exc = None
@@ -31,15 +31,27 @@ def fetch(params, retries=3):
         except requests.exceptions.RequestException as exc:
             last_exc = exc
             if attempt < retries - 1:
-                time.sleep(3 * (attempt + 1))
+                time.sleep(2)
     raise last_exc
 
 
-def fetch_page_resilient(base_params, skip, top):
+# Teto de tempo total pra bisecao de uma pagina problematica — se um erro nao for um registro
+# isolado mas algo sistemico (ex.: a API rejeitando por outro motivo, nao um dado corrompido),
+# bisectar ate top=1 pode significar centenas de sub-requisicoes. Depois desse teto, desiste do
+# resto da pagina (loga um aviso) em vez de travar o job inteiro por muito tempo.
+BISECT_DEADLINE_S = 150
+
+
+def fetch_page_resilient(base_params, skip, top, deadline=None):
     """Busca uma pagina ($skip/$top); se a API devolver erro (ex.: 500 por um registro
     corrompido especifico numa das paginas — o que vinha travando TODA a sincronizacao desde
     2026-08-03 ~19h), particiona a pagina em blocos menores pra isolar e pular so' o(s) registro(s)
     problematicos, em vez de abortar a busca inteira dos chamados abertos."""
+    if deadline is None:
+        deadline = time.time() + BISECT_DEADLINE_S
+    if time.time() > deadline:
+        print(f"[aviso] tempo de bisecao esgotado — pulando o restante da pagina em $skip={skip} $top={top}")
+        return []
     try:
         return fetch({**base_params, "$top": top, "$skip": skip})
     except requests.exceptions.RequestException:
@@ -47,8 +59,8 @@ def fetch_page_resilient(base_params, skip, top):
             print(f"[aviso] pulando registro problematico em $skip={skip} (a API rejeitou mesmo isolado)")
             return []
         half = top // 2
-        first = fetch_page_resilient(base_params, skip, half)
-        second = fetch_page_resilient(base_params, skip + half, top - half)
+        first = fetch_page_resilient(base_params, skip, half, deadline)
+        second = fetch_page_resilient(base_params, skip + half, top - half, deadline)
         return first + second
 
 
