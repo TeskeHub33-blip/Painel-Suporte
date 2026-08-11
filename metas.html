@@ -1,0 +1,435 @@
+<title>Metas & 1:1 — Suporte N1/N2/N3</title>
+<style>
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --surface-2:#eef0f4; --ink:#1c2130; --muted:#5c6270;
+  --line:#dde1e8; --accent:#c23a67; --accent-ink:#7a1f42; --accent-2:#1f3a63;
+  --good:#2f9e6e; --good-bg:#e6f5ee; --warn:#b9791b; --warn-bg:#fbeed7; --crit:#c0392b; --crit-bg:#fbe6e3;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#12151c; --surface:#1a1e28; --surface-2:#222734; --ink:#e8eaf0; --muted:#9aa1b0;
+    --line:#2c313f; --accent:#e2618b; --accent-ink:#f3a4bf; --accent-2:#7fa3d6;
+    --good:#4fbf8f; --good-bg:#123526; --warn:#e0a544; --warn-bg:#3a2f14; --crit:#e37769; --crit-bg:#3a1c17; }
+}
+:root[data-theme="dark"]{ --bg:#12151c; --surface:#1a1e28; --surface-2:#222734; --ink:#e8eaf0; --muted:#9aa1b0;
+  --line:#2c313f; --accent:#e2618b; --accent-ink:#f3a4bf; --accent-2:#7fa3d6;
+  --good:#4fbf8f; --good-bg:#123526; --warn:#e0a544; --warn-bg:#3a2f14; --crit:#e37769; --crit-bg:#3a1c17; }
+:root[data-theme="light"]{ --bg:#f5f6f8; --surface:#ffffff; --surface-2:#eef0f4; --ink:#1c2130; --muted:#5c6270;
+  --line:#dde1e8; --accent:#c23a67; --accent-ink:#7a1f42; --accent-2:#1f3a63;
+  --good:#2f9e6e; --good-bg:#e6f5ee; --warn:#b9791b; --warn-bg:#fbeed7; --crit:#c0392b; --crit-bg:#fbe6e3; }
+
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,"Segoe UI","Helvetica Neue",Arial,sans-serif;}
+h1,h2,h3{font-family:"Iowan Old Style","Palatino Linotype",Georgia,serif; text-wrap:balance; margin:0;}
+.num{font-family:"Cascadia Code","SF Mono","Consolas",monospace; font-variant-numeric:tabular-nums;}
+
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px;}
+header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px;}
+header.top h1{font-size:1.7rem;font-weight:600;}
+header.top p{margin:6px 0 0;color:var(--muted);font-size:.92rem;max-width:52ch;}
+
+.tabs{display:flex;gap:6px;background:var(--surface-2);border-radius:10px;padding:4px;}
+.tabs button{border:none;background:transparent;color:var(--muted);font:inherit;font-weight:600;
+  padding:8px 18px;border-radius:8px;cursor:pointer;font-size:.9rem;}
+.tabs button.active{background:var(--surface);color:var(--accent-ink);box-shadow:0 1px 2px rgba(0,0,0,.08);}
+.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:18px 0;padding:14px 16px;
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;}
+.toolbar label{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-right:6px;}
+select,input[type=text],.horizon button{
+  font:inherit;border:1px solid var(--line);background:var(--bg);color:var(--ink);
+  border-radius:7px;padding:7px 10px;font-size:.88rem;}
+select:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+.btn{border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font:inherit;font-size:.85rem;
+  font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer;}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.btn.ghost{background:transparent;}
+.btn.danger{color:var(--crit);}
+.horizon{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+.horizon button{border:none;border-radius:0;background:var(--bg);}
+.horizon button.on{background:var(--accent-2);color:#fff;}
+.spacer{flex:1;}
+
+.cards{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:20px;}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 14px 12px;}
+.card .label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+.card .value{font-size:1.5rem;font-weight:700;margin-top:4px;}
+.card .value.num{font-weight:600;}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:700;}
+.pill.good{background:var(--good-bg);color:var(--good);}
+.pill.warn{background:var(--warn-bg);color:var(--warn);}
+.pill.crit{background:var(--crit-bg);color:var(--crit);}
+.card.gami{background:linear-gradient(135deg,var(--accent-2),var(--accent));color:#fff;border:none;}
+.card.gami .label{color:rgba(255,255,255,.8);}
+.card.gami .value{color:#fff;}
+
+.section-title{display:flex;align-items:baseline;gap:8px;margin:22px 0 8px;}
+.section-title h2{font-size:1.05rem;font-weight:600;}
+.section-title .wt{color:var(--muted);font-size:.82rem;}
+
+.gridwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);}
+table.grid{border-collapse:collapse;width:100%;min-width:1100px;}
+table.grid th,table.grid td{border-bottom:1px solid var(--line);padding:0;}
+table.grid thead th{padding:9px 8px;font-size:.72rem;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.04em;text-align:center;background:var(--surface-2);position:sticky;top:0;}
+table.grid thead th.indic{text-align:left;min-width:230px;position:sticky;left:0;z-index:2;}
+td.indic{position:sticky;left:0;background:var(--surface);z-index:1;padding:10px 12px;
+  font-size:.86rem;border-right:1px solid var(--line);min-width:230px;}
+td.indic .w{color:var(--muted);font-size:.74rem;display:block;margin-top:1px;}
+td.month{text-align:center;padding:4px;position:relative;min-width:64px;}
+td.month input{width:52px;text-align:center;border:1px solid transparent;background:transparent;
+  color:var(--ink);border-radius:6px;padding:6px 2px;font-size:.84rem;}
+td.month input:hover{border-color:var(--line);}
+td.month input:focus-visible{outline:2px solid var(--accent);border-color:transparent;background:var(--surface);}
+td.month .note-dot{position:absolute;top:3px;right:4px;width:7px;height:7px;border-radius:50%;
+  background:var(--accent);cursor:pointer;border:none;padding:0;}
+td.month .note-dot.empty{background:var(--line);}
+td.month .note-dot:focus-visible{outline:2px solid var(--accent);}
+td.avg{text-align:center;font-weight:700;background:var(--surface-2);min-width:70px;}
+td.avg.active{color:var(--accent-ink);}
+tr.behav td.indic{color:var(--accent-2);}
+tr.gestor td.indic{color:var(--accent-ink);}
+
+dialog.note{border:1px solid var(--line);border-radius:12px;padding:0;max-width:380px;width:90%;
+  background:var(--surface);color:var(--ink);}
+dialog.note::backdrop{background:rgba(10,12,18,.45);}
+dialog.note .head{padding:14px 16px;border-bottom:1px solid var(--line);}
+dialog.note .head b{display:block;font-size:.92rem;}
+dialog.note .head span{color:var(--muted);font-size:.78rem;}
+dialog.note textarea{width:100%;min-height:110px;margin:14px 16px 0;padding:10px;box-sizing:border-box;
+  border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:.88rem;resize:vertical;}
+dialog.note .foot{display:flex;justify-content:flex-end;gap:8px;padding:14px 16px;}
+
+footer.note{color:var(--muted);font-size:.8rem;margin-top:26px;line-height:1.5;}
+@media (max-width:760px){.cards{grid-template-columns:repeat(2,1fr);}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Metas &amp; 1:1 — Equipe de Suporte</h1>
+      <p>Apuração mensal por indicador (N1/N2/N3), com justificativa por mês. Os totais aqui batem com o modelo 70/20/10 da planilha — preencha a planilha oficial a partir destes números.</p>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Nível">
+      <button data-level="N1" class="active">N1</button>
+      <button data-level="N2">N2</button>
+      <button data-level="N3">N3</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <label for="collabSel">Colaborador</label>
+    <select id="collabSel"></select>
+    <button class="btn" id="addCollab">+ Novo</button>
+    <button class="btn danger ghost" id="delCollab">Remover</button>
+    <div class="spacer"></div>
+    <label>Horizonte</label>
+    <div class="horizon">
+      <button id="h3" class="on">3M</button>
+      <button id="h6">6M</button>
+    </div>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div id="sections"></div>
+
+  <footer class="note">
+    Nota Técnica = média dos indicadores técnicos do nível (peso 70%) · Comportamental = média dos 5 itens do gestor (peso 20%) · Visão do Gestor (peso 10%).
+    Elegível a reajuste com Nota Final ≥ 50%; Step do Grade = 80% + (Nota Final − 50%) × 0,8, limitado entre 80% e 120%.
+    Pontuação de gamification = mesma soma ponderada das três categorias, em pontos (Nota Final × 10).
+    Dados salvos apenas neste navegador (localStorage) — não substituem a planilha oficial.
+  </footer>
+</div>
+
+<dialog class="note" id="noteDlg">
+  <div class="head"><b id="noteTitle">Justificativa</b><span id="noteSub"></span></div>
+  <textarea id="noteText" placeholder="Descreva o que justifica esse percentual neste mês…"></textarea>
+  <div class="foot">
+    <button class="btn ghost" id="noteCancel">Cancelar</button>
+    <button class="btn primary" id="noteSave">Salvar</button>
+  </div>
+</dialog>
+
+<script>
+const MONTHS = Array.from({length:12},(_,i)=>"Mês "+(i+1));
+
+const BEHAV = [
+  {id:"comprometimento", label:"Comprometimento", w:4},
+  {id:"urgencia", label:"Senso de urgência", w:4},
+  {id:"feedback", label:"Feedback positivo de cliente", w:4},
+  {id:"proatividade_comp", label:"Proatividade", w:4},
+  {id:"relacionamento", label:"Relacionamento com o time", w:4},
+];
+const GESTOR = {id:"visao_gestor", label:"Visão do Gestor", w:10};
+
+const TECH = {
+  N1: [
+    {id:"sla_resposta", label:"SLA de resposta (Em atendimento)", desc:"Tempo até a 1ª interação do analista"},
+    {id:"sla_urgencia", label:"SLA de chamados por urgência", desc:"Cumprimento do prazo por urgência classificada"},
+    {id:"resolvidos_1a", label:"Resolvidos na primeira resposta", desc:"% encerrados já na 1ª interação"},
+    {id:"assert_bugs", label:"Assertividade na passagem de bugs", desc:"% de bugs escalados ao N2 com urgência correta"},
+    {id:"assert_analise", label:"Assertividade de análise", desc:"Inverso de chamados devolvidos pelo N2"},
+    {id:"telas", label:"Atendimento de X% das telas do EmiteAí", desc:"Cobertura de telas que o analista deve saber atender"},
+  ],
+  N2: [
+    {id:"tempo_assumir", label:"Tempo para assumir chamado (fila N2, em nome de N1)"},
+    {id:"tempo_atend", label:"Tempo de atendimento depois que assumiu"},
+    {id:"tempo_abertura_task", label:"Tempo de abertura de task"},
+    {id:"tempo_validacao_task", label:"Tempo de validação de task"},
+    {id:"tempo_impedimento_task", label:"Tempo de impedimento de task"},
+    {id:"telas", label:"Atendimento de X% das telas do EmiteAí"},
+  ],
+  N3: [
+    {id:"sla_resposta", label:"SLA de resposta (Em atendimento)"},
+    {id:"sla_urgencia", label:"SLA de chamados por urgência"},
+    {id:"resolvidos_1a", label:"Resolvidos na primeira resposta"},
+    {id:"assert_bugs", label:"Assertividade na passagem de bugs"},
+    {id:"assert_analise", label:"Assertividade de análise"},
+    {id:"telas", label:"Atendimento de X% das telas do EmiteAí"},
+    {id:"faqs", label:"Cadastro de FAQs", desc:"Volume/qualidade de FAQs para a base de conhecimento"},
+    {id:"proatividade_chamados", label:"Proatividade de chamados", desc:"Identificação/tratamento proativo antes da escalada"},
+  ],
+};
+
+const STORE_KEY = "metas-suporte-v1";
+function load(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }catch(e){ return {}; } }
+function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+let state = load();
+if(!state.collabs) state.collabs = {}; // id -> {name, level, data:{indicId:{months:[12], notes:{monthIdx:text}}}}
+if(!state.order) state.order = [];
+
+let currentLevel = "N1";
+let currentCollab = null;
+let horizon = 3;
+
+function indicList(level){ return [...TECH[level], ...BEHAV, GESTOR]; }
+function weightOf(level, id){
+  if(id===GESTOR.id) return GESTOR.w;
+  const b = BEHAV.find(x=>x.id===id); if(b) return b.w;
+  return 70/TECH[level].length;
+}
+
+function ensureCollabData(c){
+  if(!c.data) c.data = {};
+  indicList(c.level).forEach(ind=>{
+    if(!c.data[ind.id]) c.data[ind.id] = {months:Array(12).fill(null), notes:{}};
+  });
+}
+
+function addCollab(name, level){
+  const id = "c"+Date.now();
+  state.collabs[id] = {name, level, data:{}};
+  ensureCollabData(state.collabs[id]);
+  state.order.push(id);
+  save();
+  return id;
+}
+
+function seedIfEmpty(){
+  if(state.order.length) return;
+  const id = addCollab("(Exemplo) Colaborador Modelo","N1");
+  const c = state.collabs[id];
+  TECH.N1.forEach(ind=>{ c.data[ind.id].months[0]=85; c.data[ind.id].months[1]=90; c.data[ind.id].months[2]=95; c.data[ind.id].months[3]=100; });
+  BEHAV.forEach(b=>{ c.data[b.id].months[0]=90; c.data[b.id].months[1]=90; c.data[b.id].months[2]=95; c.data[b.id].months[3]=100; });
+  c.data[GESTOR.id].months[0]=90; c.data[GESTOR.id].months[1]=95; c.data[GESTOR.id].months[2]=95; c.data[GESTOR.id].months[3]=100;
+  save();
+}
+seedIfEmpty();
+currentCollab = state.order.find(id=>state.collabs[id].level===currentLevel) || state.order[0];
+
+function lastNAvg(monthsArr, n){
+  const filled = [];
+  for(let i=11;i>=0 && filled.length<n;i--){ if(monthsArr[i]!==null && monthsArr[i]!==undefined && monthsArr[i]!=="") filled.push(Number(monthsArr[i])); }
+  if(!filled.length) return null;
+  return filled.reduce((a,b)=>a+b,0)/filled.length;
+}
+
+function computeScores(c, n){
+  const level = c.level;
+  const techAvgs = TECH[level].map(ind=>lastNAvg(c.data[ind.id].months, n)).filter(v=>v!==null);
+  const behavAvgs = BEHAV.map(b=>lastNAvg(c.data[b.id].months, n)).filter(v=>v!==null);
+  const gestorAvg = lastNAvg(c.data[GESTOR.id].months, n);
+  const notaTecnica = techAvgs.length? techAvgs.reduce((a,b)=>a+b,0)/techAvgs.length : null;
+  const notaComport = behavAvgs.length? behavAvgs.reduce((a,b)=>a+b,0)/behavAvgs.length : null;
+  const notaGestor = gestorAvg;
+  let notaFinal = null;
+  if(notaTecnica!==null || notaComport!==null || notaGestor!==null){
+    notaFinal = (notaTecnica||0)*0.7 + (notaComport||0)*0.2 + (notaGestor||0)*0.10;
+  }
+  let step = null, elig = false;
+  if(notaFinal!==null){
+    elig = notaFinal >= 50;
+    if(elig){ step = 80 + (notaFinal-50)*0.8; step = Math.max(80, Math.min(120, step)); }
+  }
+  const gami = notaFinal!==null ? Math.round(notaFinal*10) : null;
+  return {notaTecnica, notaComport, notaGestor, notaFinal, elig, step, gami};
+}
+
+function fmtPct(v){ return v===null||v===undefined ? "—" : v.toFixed(1)+"%"; }
+
+function renderCollabSelect(){
+  const sel = document.getElementById("collabSel");
+  sel.innerHTML = "";
+  const ids = state.order.filter(id=>state.collabs[id] && state.collabs[id].level===currentLevel);
+  if(!ids.length){ sel.innerHTML = "<option value=''>Nenhum colaborador neste nível</option>"; currentCollab=null; }
+  ids.forEach(id=>{
+    const o = document.createElement("option");
+    o.value = id; o.textContent = state.collabs[id].name;
+    if(id===currentCollab) o.selected = true;
+    sel.appendChild(o);
+  });
+  if(!ids.includes(currentCollab)) currentCollab = ids[0] || null;
+}
+
+function renderCards(){
+  const wrap = document.getElementById("cards");
+  wrap.innerHTML = "";
+  if(!currentCollab){ wrap.innerHTML = "<div class='card'><div class='label'>Sem dados</div><div class='value'>—</div></div>"; return; }
+  const c = state.collabs[currentCollab];
+  const s = computeScores(c, horizon);
+  const eligPill = s.notaFinal===null ? "" :
+    (s.elig ? "<span class='pill good'>Elegível</span>" : "<span class='pill crit'>Sem reajuste</span>");
+  const cardsData = [
+    ["Nota Técnica (70%)", fmtPct(s.notaTecnica)],
+    ["Comportamental (20%)", fmtPct(s.notaComport)],
+    ["Visão do Gestor (10%)", fmtPct(s.notaGestor)],
+    ["Nota Final", fmtPct(s.notaFinal)],
+    ["Step sugerido", s.step===null?"—":s.step.toFixed(1)+"%"],
+    ["Elegibilidade", eligPill || "—"],
+  ];
+  cardsData.forEach(([label,val])=>{
+    const el = document.createElement("div"); el.className="card";
+    el.innerHTML = `<div class="label">${label}</div><div class="value num">${val}</div>`;
+    wrap.appendChild(el);
+  });
+  const gami = document.createElement("div"); gami.className="card gami";
+  gami.innerHTML = `<div class="label">Pontuação Gamification (Últ. ${horizon}M)</div>
+    <div class="value num">${s.gami===null?"—":s.gami+" pts"}</div>`;
+  wrap.appendChild(gami);
+}
+
+function monthCellHtml(c, ind){
+  const d = c.data[ind.id];
+  return MONTHS.map((_,i)=>{
+    const v = d.months[i];
+    const has = d.notes[i] && d.notes[i].trim().length>0;
+    return `<td class="month">
+      <input type="number" min="0" max="120" step="1" value="${v===null?'':v}"
+        data-indic="${ind.id}" data-month="${i}" aria-label="${ind.label} — Mês ${i+1}" />
+      <button class="note-dot ${has?'':'empty'}" data-indic="${ind.id}" data-month="${i}"
+        title="${has? 'Ver/editar justificativa' : 'Adicionar justificativa'}" aria-label="Justificativa do mês ${i+1}"></button>
+    </td>`;
+  }).join("");
+}
+
+function rowHtml(c, ind, weight, extraClass){
+  const avg3 = lastNAvg(c.data[ind.id].months, 3);
+  const avg6 = lastNAvg(c.data[ind.id].months, 6);
+  return `<tr class="${extraClass||''}">
+    <td class="indic">${ind.label}${ind.desc?`<span class="w">${ind.desc}</span>`:''}
+      <span class="w">peso ${weight.toFixed ? weight.toFixed(1) : weight}%</span></td>
+    ${monthCellHtml(c, ind)}
+    <td class="avg ${horizon===3?'active':''} num">${fmtPct(avg3)}</td>
+    <td class="avg ${horizon===6?'active':''} num">${fmtPct(avg6)}</td>
+  </tr>`;
+}
+
+function renderSections(){
+  const host = document.getElementById("sections");
+  host.innerHTML = "";
+  if(!currentCollab){ host.innerHTML = "<p style='color:var(--muted)'>Cadastre um colaborador para começar a apuração mensal.</p>"; return; }
+  const c = state.collabs[currentCollab];
+  const level = c.level;
+  const techW = 70/TECH[level].length;
+
+  function table(rows, title, weightLabel){
+    return `<div class="section-title"><h2>${title}</h2><span class="wt">${weightLabel}</span></div>
+    <div class="gridwrap"><table class="grid">
+      <thead><tr><th class="indic">Indicador</th>${MONTHS.map(m=>`<th>${m}</th>`).join("")}
+      <th class="num">Méd. 3M</th><th class="num">Méd. 6M</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }
+  // fix stray token from template literal above
+  let techRows = TECH[level].map(ind=>rowHtml(c, ind, techW)).join("");
+  let behavRows = BEHAV.map(ind=>rowHtml(c, ind, ind.w, "behav")).join("");
+  let gestorRows = rowHtml(c, GESTOR, GESTOR.w, "gestor");
+
+  host.innerHTML =
+    table(techRows, `Metas Técnicas — ${level}`, `peso total 70% · ${TECH[level].length} indicadores`) +
+    table(behavRows, "Aspectos Comportamentais", "peso total 20% · 5 itens, avaliados pelo gestor") +
+    table(gestorRows, "Visão do Gestor", "peso 10% · nota discricionária");
+
+  host.querySelectorAll('input[type=number]').forEach(inp=>{
+    inp.addEventListener('change', e=>{
+      let v = e.target.value;
+      if(v===""){ v = null; } else { v = Math.max(0, Math.min(120, Number(v))); }
+      c.data[e.target.dataset.indic].months[Number(e.target.dataset.month)] = v;
+      save(); renderCards(); renderSections();
+    });
+  });
+  host.querySelectorAll('.note-dot').forEach(btn=>{
+    btn.addEventListener('click', ()=> openNote(c, btn.dataset.indic, Number(btn.dataset.month)));
+  });
+}
+
+function allIndicators(level){ return [...TECH[level], ...BEHAV, GESTOR]; }
+
+function openNote(c, indicId, monthIdx){
+  const dlg = document.getElementById("noteDlg");
+  const ind = allIndicators(c.level).find(x=>x.id===indicId);
+  document.getElementById("noteTitle").textContent = ind.label;
+  document.getElementById("noteSub").textContent = " — " + MONTHS[monthIdx] + " · " + c.name;
+  document.getElementById("noteText").value = c.data[indicId].notes[monthIdx] || "";
+  dlg.dataset.indic = indicId; dlg.dataset.month = monthIdx;
+  dlg.showModal();
+}
+document.getElementById("noteCancel").addEventListener("click", ()=> document.getElementById("noteDlg").close());
+document.getElementById("noteSave").addEventListener("click", ()=>{
+  const dlg = document.getElementById("noteDlg");
+  const c = state.collabs[currentCollab];
+  const text = document.getElementById("noteText").value;
+  if(text.trim()) c.data[dlg.dataset.indic].notes[dlg.dataset.month] = text;
+  else delete c.data[dlg.dataset.indic].notes[dlg.dataset.month];
+  save(); dlg.close(); renderSections();
+});
+
+document.querySelectorAll('.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentLevel = btn.dataset.level;
+    renderCollabSelect(); renderCards(); renderSections();
+  });
+});
+
+document.getElementById("collabSel").addEventListener('change', e=>{
+  currentCollab = e.target.value || null;
+  renderCards(); renderSections();
+});
+
+document.getElementById("addCollab").addEventListener('click', ()=>{
+  const name = prompt("Nome do colaborador ("+currentLevel+"):");
+  if(!name) return;
+  const id = addCollab(name.trim(), currentLevel);
+  currentCollab = id;
+  renderCollabSelect(); renderCards(); renderSections();
+});
+
+document.getElementById("delCollab").addEventListener('click', ()=>{
+  if(!currentCollab) return;
+  const c = state.collabs[currentCollab];
+  if(!confirm("Remover "+c.name+"? Essa ação não pode ser desfeita.")) return;
+  delete state.collabs[currentCollab];
+  state.order = state.order.filter(id=>id!==currentCollab);
+  currentCollab = null;
+  save(); renderCollabSelect(); renderCards(); renderSections();
+});
+
+document.getElementById("h3").addEventListener('click', ()=>{ horizon=3; document.getElementById("h3").classList.add('on'); document.getElementById("h6").classList.remove('on'); renderCards(); renderSections(); });
+document.getElementById("h6").addEventListener('click', ()=>{ horizon=6; document.getElementById("h6").classList.add('on'); document.getElementById("h3").classList.remove('on'); renderCards(); renderSections(); });
+
+renderCollabSelect(); renderCards(); renderSections();
+</script>
