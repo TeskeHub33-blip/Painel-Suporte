@@ -46,22 +46,28 @@ def fetch_page_resilient(base_params, skip, top, deadline=None):
     """Busca uma pagina ($skip/$top); se a API devolver erro (ex.: 500 por um registro
     corrompido especifico numa das paginas — o que vinha travando TODA a sincronizacao desde
     2026-08-03 ~19h), particiona a pagina em blocos menores pra isolar e pular so' o(s) registro(s)
-    problematicos, em vez de abortar a busca inteira dos chamados abertos."""
+    problematicos, em vez de abortar a busca inteira dos chamados abertos.
+
+    Retorna (items, completo). completo=False significa que parte da pagina foi desistida (erro
+    persistente ou teto de tempo) — quem chama NAO pode usar len(items) pra decidir se chegou ao
+    fim da paginacao, senao uma pagina incompleta (menor que $top so' por ter desistido, nao por
+    ser genuinamente a ultima) faz o loop parar cedo demais e perder chamados (foi o que aconteceu:
+    parou em ~500, escondendo justamente os chamados mais novos/'Novo'/'Em atendimento')."""
     if deadline is None:
         deadline = time.time() + BISECT_DEADLINE_S
     if time.time() > deadline:
         print(f"[aviso] tempo de bisecao esgotado — pulando o restante da pagina em $skip={skip} $top={top}")
-        return []
+        return [], False
     try:
-        return fetch({**base_params, "$top": top, "$skip": skip})
+        return fetch({**base_params, "$top": top, "$skip": skip}), True
     except requests.exceptions.RequestException:
         if top <= 1:
             print(f"[aviso] pulando registro problematico em $skip={skip} (a API rejeitou mesmo isolado)")
-            return []
+            return [], False
         half = top // 2
-        first = fetch_page_resilient(base_params, skip, half, deadline)
-        second = fetch_page_resilient(base_params, skip + half, top - half, deadline)
-        return first + second
+        first, ok1 = fetch_page_resilient(base_params, skip, half, deadline)
+        second, ok2 = fetch_page_resilient(base_params, skip + half, top - half, deadline)
+        return first + second, ok1 and ok2
 
 
 def save(filename, data):
@@ -113,14 +119,23 @@ def main():
         "$filter": "status ne 'Fechado' and status ne 'Cancelado' and status ne 'Resolvido'",
     }
     open_tickets = []
-    page_size = 500
+    page_size = 200
     skip = 0
-    while True:
-        page = fetch_page_resilient(open_tickets_base_params, skip, page_size)
+    paginas_incompletas = 0
+    while skip < 20000:  # teto de seguranca — evita loop infinito se a API estiver persistentemente fora
+        page, completo = fetch_page_resilient(open_tickets_base_params, skip, page_size)
         open_tickets += page
-        if len(page) < page_size:
+        if not completo:
+            # Pagina incompleta (desistiu por erro/tempo) NAO pode ser confundida com "chegou ao
+            # fim" — senao os chamados das paginas seguintes (tipicamente os mais novos) somem do
+            # painel inteiro em silencio, como aconteceu antes. Continua avancando mesmo assim.
+            paginas_incompletas += 1
+            print(f"[aviso] pagina em $skip={skip} ficou incompleta — seguindo para a proxima mesmo assim")
+        elif len(page) < page_size:
             break
         skip += page_size
+    if paginas_incompletas:
+        print(f"[aviso] total de paginas incompletas nesta sincronizacao: {paginas_incompletas}")
     save("tickets_full.json", open_tickets)
 
     # 2. Resolvidos hoje
