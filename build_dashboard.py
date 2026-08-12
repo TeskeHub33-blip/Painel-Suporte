@@ -452,6 +452,43 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 .flow-gantt-swatch {{ width: 10px; height: 10px; border-radius: 3px; display: inline-block; }}
 .flow-stage-tag {{ display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 8px; border-radius: 4px; background: var(--surface2); color: var(--text-dim); margin-left: 6px; }}
 
+/* Apuracao de Metas (One-on-One) — grade mensal editavel por indicador, com celulas clicaveis. */
+.metas-table {{ border-collapse: collapse; width: 100%; font-size: 11.5px; }}
+.metas-table th, .metas-table td {{ padding: 6px 8px; white-space: nowrap; border-bottom: 1px solid var(--panel-border); }}
+.metas-table th {{ color: var(--text3); font-weight: 600; text-align: left; position: sticky; top: 0; background: var(--panel); }}
+.metas-table td.metas-indicador {{ white-space: normal; max-width: 220px; color: var(--text); font-weight: 600; }}
+.metas-table td.metas-tipo {{ color: var(--text3); font-size: 10.5px; }}
+.metas-table tr.metas-row-gestor {{ border-top: 2px solid var(--panel-border); }}
+.meta-cell {{
+  display: inline-block; min-width: 42px; padding: 4px 6px; border-radius: 5px;
+  border: 1.25px solid var(--panel-border); cursor: pointer; font-size: 11px; font-weight: 700;
+  text-align: center; color: var(--text-dim); transition: border-color .15s;
+}}
+.meta-cell:hover {{ border-color: var(--pink); }}
+.meta-cell.meta-ok {{ border-color: var(--ok-bord); color: var(--ok); background: var(--ok-dim); }}
+.meta-cell.meta-warn {{ border-color: var(--warn-bord); color: var(--warn); background: var(--warn-dim); }}
+.meta-cell.meta-danger {{ border-color: var(--danger-bord); color: var(--danger); background: var(--danger-dim); }}
+.meta-cell.meta-just::after {{ content: '📝'; font-size: 8px; margin-left: 3px; }}
+.metas-resumo-cell {{ color: var(--text3); font-size: 11px; text-align: center; }}
+.meta-editor-overlay {{
+  position: fixed; inset: 0; background: rgba(26,26,44,0.55); z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+}}
+.meta-editor-box {{
+  background: var(--panel); border-radius: 8px; padding: 22px 24px; width: 380px; max-width: 92vw;
+  box-shadow: 0 24px 64px rgba(26,26,44,0.3);
+}}
+.meta-editor-box h4 {{ margin: 0 0 4px; font-size: 15px; color: var(--text); }}
+.meta-editor-box .meta-editor-sub {{ font-size: 11.5px; color: var(--text3); margin-bottom: 14px; }}
+.meta-editor-box label {{ font-size: 11.5px; color: var(--text-dim); display: block; margin: 10px 0 4px; }}
+.meta-editor-box input[type=number] {{ width: 100%; padding: 8px 10px; border-radius: 6px; border: 1.25px solid var(--panel-border); background: var(--surface2); color: var(--text); font-size: 13px; }}
+.meta-editor-box textarea {{ width: 100%; min-height: 70px; padding: 8px 10px; border-radius: 6px; border: 1.25px solid var(--panel-border); background: var(--surface2); color: var(--text); font-size: 12px; font-family: inherit; resize: vertical; }}
+.meta-editor-actions {{ display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }}
+.meta-editor-actions button {{ padding: 7px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 12.5px; font-weight: 600; }}
+.meta-editor-actions .meta-btn-cancel {{ background: var(--surface2); color: var(--text-dim); }}
+.meta-editor-actions .meta-btn-clear {{ background: var(--danger-dim); color: var(--danger); }}
+.meta-editor-actions .meta-btn-save {{ background: var(--pink); color: #fff; }}
+
 .modal-overlay {{
   position: fixed; inset: 0; background: rgba(26,26,44,0.45);
   display: none; align-items: center; justify-content: center; z-index: 50;
@@ -551,6 +588,20 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
       <div class="kpi-row" id="kpiOneOnOne2" style="grid-template-columns: repeat(3, 1fr); margin-top:-4px;"></div>
       <div class="kpi-row" id="kpiOneOnOneMetas" style="grid-template-columns: repeat(3, 1fr); margin-top:-4px;"></div>
       <div class="kpi-row" id="kpiOneOnOneN2" style="grid-template-columns: repeat(3, 1fr); margin-top:-4px;"></div>
+
+      <div class="panel" style="margin-top:18px;">
+        <h2>🎯 Apuracao de Metas — <span id="metasNivelBadge"></span></h2>
+        <div class="panel-sub">Modelo oficial de metas por nivel (Tecnica 70% + Comportamental 20% + Visao do Gestor 10%). Clique numa celula do mes pra lancar o % de atingimento (0–120%) e justificar — fica salvo neste navegador. Nao inclui a parte salarial/reajuste, so a apuracao e a nota.</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin: 10px 0 14px;">
+          <select id="selColaboradorMetas" class="itil-select" style="max-width:260px; font-size:12px; padding:4px 8px;"></select>
+          <select id="selHorizonteMetas" class="itil-select" style="max-width:150px; font-size:12px; padding:4px 8px;">
+            <option value="3">Nota s/ media 3M</option>
+            <option value="6">Nota s/ media 6M</option>
+          </select>
+        </div>
+        <div class="kpi-row" id="kpiMetasResumo" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 14px;"></div>
+        <div id="metasGridWrap" style="overflow-x:auto;"></div>
+      </div>
     </div>
   </div>
 
@@ -1322,6 +1373,204 @@ const bugMetricsAlta = bugMetricsFor('Alta');
 const N2_TECNICOS = ['Alife Caetano dos Santos', 'Vinicius Campestrini', 'Vitor Hugo Siegel da Silva', 'Gabriel Schmitt Müller', 'Monique A. Zeferino', 'Anderson Gustavo Fischer'];
 function tierDoTecnico(tecnico) {{ return N2_TECNICOS.indexOf(tecnico) !== -1 ? 'N2' : 'N1'; }}
 
+// ============================================================
+// Apuracao mensal de Metas por nivel (One-on-One) — modelo oficial: Tecnica 70% + Comportamental
+// 20% + Visao do Gestor 10%, elegibilidade minima de 50%. Reproduz a planilha
+// "Modelo_Metas_Reajuste_Suporte" (abas "Metas Mensais N1/N2/N3"), SEM a parte salarial/step —
+// so a apuracao e a nota. Os dados sao lancados aqui (clique na celula do mes) e ficam salvos no
+// localStorage deste navegador (nao ha backend — nao sincroniza entre maquinas/pessoas).
+// ============================================================
+const ROSTER_METAS = [
+  {{ nome: 'Alexander Junior', nivel: 'N1' }},
+  {{ nome: 'Bruna Beatriz', nivel: 'N1' }},
+  {{ nome: 'Guilherme Paredes', nivel: 'N1' }},
+  {{ nome: 'Guilherme Prochnow Meyer', nivel: 'N1' }},
+  {{ nome: 'Maria Paula de Olivera', nivel: 'N1' }},
+  {{ nome: 'João Victor Matoso', nivel: 'N1' }},
+  {{ nome: 'Laura Machado', nivel: 'N1' }},
+  {{ nome: 'Vitor G. Andrade', nivel: 'N1' }},
+  {{ nome: 'Alife Caetano dos Santos', nivel: 'N2' }},
+  {{ nome: 'Gabriel Schmitt Müller', nivel: 'N2' }},
+  {{ nome: 'Vinicius Campestrini', nivel: 'N2' }},
+  {{ nome: 'Monique Zeferino', nivel: 'N2' }},
+  {{ nome: 'Vitor Hugo Siegel da Silva', nivel: 'N3' }},
+];
+function nivelDoColaboradorMetas(nome) {{
+  const r = ROSTER_METAS.find(c => c.nome === nome);
+  return r ? r.nivel : 'N1';
+}}
+
+const METAS_TECNICAS_N1 = [
+  'SLA de resposta (Em atendimento)',
+  'SLA de chamados por urgência',
+  'Resolvidos na primeira resposta',
+  'Assertividade na passagem de bugs com urgência correta',
+  'Assertividade de análise (não devolvido pelo N2)',
+  'Atendimento de X% das telas do EmiteAI',
+];
+const METAS_TECNICAS_N2 = [
+  'Tempo para assumir chamado (fila N2, em nome de um N1)',
+  'Tempo de atendimento depois que assumiu',
+  'Tempo de abertura de task',
+  'Tempo de validação de task',
+  'Tempo de impedimento de task',
+  'Atendimento de X% das telas do EmiteAI',
+];
+const METAS_TECNICAS_N3 = METAS_TECNICAS_N1.concat(['Meta de cadastro de FAQs', 'Metas de proatividade de chamados']);
+const METAS_TECNICAS_POR_NIVEL = {{ N1: METAS_TECNICAS_N1, N2: METAS_TECNICAS_N2, N3: METAS_TECNICAS_N3 }};
+const METAS_COMPORTAMENTAIS = ['Comprometimento', 'Senso de urgência', 'Feedback positivo de cliente', 'Proatividade', 'Relacionamento com o time'];
+const METAS_GESTOR = 'Visão do Gestor';
+const METAS_PESO_TECNICA = 0.7;
+const METAS_PESO_COMPORTAMENTAL = 0.2;
+const METAS_PESO_GESTOR = 0.1;
+const METAS_ELEGIBILIDADE_MIN = 0.5;
+
+function indicadoresDoNivel(nivel) {{
+  return METAS_TECNICAS_POR_NIVEL[nivel].map(nome => ({{nome, tipo: 'Técnica'}}))
+    .concat(METAS_COMPORTAMENTAIS.map(nome => ({{nome, tipo: 'Comportamental'}})))
+    .concat([{{nome: METAS_GESTOR, tipo: 'Gestor'}}]);
+}}
+
+// Ultimos N meses corridos (calendario real, nao "Mes 1..12" fixo da planilha) — {{key:'2026-08', label:'ago/26'}}.
+const METAS_MES_NOMES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function ultimosMesesMetas(n) {{
+  const hoje = new Date();
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) {{
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    out.push({{key, label: METAS_MES_NOMES[d.getMonth()] + '/' + String(d.getFullYear()).slice(2)}});
+  }}
+  return out;
+}}
+const METAS_MESES_12 = ultimosMesesMetas(12);
+
+// Armazenamento local (sem backend): chave "colaborador|indicador" -> mes (AAAA-MM) -> {{v: 0.95, j: "texto"}}
+const METAS_STORE_KEY = 'metasApuracaoV1';
+function metasStoreLoad() {{
+  try {{ return JSON.parse(localStorage.getItem(METAS_STORE_KEY) || '{{}}'); }} catch(e) {{ return {{}}; }}
+}}
+function metasStoreSave(store) {{ localStorage.setItem(METAS_STORE_KEY, JSON.stringify(store)); }}
+function metaChave(colaborador, indicador) {{ return colaborador + '|' + indicador; }}
+function getMetaEntry(colaborador, indicador, mesKey) {{
+  const store = metasStoreLoad();
+  const linha = store[metaChave(colaborador, indicador)];
+  return (linha && linha[mesKey]) ? linha[mesKey] : null;
+}}
+function setMetaEntry(colaborador, indicador, mesKey, valor, justificativa) {{
+  const store = metasStoreLoad();
+  const k = metaChave(colaborador, indicador);
+  if (!store[k]) store[k] = {{}};
+  if (valor === null) {{
+    delete store[k][mesKey];
+  }} else {{
+    store[k][mesKey] = {{v: valor, j: justificativa || ''}};
+  }}
+  metasStoreSave(store);
+}}
+
+// Meses preenchidos + media dos ultimos N meses preenchidos (mais recentes primeiro) — mesma logica
+// da planilha (OFFSET com os ultimos 3/6 meses com dado, nao necessariamente os ultimos 3/6 do
+// calendario, caso algum mes fique em branco).
+function metaSerie(colaborador, indicador) {{
+  return METAS_MESES_12.map(m => ({{...m, entry: getMetaEntry(colaborador, indicador, m.key)}}));
+}}
+function metaMediaUltimosN(serie, n) {{
+  const preenchidos = serie.filter(s => s.entry !== null);
+  if (!preenchidos.length) return null;
+  const usados = preenchidos.slice(Math.max(0, preenchidos.length - n));
+  return avg(usados.map(s => s.entry.v));
+}}
+
+// Nota tecnica/comportamental/final de UM colaborador, num horizonte (3 ou 6 meses).
+function calcularNotaColaborador(colaborador, horizonteN) {{
+  const nivel = nivelDoColaboradorMetas(colaborador);
+  const tecnicas = METAS_TECNICAS_POR_NIVEL[nivel];
+  const mediaTecnicas = tecnicas.map(ind => metaMediaUltimosN(metaSerie(colaborador, ind), horizonteN));
+  const mediaComport = METAS_COMPORTAMENTAIS.map(ind => metaMediaUltimosN(metaSerie(colaborador, ind), horizonteN));
+  const mediaGestor = metaMediaUltimosN(metaSerie(colaborador, METAS_GESTOR), horizonteN);
+  const notaTecnica = avg(mediaTecnicas.filter(v => v !== null));
+  const notaComport = avg(mediaComport.filter(v => v !== null));
+  const notaGestor = mediaGestor;
+  let notaFinal = null;
+  if (notaTecnica !== null && notaComport !== null && notaGestor !== null) {{
+    notaFinal = notaTecnica * METAS_PESO_TECNICA + notaComport * METAS_PESO_COMPORTAMENTAL + notaGestor * METAS_PESO_GESTOR;
+  }}
+  const elegivel = notaFinal !== null ? notaFinal >= METAS_ELEGIBILIDADE_MIN : null;
+  return {{ nivel, notaTecnica, notaComport, notaGestor, notaFinal, elegivel }};
+}}
+
+function metaCellCls(v) {{
+  if (v === null) return '';
+  if (v >= 1) return 'meta-ok';
+  if (v >= METAS_ELEGIBILIDADE_MIN) return 'meta-warn';
+  return 'meta-danger';
+}}
+
+function abrirEditorMeta(colaborador, indicador, mesKey, mesLabel) {{
+  const atual = getMetaEntry(colaborador, indicador, mesKey);
+  const overlay = document.createElement('div');
+  overlay.className = 'meta-editor-overlay';
+  overlay.innerHTML = `
+    <div class="meta-editor-box">
+      <h4>${{esc(indicador)}}</h4>
+      <div class="meta-editor-sub">${{esc(colaborador)}} · ${{esc(mesLabel)}}</div>
+      <label>% de atingimento (0 a 120)</label>
+      <input type="number" id="metaEditorValor" min="0" max="120" step="5" value="${{atual ? Math.round(atual.v*100) : ''}}" placeholder="Ex.: 95" />
+      <label>Justificativa (opcional, mas recomendado)</label>
+      <textarea id="metaEditorJust" placeholder="Explique o numero lancado — o que aconteceu no mes, evidencias, etc.">${{atual ? esc(atual.j || '') : ''}}</textarea>
+      <div class="meta-editor-actions">
+        ${{atual ? '<button class="meta-btn-clear" id="metaEditorClear">Limpar</button>' : ''}}
+        <button class="meta-btn-cancel" id="metaEditorCancel">Cancelar</button>
+        <button class="meta-btn-save" id="metaEditorSave">Salvar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', e => {{ if (e.target === overlay) close(); }});
+  overlay.querySelector('#metaEditorCancel').addEventListener('click', close);
+  const clearBtn = overlay.querySelector('#metaEditorClear');
+  if (clearBtn) clearBtn.addEventListener('click', () => {{ setMetaEntry(colaborador, indicador, mesKey, null); close(); if (window._onMetaSaved) window._onMetaSaved(); }});
+  overlay.querySelector('#metaEditorSave').addEventListener('click', () => {{
+    const raw = overlay.querySelector('#metaEditorValor').value;
+    const just = overlay.querySelector('#metaEditorJust').value;
+    if (raw === '') {{ setMetaEntry(colaborador, indicador, mesKey, null); close(); if (window._onMetaSaved) window._onMetaSaved(); return; }}
+    const num = Math.max(0, Math.min(120, parseFloat(raw))) / 100;
+    setMetaEntry(colaborador, indicador, mesKey, num, just);
+    close();
+    if (window._onMetaSaved) window._onMetaSaved();
+  }});
+  overlay.querySelector('#metaEditorValor').focus();
+}}
+
+function metasGridHtml(colaborador) {{
+  const nivel = nivelDoColaboradorMetas(colaborador);
+  const linhas = indicadoresDoNivel(nivel);
+  const header = `<tr><th>Indicador</th><th>Tipo</th>${{METAS_MESES_12.map(m => `<th>${{esc(m.label)}}</th>`).join('')}}<th>Preench.</th><th>Media 3M</th><th>Media 6M</th></tr>`;
+  const rows = linhas.map(({{nome, tipo}}) => {{
+    const serie = metaSerie(colaborador, nome);
+    const preenchidos = serie.filter(s => s.entry !== null).length;
+    const m3 = metaMediaUltimosN(serie, 3);
+    const m6 = metaMediaUltimosN(serie, 6);
+    const cells = serie.map(s => {{
+      const v = s.entry ? s.entry.v : null;
+      const temJust = s.entry && s.entry.j;
+      return `<td><span class="meta-cell ${{metaCellCls(v)}} ${{temJust ? 'meta-just' : ''}}" title="${{temJust ? esc(s.entry.j) : 'Clique para lancar'}}" onclick="abrirEditorMeta(${{jsStr(colaborador)}}, ${{jsStr(nome)}}, ${{jsStr(s.key)}}, ${{jsStr(s.label)}})">${{v === null ? '–' : Math.round(v*100)+'%'}}</span></td>`;
+    }}).join('');
+    const rowCls = tipo === 'Gestor' ? 'metas-row-gestor' : '';
+    return `<tr class="${{rowCls}}">
+      <td class="metas-indicador">${{esc(nome)}}</td>
+      <td class="metas-tipo">${{tipo}}</td>
+      ${{cells}}
+      <td class="metas-resumo-cell">${{preenchidos}}/12</td>
+      <td class="metas-resumo-cell">${{m3 !== null ? Math.round(m3*100)+'%' : '-'}}</td>
+      <td class="metas-resumo-cell">${{m6 !== null ? Math.round(m6*100)+'%' : '-'}}</td>
+    </tr>`;
+  }}).join('');
+  return `<table class="metas-table"><thead>${{header}}</thead><tbody>${{rows}}</tbody></table>`;
+}}
+
 const CATEGORIAS_TECNICAS_N2 = ['Bug', 'Melhoria', 'Serviços'];
 // So' disponivel para o mes corrente (offset 0) — statusHistories nao e mantido nos meses anteriores.
 function computeN2Metrics(tecnico, periodoKey) {{
@@ -1390,26 +1639,6 @@ function indicadoresTecnico3Meses(tecnico) {{
     pctSla: avg(porMesRaw.filter(i => i.pctSla !== null).map(i => i.pctSla)),
     comparativoTotal,
   }};
-}}
-
-// Metas de um tecnico num mes especifico (X de 3 batidas) — usado na Gamificacao e reaproveitavel
-// pelo One-on-One. Baseado na propria media de 3 meses do tecnico, com 10% de melhoria.
-function metasDoTecnicoNoMes(tecnico, mesKey) {{
-  const items = (RESOLVED_MONTHS[mesKey] || []).filter(r => r.ownerName === tecnico);
-  const ind = computeIndicadores(items);
-  const pctPrimeira = items.length ? Math.round(items.filter(isPrimeiraResposta).length / items.length * 100) : null;
-  const m3 = indicadoresTecnico3Meses(tecnico);
-  const metaMttr = metaMelhoria10(m3.mttrH, true);
-  const metaSla = metaMelhoria10(m3.pctSla, false);
-  const metaPrimeira = metaMelhoria10(m3.pctPrimeira, false);
-  const itens = [
-    {{ nome: 'MTTR', bateu: bateMeta(ind.mttrH, metaMttr, true) }},
-    {{ nome: 'SLA no prazo', bateu: bateMeta(ind.pctSla, metaSla, false) }},
-    {{ nome: '1a resposta', bateu: bateMeta(pctPrimeira, metaPrimeira, false) }},
-  ];
-  const validas = itens.filter(i => i.bateu !== null);
-  const batidas = validas.filter(i => i.bateu).length;
-  return {{ itens, batidas, total: validas.length, temDados: items.length > 0 }};
 }}
 
 const novos = apply('novos');
@@ -2132,6 +2361,29 @@ function initOneOnOne() {{
   selTecnico.addEventListener('change', renderOneOnOne);
   refreshTecnicoOptions();
   renderOneOnOne();
+
+  // --- Apuracao de Metas (manual, por nivel) ---
+  const selColabMetas = document.getElementById('selColaboradorMetas');
+  const selHorizonte = document.getElementById('selHorizonteMetas');
+  populateSelect(selColabMetas, ROSTER_METAS.map(c => [c.nome, `${{c.nome}} (${{c.nivel}})`]));
+  function renderMetasPanel() {{
+    const colaborador = selColabMetas.value;
+    const nivel = nivelDoColaboradorMetas(colaborador);
+    const horizonteN = parseInt(selHorizonte.value, 10);
+    document.getElementById('metasNivelBadge').textContent = nivel;
+    document.getElementById('metasGridWrap').innerHTML = metasGridHtml(colaborador);
+    const nota = calcularNotaColaborador(colaborador, horizonteN);
+    const fmtPct = v => v !== null ? Math.round(v*100)+'%' : '-';
+    document.getElementById('kpiMetasResumo').innerHTML =
+      kpiTileStatic('neutral', fmtPct(nota.notaTecnica), 'Nota Tecnica (70%)', `media dos indicadores tecnicos do ${{nivel}} — ultimos ${{horizonteN}} meses preenchidos`) +
+      kpiTileStatic('neutral', fmtPct(nota.notaComport), 'Nota Comportamental (20%)', 'media dos 5 itens comportamentais') +
+      kpiTileStatic('neutral', fmtPct(nota.notaFinal), 'Nota Final (70/20/10)', 'tecnica*0,7 + comportamental*0,2 + gestor*0,1') +
+      kpiTileStatic(nota.elegivel === null ? 'neutral' : (nota.elegivel ? 'ok' : 'danger'), nota.elegivel === null ? '-' : (nota.elegivel ? 'Elegivel' : 'Nao elegivel'), 'Elegibilidade (>=50%)', 'regra do modelo oficial de metas');
+  }}
+  window._onMetaSaved = renderMetasPanel;
+  selColabMetas.addEventListener('change', renderMetasPanel);
+  selHorizonte.addEventListener('change', renderMetasPanel);
+  renderMetasPanel();
 }}
 if (sessionStorage.getItem('oneOnOneUnlocked') === '1') initOneOnOne();
 
@@ -2161,50 +2413,52 @@ function initGamificacao() {{
   if (gamificacaoInited) return;
   gamificacaoInited = true;
   const selMes = document.getElementById('selMesGamificacao');
-  const opcoes = Object.keys(MONTH_LABELS).map(k => [k, MONTH_LABELS[k]]);
-  opcoes.push(['all', 'Soma dos ultimos 3 meses']);
+  const opcoes = METAS_MESES_12.slice().reverse().map(m => [m.key, m.label]);
+  opcoes.push(['3m', 'Soma dos ultimos 3 meses']);
+  opcoes.push(['6m', 'Soma dos ultimos 6 meses']);
   populateSelect(selMes, opcoes);
 
+  // Usa a MESMA base da Apuracao de Metas (One-on-One): soma, por CATEGORIA (Tecnica/Comportamental/
+  // Gestor — o mesmo agrupamento "Tipo" da planilha oficial), quantos lancamentos (colaborador x
+  // indicador x mes) bateram a meta (>=100% de atingimento) entre os preenchidos no periodo — sem
+  // expor nome de colaborador individual.
   function renderGamificacao() {{
-    const mesKey = selMes.value;
-    const todosTecnicos = Array.from(new Set(Object.values(RESOLVED_MONTHS).flat().map(r => r.ownerName).filter(Boolean))).sort((a,b) => a.localeCompare(b));
-    const meses = mesKey === 'all' ? Object.keys(MONTH_LABELS) : [mesKey];
+    const periodo = selMes.value;
+    const mesesConsiderados = periodo === '3m' ? METAS_MESES_12.slice(-3) : periodo === '6m' ? METAS_MESES_12.slice(-6) : METAS_MESES_12.filter(m => m.key === periodo);
 
-    // Agrega por CRITERIO (MTTR, SLA no prazo, 1a resposta) — sem expor nome de tecnico individual.
-    const porCriterio = {{}};
-    todosTecnicos.forEach(t => {{
-      meses.forEach(k => {{
-        const m = metasDoTecnicoNoMes(t, k);
-        if (!m.temDados) return;
-        m.itens.forEach(item => {{
-          if (item.bateu === null) return;
-          if (!porCriterio[item.nome]) porCriterio[item.nome] = {{ batidas: 0, total: 0 }};
-          porCriterio[item.nome].total++;
-          if (item.bateu) porCriterio[item.nome].batidas++;
+    const porCategoria = {{}};
+    ROSTER_METAS.forEach(({{nome, nivel}}) => {{
+      indicadoresDoNivel(nivel).forEach(({{nome: indicador, tipo}}) => {{
+        mesesConsiderados.forEach(m => {{
+          const entry = getMetaEntry(nome, indicador, m.key);
+          if (!entry) return;
+          if (!porCategoria[tipo]) porCategoria[tipo] = {{ batidas: 0, total: 0 }};
+          porCategoria[tipo].total++;
+          if (entry.v >= 1) porCategoria[tipo].batidas++;
         }});
       }});
     }});
-    const criterios = Object.entries(porCriterio);
-    const somaBatidas = criterios.reduce((s,[,v]) => s + v.batidas, 0);
-    const somaTotal = criterios.reduce((s,[,v]) => s + v.total, 0);
-    const periodoLabel = mesKey === 'all' ? 'soma dos ultimos 3 meses' : MONTH_LABELS[mesKey];
+    const categorias = Object.entries(porCategoria);
+    const somaBatidas = categorias.reduce((s,[,v]) => s + v.batidas, 0);
+    const somaTotal = categorias.reduce((s,[,v]) => s + v.total, 0);
+    const periodoLabel = periodo === '3m' ? 'soma dos ultimos 3 meses' : periodo === '6m' ? 'soma dos ultimos 6 meses' : (METAS_MESES_12.find(m => m.key === periodo)||{{}}).label;
 
     document.getElementById('kpiGamificacao').innerHTML =
       kpiTileStatic('ok', `${{somaBatidas}} de ${{somaTotal}}`, 'Metas batidas (soma geral)', `${{somaTotal ? Math.round(somaBatidas/somaTotal*100) : 0}}% de aproveitamento · ${{periodoLabel}}`) +
-      kpiTileStatic('neutral', criterios.length, 'Criterios avaliados', `MTTR, SLA no prazo e 1a resposta — 10% de melhoria s/ media 3m de cada tecnico`);
+      kpiTileStatic('neutral', categorias.length, 'Categorias avaliadas', `Tecnica, Comportamental e Visao do Gestor — mesmas categorias da Apuracao de Metas do One-on-One (meta batida = 100% ou mais de atingimento)`);
 
     document.getElementById('gridGamificacao').innerHTML = `
       <div class="panel">
-        <h2>🏆 Metas batidas por criterio</h2>
-        <div class="panel-sub">${{periodoLabel}} — cada avaliacao (tecnico x mes) conta uma vez por criterio</div>
-        <table><thead><tr><th>Criterio</th><th>Meta batida</th><th>Total avaliado</th><th>Aproveitamento</th></tr></thead>
-          <tbody>${{criterios.map(([nome, v]) => `
+        <h2>🏆 Metas batidas por categoria</h2>
+        <div class="panel-sub">${{periodoLabel}} — soma de todos os colaboradores e indicadores lancados na Apuracao de Metas, sem expor nome individual</div>
+        <table><thead><tr><th>Categoria</th><th>Meta batida</th><th>Total lancado</th><th>Aproveitamento</th></tr></thead>
+          <tbody>${{categorias.length ? categorias.map(([nome, v]) => `
             <tr>
               <td>${{esc(nome)}}</td>
               <td>${{v.batidas}}</td>
               <td>${{v.total}}</td>
               <td>${{v.total ? Math.round(v.batidas/v.total*100) : 0}}%</td>
-            </tr>`).join('')}}
+            </tr>`).join('') : '<tr><td colspan="4" class="empty-msg">Nenhum lancamento na Apuracao de Metas ainda para este periodo</td></tr>'}}
           </tbody></table>
       </div>
     `;
