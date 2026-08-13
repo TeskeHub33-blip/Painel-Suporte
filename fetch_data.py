@@ -56,13 +56,13 @@ def fetch_page_resilient(base_params, skip, top, deadline=None):
     if deadline is None:
         deadline = time.time() + BISECT_DEADLINE_S
     if time.time() > deadline:
-        print(f"[aviso] tempo de bisecao esgotado — pulando o restante da pagina em $skip={skip} $top={top}")
+        print(f"[aviso] tempo de bisecao esgotado — pulando o restante da pagina em $skip={skip} $top={top}", flush=True)
         return [], False
     try:
         return fetch({**base_params, "$top": top, "$skip": skip}), True
     except requests.exceptions.RequestException:
         if top <= 1:
-            print(f"[aviso] pulando registro problematico em $skip={skip} (a API rejeitou mesmo isolado)")
+            print(f"[aviso] pulando registro problematico em $skip={skip} (a API rejeitou mesmo isolado)", flush=True)
             return [], False
         half = top // 2
         first, ok1 = fetch_page_resilient(base_params, skip, half, deadline)
@@ -89,17 +89,18 @@ def month_window(year, month):
     return start, mid, end
 
 
-def fetch_paginated(base_params, page_size=300):
+def fetch_paginated(base_params, page_size=500, deadline_s=25):
     """Busca TODAS as paginas de um filtro, com $skip — um $top fixo sem paginacao (usado antes
     pra meses resolvidos) pode voltar incompleto silenciosamente (ex.: por rate-limit da API
     devolvendo menos itens sem erro), e como nao ha como distinguir isso de 'a pagina realmente
     acabou', o jeito seguro e' sempre paginar em blocos menores e so parar quando uma pagina
     completa vier menor que o $top. Usa fetch_page_resilient (com bisecao) pra tambem sobreviver
-    a erros 500 pontuais numa pagina especifica."""
+    a erros 500 pontuais numa pagina especifica. deadline_s baixo (bem menor que o usado pros
+    chamados abertos) pra nao deixar um mes com problema comer o tempo de todos os outros."""
     items = []
     skip = 0
     while skip < 50000:
-        page, completo = fetch_page_resilient(base_params, skip, page_size)
+        page, completo = fetch_page_resilient(base_params, skip, page_size, time.time() + deadline_s)
         items += page
         if completo and len(page) < page_size:
             break
@@ -117,9 +118,7 @@ def fetch_month(year, month):
             "$filter": f"resolvedIn ge {a.strftime('%Y-%m-%d')}T00:00:00Z and resolvedIn lt {b.strftime('%Y-%m-%d')}T00:00:00Z",
         })
 
-    result = fetch_window(start, mid) + fetch_window(mid, end)
-    time.sleep(1)  # respiro entre meses pra reduzir chance de rate-limit da API num loop de varios meses
-    return result
+    return fetch_window(start, mid) + fetch_window(mid, end)
 
 
 def main():
@@ -149,12 +148,12 @@ def main():
             # fim" — senao os chamados das paginas seguintes (tipicamente os mais novos) somem do
             # painel inteiro em silencio, como aconteceu antes. Continua avancando mesmo assim.
             paginas_incompletas += 1
-            print(f"[aviso] pagina em $skip={skip} ficou incompleta — seguindo para a proxima mesmo assim")
+            print(f"[aviso] pagina em $skip={skip} ficou incompleta — seguindo para a proxima mesmo assim", flush=True)
         elif len(page) < page_size:
             break
         skip += page_size
     if paginas_incompletas:
-        print(f"[aviso] total de paginas incompletas nesta sincronizacao: {paginas_incompletas}")
+        print(f"[aviso] total de paginas incompletas nesta sincronizacao: {paginas_incompletas}", flush=True)
     save("tickets_full.json", open_tickets)
 
     # 2. Resolvidos hoje
@@ -166,17 +165,31 @@ def main():
     })
     save("resolved_today.json", resolved_today)
 
-    # 3. Resolvidos desde janeiro/2026 (sempre busca tudo do zero — nao ha cache entre runs no
-    # GitHub Actions). offset 0 = mes corrente, offset 1 = mes anterior, etc. — quantidade de meses
-    # cresce automaticamente conforme o tempo passa (nao fica travado em so' 3 meses).
+    # 3. Resolvidos desde janeiro/2026. offset 0 = mes corrente, offset 1 = mes anterior, etc. —
+    # quantidade de meses cresce automaticamente conforme o tempo passa (nao fica travado em so' 3
+    # meses). So os offsets 0 e 1 (mes corrente + anterior, que ainda podem receber resolucoes
+    # tardias) sao buscados de novo em TODA sincronizacao; meses mais antigos que isso ja estao
+    # encerrados e nao mudam mais, entao sao buscados so' uma vez e depois ficam em cache — o
+    # arquivo resolved_month_N.json (N>=2) e commitado no repo (ver .gitignore/workflow) e
+    # reaproveitado nas proximas execucoes, em vez de rebaixar tudo desde jan/2026 a cada 15min
+    # (foi o que travou a sincronizacao por quase 30min na primeira tentativa de historico completo).
     JAN_2026 = datetime(2026, 1, 1)
     meses_desde_jan2026 = (now_utc.year - JAN_2026.year) * 12 + (now_utc.month - JAN_2026.month) + 1
+    MESES_SEMPRE_FRESCOS = 2
     resolved_months = {}
     for offset in range(meses_desde_jan2026):
-        target = add_months(now_utc, -offset)
-        data = fetch_month(target.year, target.month)
+        path = os.path.join(BASE_DIR, f"resolved_month_{offset}.json")
+        if offset >= MESES_SEMPRE_FRESCOS and os.path.exists(path):
+            print(f"[info] mes offset={offset} ja em cache — reaproveitando resolved_month_{offset}.json", flush=True)
+            with open(path, encoding='utf-8-sig') as f:
+                data = json.load(f)
+        else:
+            target = add_months(now_utc, -offset)
+            print(f"[info] buscando mes offset={offset} ({target.year}-{target.month:02d})...", flush=True)
+            data = fetch_month(target.year, target.month)
+            save(f"resolved_month_{offset}.json", data)
+            print(f"[info] mes offset={offset}: {len(data)} chamados", flush=True)
         resolved_months[offset] = data
-        save(f"resolved_month_{offset}.json", data)
 
     # 4. Acoes/notas dos chamados tecnicos (Bug/Melhoria/Servicos) resolvidos no mes corrente — usadas
     # pra achar, no log do DevOps/Azure, o comentario que marca quando a task foi para validacao ou
