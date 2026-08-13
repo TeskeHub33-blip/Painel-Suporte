@@ -617,7 +617,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
       <div style="display:flex; justify-content:flex-end; margin-bottom: 10px;">
         <select id="selMesGamificacao" class="itil-select" title="Mes / periodo" style="max-width:220px; font-size:12px; padding:4px 8px;"></select>
       </div>
-      <div class="kpi-row" id="kpiGamificacao" style="grid-template-columns: repeat(2, 1fr);"></div>
+      <div class="kpi-row" id="kpiGamificacao" style="grid-template-columns: repeat(3, 1fr);"></div>
       <div class="grid" id="gridGamificacao" style="margin-top: 18px;"></div>
     </div>
   </div>
@@ -2443,8 +2443,26 @@ function initGamificacao() {{
     const somaBatidas = niveisComDados.reduce((s,[,v]) => s + v.batidas, 0);
     const somaTotal = niveisComDados.reduce((s,[,v]) => s + v.total, 0);
 
+    // Media geral dos ultimos 3 meses (independente do periodo selecionado acima — sempre a media
+    // "rolante" dos ultimos 3 meses PREENCHIDOS de cada indicador, igual a coluna "Media Ult. 3M"
+    // da planilha/aba de Apuracao de Metas), calculada por colaborador x indicador tecnico e depois
+    // agregada por nivel.
+    function mediaUlt3MPorNivel(nivel) {{
+      const medias = [];
+      ROSTER_METAS.filter(c => c.nivel === nivel).forEach(({{nome}}) => {{
+        METAS_TECNICAS_POR_NIVEL[nivel].forEach(indicador => {{
+          const m3 = metaMediaUltimosN(metaSerie(nome, indicador), 3);
+          if (m3 !== null) medias.push(m3);
+        }});
+      }});
+      return medias.length ? avg(medias) : null;
+    }}
+    const mediasNiveis = niveisComDados.map(([nivel]) => mediaUlt3MPorNivel(nivel)).filter(v => v !== null);
+    const mediaGeral3M = mediasNiveis.length ? avg(mediasNiveis) : null;
+
     document.getElementById('kpiGamificacao').innerHTML =
       kpiTileStatic('ok', `${{somaBatidas}} de ${{somaTotal}}`, 'Metas tecnicas batidas (soma geral)', `${{somaTotal ? Math.round(somaBatidas/somaTotal*100) : 0}}% de aproveitamento · ${{periodoLabel}}`) +
+      kpiTileStatic('neutral', mediaGeral3M !== null ? `${{Math.round(mediaGeral3M*100)}}%` : '-', 'Media geral — ultimos 3 meses', 'media do percentual de atingimento (nao apenas a contagem de batidas), rolante sobre os ultimos 3 meses preenchidos de cada indicador') +
       kpiTileStatic('neutral', niveisComDados.length, 'Niveis com lancamento', `de N1/N2/N3 — so' metas tecnicas, mesmas da Apuracao de Metas do One-on-One (meta batida = 100% ou mais de atingimento)`);
 
     document.getElementById('gridGamificacao').innerHTML = niveisComDados.length ? niveisComDados.map(([nivel, v]) => {{
@@ -2458,19 +2476,27 @@ function initGamificacao() {{
             porIndicador[indicador].total++;
             if (entry.v >= 1) porIndicador[indicador].batidas++;
           }});
+          const m3 = metaMediaUltimosN(metaSerie(nome, indicador), 3);
+          if (m3 !== null) {{
+            if (!porIndicador[indicador]) porIndicador[indicador] = {{ batidas: 0, total: 0 }};
+            if (!porIndicador[indicador].m3vals) porIndicador[indicador].m3vals = [];
+            porIndicador[indicador].m3vals.push(m3);
+          }}
         }});
       }});
       const linhas = Object.entries(porIndicador);
+      const mediaNivel3M = mediaUlt3MPorNivel(nivel);
       return `<div class="panel">
         <h2>🏆 Metas tecnicas batidas — Nivel ${{nivel}}</h2>
-        <div class="panel-sub">${{periodoLabel}} — soma dos colaboradores ${{nivel}}, sem expor nome individual · ${{v.batidas}} de ${{v.total}} (${{v.total ? Math.round(v.batidas/v.total*100) : 0}}%)</div>
-        <table><thead><tr><th>Indicador tecnico</th><th>Meta batida</th><th>Total lancado</th><th>Aproveitamento</th></tr></thead>
+        <div class="panel-sub">${{periodoLabel}} — soma dos colaboradores ${{nivel}}, sem expor nome individual · ${{v.batidas}} de ${{v.total}} (${{v.total ? Math.round(v.batidas/v.total*100) : 0}}%) · media ult. 3M do nivel: ${{mediaNivel3M !== null ? Math.round(mediaNivel3M*100)+'%' : '-'}}</div>
+        <table><thead><tr><th>Indicador tecnico</th><th>Meta batida</th><th>Total lancado</th><th>Aproveitamento</th><th>Media Ult. 3M</th></tr></thead>
           <tbody>${{linhas.map(([nome, iv]) => `
             <tr>
               <td>${{esc(nome)}}</td>
               <td>${{iv.batidas}}</td>
               <td>${{iv.total}}</td>
               <td>${{iv.total ? Math.round(iv.batidas/iv.total*100) : 0}}%</td>
+              <td>${{iv.m3vals && iv.m3vals.length ? Math.round(avg(iv.m3vals)*100)+'%' : '-'}}</td>
             </tr>`).join('')}}
           </tbody></table>
       </div>`;
