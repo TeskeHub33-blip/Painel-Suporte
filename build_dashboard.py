@@ -2418,50 +2418,63 @@ function initGamificacao() {{
   opcoes.push(['6m', 'Soma dos ultimos 6 meses']);
   populateSelect(selMes, opcoes);
 
-  // Usa a MESMA base da Apuracao de Metas (One-on-One): soma, por CATEGORIA (Tecnica/Comportamental/
-  // Gestor — o mesmo agrupamento "Tipo" da planilha oficial), quantos lancamentos (colaborador x
-  // indicador x mes) bateram a meta (>=100% de atingimento) entre os preenchidos no periodo — sem
-  // expor nome de colaborador individual.
+  // Usa a MESMA base da Apuracao de Metas (One-on-One), mas so' as metas TECNICAS (nao entram
+  // Comportamental/Gestor aqui), divididas em 3 secoes por nivel (N1/N2/N3) — cada nivel soma
+  // apenas os indicadores tecnicos proprios dele, e so' conta niveis que tenham algum lancamento
+  // no periodo (niveis sem dado nao aparecem). Meta batida = >=100% de atingimento. Sem expor nome
+  // de colaborador individual.
   function renderGamificacao() {{
     const periodo = selMes.value;
     const mesesConsiderados = periodo === '3m' ? METAS_MESES_12.slice(-3) : periodo === '6m' ? METAS_MESES_12.slice(-6) : METAS_MESES_12.filter(m => m.key === periodo);
+    const periodoLabel = periodo === '3m' ? 'soma dos ultimos 3 meses' : periodo === '6m' ? 'soma dos ultimos 6 meses' : (METAS_MESES_12.find(m => m.key === periodo)||{{}}).label;
 
-    const porCategoria = {{}};
+    const porNivel = {{ N1: {{ batidas: 0, total: 0 }}, N2: {{ batidas: 0, total: 0 }}, N3: {{ batidas: 0, total: 0 }} }};
     ROSTER_METAS.forEach(({{nome, nivel}}) => {{
-      indicadoresDoNivel(nivel).forEach(({{nome: indicador, tipo}}) => {{
+      METAS_TECNICAS_POR_NIVEL[nivel].forEach(indicador => {{
         mesesConsiderados.forEach(m => {{
           const entry = getMetaEntry(nome, indicador, m.key);
           if (!entry) return;
-          if (!porCategoria[tipo]) porCategoria[tipo] = {{ batidas: 0, total: 0 }};
-          porCategoria[tipo].total++;
-          if (entry.v >= 1) porCategoria[tipo].batidas++;
+          porNivel[nivel].total++;
+          if (entry.v >= 1) porNivel[nivel].batidas++;
         }});
       }});
     }});
-    const categorias = Object.entries(porCategoria);
-    const somaBatidas = categorias.reduce((s,[,v]) => s + v.batidas, 0);
-    const somaTotal = categorias.reduce((s,[,v]) => s + v.total, 0);
-    const periodoLabel = periodo === '3m' ? 'soma dos ultimos 3 meses' : periodo === '6m' ? 'soma dos ultimos 6 meses' : (METAS_MESES_12.find(m => m.key === periodo)||{{}}).label;
+    const niveisComDados = Object.entries(porNivel).filter(([,v]) => v.total > 0);
+    const somaBatidas = niveisComDados.reduce((s,[,v]) => s + v.batidas, 0);
+    const somaTotal = niveisComDados.reduce((s,[,v]) => s + v.total, 0);
 
     document.getElementById('kpiGamificacao').innerHTML =
-      kpiTileStatic('ok', `${{somaBatidas}} de ${{somaTotal}}`, 'Metas batidas (soma geral)', `${{somaTotal ? Math.round(somaBatidas/somaTotal*100) : 0}}% de aproveitamento · ${{periodoLabel}}`) +
-      kpiTileStatic('neutral', categorias.length, 'Categorias avaliadas', `Tecnica, Comportamental e Visao do Gestor — mesmas categorias da Apuracao de Metas do One-on-One (meta batida = 100% ou mais de atingimento)`);
+      kpiTileStatic('ok', `${{somaBatidas}} de ${{somaTotal}}`, 'Metas tecnicas batidas (soma geral)', `${{somaTotal ? Math.round(somaBatidas/somaTotal*100) : 0}}% de aproveitamento · ${{periodoLabel}}`) +
+      kpiTileStatic('neutral', niveisComDados.length, 'Niveis com lancamento', `de N1/N2/N3 — so' metas tecnicas, mesmas da Apuracao de Metas do One-on-One (meta batida = 100% ou mais de atingimento)`);
 
-    document.getElementById('gridGamificacao').innerHTML = `
-      <div class="panel">
-        <h2>🏆 Metas batidas por categoria</h2>
-        <div class="panel-sub">${{periodoLabel}} — soma de todos os colaboradores e indicadores lancados na Apuracao de Metas, sem expor nome individual</div>
-        <table><thead><tr><th>Categoria</th><th>Meta batida</th><th>Total lancado</th><th>Aproveitamento</th></tr></thead>
-          <tbody>${{categorias.length ? categorias.map(([nome, v]) => `
+    document.getElementById('gridGamificacao').innerHTML = niveisComDados.length ? niveisComDados.map(([nivel, v]) => {{
+      const porIndicador = {{}};
+      ROSTER_METAS.filter(c => c.nivel === nivel).forEach(({{nome}}) => {{
+        METAS_TECNICAS_POR_NIVEL[nivel].forEach(indicador => {{
+          mesesConsiderados.forEach(m => {{
+            const entry = getMetaEntry(nome, indicador, m.key);
+            if (!entry) return;
+            if (!porIndicador[indicador]) porIndicador[indicador] = {{ batidas: 0, total: 0 }};
+            porIndicador[indicador].total++;
+            if (entry.v >= 1) porIndicador[indicador].batidas++;
+          }});
+        }});
+      }});
+      const linhas = Object.entries(porIndicador);
+      return `<div class="panel">
+        <h2>🏆 Metas tecnicas batidas — Nivel ${{nivel}}</h2>
+        <div class="panel-sub">${{periodoLabel}} — soma dos colaboradores ${{nivel}}, sem expor nome individual · ${{v.batidas}} de ${{v.total}} (${{v.total ? Math.round(v.batidas/v.total*100) : 0}}%)</div>
+        <table><thead><tr><th>Indicador tecnico</th><th>Meta batida</th><th>Total lancado</th><th>Aproveitamento</th></tr></thead>
+          <tbody>${{linhas.map(([nome, iv]) => `
             <tr>
               <td>${{esc(nome)}}</td>
-              <td>${{v.batidas}}</td>
-              <td>${{v.total}}</td>
-              <td>${{v.total ? Math.round(v.batidas/v.total*100) : 0}}%</td>
-            </tr>`).join('') : '<tr><td colspan="4" class="empty-msg">Nenhum lancamento na Apuracao de Metas ainda para este periodo</td></tr>'}}
+              <td>${{iv.batidas}}</td>
+              <td>${{iv.total}}</td>
+              <td>${{iv.total ? Math.round(iv.batidas/iv.total*100) : 0}}%</td>
+            </tr>`).join('')}}
           </tbody></table>
-      </div>
-    `;
+      </div>`;
+    }}).join('') : '<div class="panel"><div class="empty-msg">Nenhum lancamento de meta tecnica na Apuracao de Metas ainda para este periodo</div></div>';
   }}
   selMes.addEventListener('change', renderGamificacao);
   renderGamificacao();
