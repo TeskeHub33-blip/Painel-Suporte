@@ -89,18 +89,37 @@ def month_window(year, month):
     return start, mid, end
 
 
+def fetch_paginated(base_params, page_size=300):
+    """Busca TODAS as paginas de um filtro, com $skip — um $top fixo sem paginacao (usado antes
+    pra meses resolvidos) pode voltar incompleto silenciosamente (ex.: por rate-limit da API
+    devolvendo menos itens sem erro), e como nao ha como distinguir isso de 'a pagina realmente
+    acabou', o jeito seguro e' sempre paginar em blocos menores e so parar quando uma pagina
+    completa vier menor que o $top. Usa fetch_page_resilient (com bisecao) pra tambem sobreviver
+    a erros 500 pontuais numa pagina especifica."""
+    items = []
+    skip = 0
+    while skip < 50000:
+        page, completo = fetch_page_resilient(base_params, skip, page_size)
+        items += page
+        if completo and len(page) < page_size:
+            break
+        skip += page_size
+    return items
+
+
 def fetch_month(year, month):
     start, mid, end = month_window(year, month)
 
     def fetch_window(a, b):
-        return fetch({
+        return fetch_paginated({
             "$select": MONTH_SELECT,
             "$expand": MONTH_EXPAND,
             "$filter": f"resolvedIn ge {a.strftime('%Y-%m-%d')}T00:00:00Z and resolvedIn lt {b.strftime('%Y-%m-%d')}T00:00:00Z",
-            "$top": 1000,
         })
 
-    return fetch_window(start, mid) + fetch_window(mid, end)
+    result = fetch_window(start, mid) + fetch_window(mid, end)
+    time.sleep(1)  # respiro entre meses pra reduzir chance de rate-limit da API num loop de varios meses
+    return result
 
 
 def main():

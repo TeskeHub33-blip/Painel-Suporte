@@ -2547,10 +2547,15 @@ if (sessionStorage.getItem('reuniaoMensalUnlocked') === '1') {{
 const REUNIAO_MENSAL_CATEGORIAS = ['Bloqueio Sistema', 'Bug', 'Dúvida', 'Melhoria', 'Erro Operacional', 'Terceiros', 'Serviços', 'GNRE Pagamento'];
 // Meta de duvidas: baseline historico de 61% (media de ~7 meses, 3535 chamados de duvida) — a meta
 // e reduzir 20% desse percentual (nao 20 pontos percentuais, e sim 20% de reducao relativa ao baseline).
+// Meta de duvidas: baseline historico de 61% (media do ano passado); a meta e' reduzir 20 PONTOS
+// percentuais (nao 20% relativo) — ou seja, no maximo 41% dos chamados do mes sendo Duvida.
 const META_DUVIDAS_BASELINE_PCT = 61;
 const META_DUVIDAS_REDUCAO_ALVO_PCT = 20;
+const META_DUVIDAS_ALVO_PCT = META_DUVIDAS_BASELINE_PCT - META_DUVIDAS_REDUCAO_ALVO_PCT;
+// Retorna quantos PONTOS percentuais o % atual de duvidas esta abaixo (positivo) ou acima
+// (negativo) do baseline de 61% — bate a meta quando esse valor for >= 20 (ou seja, atual <= 41%).
 function reducaoDuvidas(pctAtual) {{
-  return Math.round((META_DUVIDAS_BASELINE_PCT - pctAtual) / META_DUVIDAS_BASELINE_PCT * 100);
+  return Math.round(META_DUVIDAS_BASELINE_PCT - pctAtual);
 }}
 let reuniaoMensalInited = false;
 function initReuniaoMensal() {{
@@ -2597,17 +2602,17 @@ function initReuniaoMensal() {{
   }});
   const statsGeral = statsForMonth(todosItensPeriodo);
 
-  // Meta de duvidas: baseline 61% (media historica de ~7 meses/3535 chamados), meta = reduzir 20% desse valor
+  // Meta de duvidas: baseline 61% (media do ano passado), meta = no maximo 41% (61 - 20 pontos)
   const pctDuvidasTotalKpi = totalGeralFechados ? Math.round((totalGeral['Dúvida']||0)/totalGeralFechados*100) : 0;
   const reducaoTotalKpi = reducaoDuvidas(pctDuvidasTotalKpi);
-  const metaBatida = reducaoTotalKpi >= META_DUVIDAS_REDUCAO_ALVO_PCT;
+  const metaBatida = pctDuvidasTotalKpi <= META_DUVIDAS_ALVO_PCT;
   document.getElementById('kpiReuniaoMensalMeta').innerHTML =
     kpiTileStatic(metaBatida ? 'ok' : (reducaoTotalKpi >= 0 ? 'warn' : 'danger'),
-      `${{reducaoTotalKpi > 0 ? '-' : (reducaoTotalKpi < 0 ? '+' : '')}}${{Math.abs(reducaoTotalKpi)}}%`,
-      'Meta de duvidas: reduzir 20% (baseline 61%)',
-      `% duvidas atual no periodo: ${{pctDuvidasTotalKpi}}% · baseline: ${{META_DUVIDAS_BASELINE_PCT}}% · ${{metaBatida ? 'meta batida' : 'meta nao batida'}}`);
+      `${{pctDuvidasTotalKpi}}%`,
+      `Meta de duvidas: no maximo ${{META_DUVIDAS_ALVO_PCT}}% (baseline ${{META_DUVIDAS_BASELINE_PCT}}% - ${{META_DUVIDAS_REDUCAO_ALVO_PCT}}pp)`,
+      `${{reducaoTotalKpi > 0 ? reducaoTotalKpi + 'pp abaixo' : (reducaoTotalKpi < 0 ? Math.abs(reducaoTotalKpi) + 'pp acima' : 'igual')}} do baseline de ${{META_DUVIDAS_BASELINE_PCT}}% · ${{metaBatida ? 'meta batida' : 'meta nao batida'}}`);
 
-  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + '<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs meta (baseline 61%)</th><th>% SLA no prazo</th>';
+  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Meta duvidas (max ${{META_DUVIDAS_ALVO_PCT}}%)</th><th>% SLA no prazo</th>`;
   const bodyRows = linhas.map(l => {{
     const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{l.porCategoria[c] || 0}}</td>`).join('');
     const corReducao = l.reducaoDuvidas >= META_DUVIDAS_REDUCAO_ALVO_PCT ? 'var(--ok)' : (l.reducaoDuvidas >= 0 ? 'var(--warn)' : 'var(--danger)');
@@ -2619,7 +2624,7 @@ function initReuniaoMensal() {{
       <td style="text-align:center">${{l.mttrH !== null ? fmtH(l.mttrH) : '-'}}</td>
       <td style="text-align:center">${{l.pctPrimeira}}%</td>
       <td style="text-align:center">${{l.pctDuvidas}}%</td>
-      <td style="text-align:center; font-weight:700; color:${{corReducao}}">${{l.reducaoDuvidas > 0 ? '-' : (l.reducaoDuvidas < 0 ? '+' : '')}}${{Math.abs(l.reducaoDuvidas)}}%</td>
+      <td style="text-align:center; font-weight:700; color:${{corReducao}}">${{l.reducaoDuvidas >= META_DUVIDAS_REDUCAO_ALVO_PCT ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - l.reducaoDuvidas}}pp faltando`}}</td>
       <td style="text-align:center">${{l.pctSla !== null ? l.pctSla+'%' : '-'}}</td>
     </tr>`;
   }}).join('');
@@ -2634,7 +2639,7 @@ function initReuniaoMensal() {{
     <td style="text-align:center">${{statsGeral.mttrH !== null ? fmtH(statsGeral.mttrH) : '-'}}</td>
     <td style="text-align:center">${{statsGeral.pctPrimeira}}%</td>
     <td style="text-align:center">${{pctDuvidasTotal}}%</td>
-    <td style="text-align:center; color:${{corReducaoTotal}}">${{reducaoTotal > 0 ? '-' : (reducaoTotal < 0 ? '+' : '')}}${{Math.abs(reducaoTotal)}}%</td>
+    <td style="text-align:center; color:${{corReducaoTotal}}">${{reducaoTotal >= META_DUVIDAS_REDUCAO_ALVO_PCT ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - reducaoTotal}}pp faltando`}}</td>
     <td style="text-align:center">${{statsGeral.pctSla !== null ? statsGeral.pctSla+'%' : '-'}}</td>
   </tr>`;
 
