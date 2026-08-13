@@ -126,11 +126,13 @@ def fetch_month(year, month):
 
 # Chamados resolvidos/mes historicamente sempre passam de umas poucas centenas — se um mes voltar
 # bem abaixo disso e' sinal de que a API devolveu uma resposta 200 incompleta (sem lancar erro,
-# entao nem a bisecao nem os retries do fetch() percebem — confirmado ao comparar com os numeros
-# reais do time: Jan/2026=970, Fev=921, Mar=1085, Abr=1142, Mai=1148, Jun=1635, todos bem acima
-# deste piso). Um mes suspeito NAO e salvo/cacheado — fica pra tentar de novo no proximo ciclo, em
-# vez de congelar um numero errado pra sempre.
-MES_TOTAL_MINIMO_SANIDADE = 200
+# entao nem a bisecao nem os retries do fetch() percebem). Confirmado com os numeros reais do
+# time: Jan/2026=970, Fev=921, Mar=1085, Abr=1142, Mai=1148, Jun=1635 — o piso fica um pouco
+# abaixo do mais baixo desses (921) pra pegar tanto truncamentos extremos (ex.: 15 chamados)
+# quanto truncamentos parciais (ex.: um mes voltando com so' 30-60% do volume real). Um mes
+# suspeito NAO e salvo/cacheado — fica pra tentar de novo no proximo ciclo, em vez de congelar um
+# numero errado pra sempre.
+MES_TOTAL_MINIMO_SANIDADE = 700
 
 
 def main():
