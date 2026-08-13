@@ -118,7 +118,19 @@ def fetch_month(year, month):
             "$filter": f"resolvedIn ge {a.strftime('%Y-%m-%d')}T00:00:00Z and resolvedIn lt {b.strftime('%Y-%m-%d')}T00:00:00Z",
         })
 
-    return fetch_window(start, mid) + fetch_window(mid, end)
+    result = fetch_window(start, mid) + fetch_window(mid, end)
+    time.sleep(3)  # respiro generoso — a API parece degradar (devolver poucos itens, sem erro) apos
+    # muitas requisicoes seguidas; isso ajuda o proximo mes/janela nao herdar esse estado.
+    return result
+
+
+# Chamados resolvidos/mes historicamente sempre passam de umas poucas centenas — se um mes voltar
+# bem abaixo disso e' sinal de que a API devolveu uma resposta 200 incompleta (sem lancar erro,
+# entao nem a bisecao nem os retries do fetch() percebem — confirmado ao comparar com os numeros
+# reais do time: Jan/2026=970, Fev=921, Mar=1085, Abr=1142, Mai=1148, Jun=1635, todos bem acima
+# deste piso). Um mes suspeito NAO e salvo/cacheado — fica pra tentar de novo no proximo ciclo, em
+# vez de congelar um numero errado pra sempre.
+MES_TOTAL_MINIMO_SANIDADE = 200
 
 
 def main():
@@ -167,28 +179,47 @@ def main():
 
     # 3. Resolvidos desde janeiro/2026. offset 0 = mes corrente, offset 1 = mes anterior, etc. —
     # quantidade de meses cresce automaticamente conforme o tempo passa (nao fica travado em so' 3
-    # meses). So os offsets 0 e 1 (mes corrente + anterior, que ainda podem receber resolucoes
+    # meses). Os offsets 0 e 1 (mes corrente + anterior, que ainda podem receber resolucoes
     # tardias) sao buscados de novo em TODA sincronizacao; meses mais antigos que isso ja estao
     # encerrados e nao mudam mais, entao sao buscados so' uma vez e depois ficam em cache — o
-    # arquivo resolved_month_N.json (N>=2) e commitado no repo (ver .gitignore/workflow) e
-    # reaproveitado nas proximas execucoes, em vez de rebaixar tudo desde jan/2026 a cada 15min
-    # (foi o que travou a sincronizacao por quase 30min na primeira tentativa de historico completo).
+    # arquivo resolved_month_N.json (N>=2) e commitado no repo (ver .gitignore/workflow).
+    #
+    # So' faz o backfill de UM mes historico ainda sem cache por execucao (nao todos de uma vez):
+    # buscar os ~6-8 meses inteiros numa unica execucao levou quase 40 minutos e ainda assim varios
+    # meses vieram com uma fracao dos chamados reais (a API parece degradar/truncar silenciosamente
+    # — sem erro — depois de muitas requisicoes seguidas). Um mes por vez, com folego entre
+    # requisicoes, mantem cada execucao rapida e deixa o historico completar sozinho em alguns
+    # ciclos — e a checagem de sanidade evita congelar um mes com numero claramente errado.
     JAN_2026 = datetime(2026, 1, 1)
     meses_desde_jan2026 = (now_utc.year - JAN_2026.year) * 12 + (now_utc.month - JAN_2026.month) + 1
     MESES_SEMPRE_FRESCOS = 2
     resolved_months = {}
+    backfill_feito = False
     for offset in range(meses_desde_jan2026):
         path = os.path.join(BASE_DIR, f"resolved_month_{offset}.json")
-        if offset >= MESES_SEMPRE_FRESCOS and os.path.exists(path):
-            print(f"[info] mes offset={offset} ja em cache — reaproveitando resolved_month_{offset}.json", flush=True)
-            with open(path, encoding='utf-8-sig') as f:
-                data = json.load(f)
-        else:
+        if offset < MESES_SEMPRE_FRESCOS:
             target = add_months(now_utc, -offset)
             print(f"[info] buscando mes offset={offset} ({target.year}-{target.month:02d})...", flush=True)
             data = fetch_month(target.year, target.month)
             save(f"resolved_month_{offset}.json", data)
             print(f"[info] mes offset={offset}: {len(data)} chamados", flush=True)
+        elif os.path.exists(path):
+            with open(path, encoding='utf-8-sig') as f:
+                data = json.load(f)
+        elif not backfill_feito:
+            backfill_feito = True
+            target = add_months(now_utc, -offset)
+            print(f"[info] backfill: buscando mes historico offset={offset} ({target.year}-{target.month:02d})...", flush=True)
+            data = fetch_month(target.year, target.month)
+            if len(data) < MES_TOTAL_MINIMO_SANIDADE:
+                print(f"[aviso] mes offset={offset} voltou com so' {len(data)} chamados (< {MES_TOTAL_MINIMO_SANIDADE}) — "
+                      f"provavel resposta incompleta da API; NAO cacheando, tenta de novo no proximo ciclo", flush=True)
+                data = []
+            else:
+                save(f"resolved_month_{offset}.json", data)
+                print(f"[info] mes offset={offset}: {len(data)} chamados — cacheado", flush=True)
+        else:
+            data = []  # ainda sem cache e o backfill deste ciclo ja foi usado noutro mes
         resolved_months[offset] = data
 
     # 4. Acoes/notas dos chamados tecnicos (Bug/Melhoria/Servicos) resolvidos no mes corrente — usadas
