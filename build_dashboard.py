@@ -178,11 +178,18 @@ def clean_month_record(t, keep_status_histories):
         rec['statusHistories'] = clean_status_histories(t.get('statusHistories'))
     return rec
 
-# Carrega os 3 meses (0 = corrente, 1 = mes anterior, 2 = dois meses atras).
-# statusHistories so e mantido para o mes corrente (usado nas metricas de Bug da aba Historico).
+# Carrega todos os meses disponiveis desde janeiro/2026 (0 = corrente, 1 = mes anterior, etc.) —
+# a quantidade de arquivos resolved_month_N.json cresce automaticamente mes a mes (ver fetch_data.py).
+# statusHistories so e mantido para o mes corrente (usado nas metricas de Bug da aba Historico);
+# meses mais antigos ficam sem esse campo pra nao inflar demais o payload do dashboard.
+qtd_meses = 0
+while os.path.exists(os.path.join(BASE_DIR, f"resolved_month_{qtd_meses}.json")):
+    qtd_meses += 1
+qtd_meses = max(qtd_meses, 1)
+
 resolved_months_clean = {}
 month_labels = {}
-for offset in range(3):
+for offset in range(qtd_meses):
     path = os.path.join(BASE_DIR, f"resolved_month_{offset}.json")
     try:
         with open(path, encoding='utf-8-sig') as f:
@@ -632,7 +639,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
     </div>
     <div id="reuniaoMensalContent" style="display:none;">
       <div class="kpi-row" id="kpiReuniaoMensalMeta" style="grid-template-columns: repeat(1, 1fr);"></div>
-      <div class="kpi-row" id="kpiReuniaoMensalSla" style="grid-template-columns: repeat(3, 1fr); margin-top:-4px;"></div>
+      <div class="kpi-row" id="kpiReuniaoMensalSla" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-top:-4px;"></div>
       <div class="panel" style="margin-top: 18px;">
         <h2>📋 Chamados fechados por categoria (por mes)</h2>
         <div class="panel-sub">Ultimos 3 meses — time Suporte</div>
@@ -740,14 +747,19 @@ const ACTIONS_BY_ID = {actions_by_id_json};
 // Notas/acoes completas dos chamados candidatos a expurgo retroativo de SLA por indisponibilidade de
 // orgao governamental (resolvidos em 2026 e fora do prazo, ou ainda abertos) — ver fetch_data.py.
 const GOV_ACTIONS_BY_ID = {gov_actions_by_id_json};
-// Todos os 3 meses, ja restritos ao time de Suporte, sem chamados Cancelados, e sem chamados
-// reabertos INDEVIDAMENTE pelo Azure (reaberturas legitimas continuam contando normalmente).
-// Esse filtro fica aqui na origem dos dados porque TODAS as abas (Historico, Clientes, One-on-One,
-// Gamificacao, Reuniao Mensal) partem de RESOLVED_MONTHS — um unico lugar garante consistencia.
+// Todos os meses desde janeiro/2026 (offset 0 = corrente, crescendo mes a mes — ver fetch_data.py),
+// ja restritos ao time de Suporte, sem chamados Cancelados, e sem chamados reabertos INDEVIDAMENTE
+// pelo Azure (reaberturas legitimas continuam contando normalmente). Esse filtro fica aqui na
+// origem dos dados porque TODAS as abas (Historico, Clientes, One-on-One, Gamificacao, Reuniao
+// Mensal) partem de RESOLVED_MONTHS — um unico lugar garante consistencia.
 const RESOLVED_MONTHS = {{}};
 Object.keys(RESOLVED_MONTHS_RAW).forEach(k => {{
   RESOLVED_MONTHS[k] = RESOLVED_MONTHS_RAW[k].filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r));
 }});
+// Chaves dos 3 meses mais recentes (menor offset = mais recente) — usado so' pelas baselines de
+// meta "media dos ultimos 3 meses" (One-on-One/Gamificacao antigo), que devem continuar sendo
+// literalmente 3 meses mesmo com o historico completo (desde jan/2026) crescendo em RESOLVED_MONTHS.
+const ULTIMOS_3_KEYS = Object.keys(MONTH_LABELS).sort((a,b) => Number(a) - Number(b)).slice(0, 3);
 const NOW = new Date("{now_iso}Z");
 const TODAY_STR = NOW.toISOString().slice(0,10);
 
@@ -1328,19 +1340,21 @@ function reaberturaIndevidaAzure(r) {{
 // disponiveis em todos os meses (statusHistories so' fica no mes corrente, entao metricas
 // de ciclo de vida do Bug nao entram aqui).
 function statsForMonth(items) {{
-  const total = items.length;
-  const primeira = items.filter(isPrimeiraResposta).length;
+  // Desconsidera em TODOS os indicadores (nao so no SLA) os chamados reabertos INDEVIDAMENTE pela
+  // integracao do Azure (reaberto em menos de 60min apos ja estar Resolvido/Fechado, sem acao
+  // humana) — reaberturas legitimas (cliente/agente) continuam contando normalmente.
+  const validos = items.filter(r => !reaberturaIndevidaAzure(r));
+  const total = validos.length;
+  const primeira = validos.filter(isPrimeiraResposta).length;
   const pctPrimeira = total ? Math.round(primeira / total * 100) : 0;
-  // So exclui do SLA os chamados reabertos INDEVIDAMENTE (pela integracao do Azure, apos ja estarem
-  // Resolvido/Fechado) — reaberturas legitimas (cliente/agente) continuam contando normalmente.
-  const comSla = items.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r));
+  const comSla = validos.filter(r => r.slaSolutionDate && !aguardouOrgaoGovernamental(r));
   const noPrazo = comSla.filter(r => parseDt(r.resolvedIn) <= parseDt(r.slaSolutionDate)).length;
   const pctSla = comSla.length ? Math.round(noPrazo / comSla.length * 100) : 0;
-  const chats = items.filter(r => r.origin === 24).length;
-  const mttrH = avg(items.filter(r => r.createdDate && r.resolvedIn).map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000));
+  const chats = validos.filter(r => r.origin === 24).length;
+  const mttrH = avg(validos.filter(r => r.createdDate && r.resolvedIn).map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000));
   return {{ total, pctPrimeira, pctSla, chats, mttrH }};
 }}
-const statsPorMes3 = Object.keys(RESOLVED_MONTHS).map(k => ({{ key: k, ...statsForMonth(RESOLVED_MONTHS[k]) }}));
+const statsPorMes3 = ULTIMOS_3_KEYS.map(k => ({{ key: k, ...statsForMonth(RESOLVED_MONTHS[k]) }}));
 const media3Meses = {{
   total: Math.round(avg(statsPorMes3.map(s => s.total))),
   pctPrimeira: Math.round(avg(statsPorMes3.map(s => s.pctPrimeira))),
@@ -1625,7 +1639,7 @@ function mediaEquipe(periodoKey, tier) {{
 // Media (baseline) dos ultimos 3 meses de um tecnico especifico — usada tanto no One-on-One
 // quanto na Gamificacao para calcular a meta de 10% de melhoria.
 function indicadoresTecnico3Meses(tecnico) {{
-  const porMesRaw = Object.keys(RESOLVED_MONTHS).map(k => {{
+  const porMesRaw = ULTIMOS_3_KEYS.map(k => {{
     const items = (RESOLVED_MONTHS[k]||[]).filter(r => r.ownerName === tecnico);
     const ind = computeIndicadores(items);
     const pctPrimeira = items.length ? Math.round(items.filter(isPrimeiraResposta).length / items.length * 100) : null;
@@ -1715,7 +1729,7 @@ function mttrSemMelhoria(items) {{
   return avg(comTempo);
 }}
 const mttrMesAtual = mttrSemMelhoria(RESOLVED_MONTH);
-const mttrPorMes3 = Object.keys(MONTH_LABELS).map(k => ({{ key: k, label: MONTH_LABELS[k], mttrH: mttrSemMelhoria(RESOLVED_MONTHS[k]) }}));
+const mttrPorMes3 = ULTIMOS_3_KEYS.map(k => ({{ key: k, label: MONTH_LABELS[k], mttrH: mttrSemMelhoria(RESOLVED_MONTHS[k]) }}));
 const mttrMedia3Meses = avg(mttrPorMes3.filter(s => s.mttrH !== null).map(s => s.mttrH));
 const comparativoMttrSemMelhoria = mttrPorMes3.map(s => `${{s.label.split('/')[0].slice(0,3)}}: ${{s.mttrH !== null ? fmtH(s.mttrH) : '-'}}`).join(' · ');
 const metaMttr = metaMelhoria10(mttrMedia3Meses, true);
@@ -2034,7 +2048,7 @@ function renderHistoricoMes(clienteFiltro) {{
   function statsForMonthCliente(items) {{
     return statsForMonth(clienteFiltro ? items.filter(r => r.clientOrg === clienteFiltro) : items);
   }}
-  const statsPorMes3F = Object.keys(RESOLVED_MONTHS).map(k => ({{ key: k, ...statsForMonthCliente(RESOLVED_MONTHS[k]) }}));
+  const statsPorMes3F = ULTIMOS_3_KEYS.map(k => ({{ key: k, ...statsForMonthCliente(RESOLVED_MONTHS[k]) }}));
   const media3MesesF = {{
     total: Math.round(avg(statsPorMes3F.map(s => s.total))),
     pctPrimeira: Math.round(avg(statsPorMes3F.map(s => s.pctPrimeira))),
@@ -2058,7 +2072,7 @@ function renderHistoricoMes(clienteFiltro) {{
     return mttrSemMelhoria(filtrados);
   }}
   const mttrMesAtualF = mttrSemMelhoriaCliente(RESOLVED_MONTH);
-  const mttrPorMes3F = Object.keys(MONTH_LABELS).map(k => ({{ key: k, label: MONTH_LABELS[k], mttrH: mttrSemMelhoriaCliente(RESOLVED_MONTHS[k]) }}));
+  const mttrPorMes3F = ULTIMOS_3_KEYS.map(k => ({{ key: k, label: MONTH_LABELS[k], mttrH: mttrSemMelhoriaCliente(RESOLVED_MONTHS[k]) }}));
   const mttrMedia3MesesF = avg(mttrPorMes3F.filter(s => s.mttrH !== null).map(s => s.mttrH));
   const comparativoMttrSemMelhoriaF = mttrPorMes3F.map(s => `${{s.label.split('/')[0].slice(0,3)}}: ${{s.mttrH !== null ? fmtH(s.mttrH) : '-'}}`).join(' · ');
   const metaMttrF = metaMelhoria10(mttrMedia3MesesF, true);
@@ -2172,7 +2186,7 @@ function refreshClienteOptions() {{
 }}
 
 function indicadores3MesesCliente(cliente) {{
-  const porMes = Object.keys(RESOLVED_MONTHS).map(k => computeIndicadores((RESOLVED_MONTHS[k]||[]).filter(r => r.clientOrg === cliente)));
+  const porMes = ULTIMOS_3_KEYS.map(k => computeIndicadores((RESOLVED_MONTHS[k]||[]).filter(r => r.clientOrg === cliente)));
   return {{
     total: avg(porMes.map(i => i.total)),
     mttrH: avg(porMes.filter(i => i.mttrH !== null).map(i => i.mttrH)),
@@ -2561,7 +2575,7 @@ function initReuniaoMensal() {{
     const duvidas = porCategoria['Dúvida'] || 0;
     const pctDuvidas = total ? Math.round(duvidas / total * 100) : 0;
     const stats = statsForMonth(items);
-    return {{ mesKey: k, label: MONTH_LABELS[k], porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla }};
+    return {{ mesKey: k, label: MONTH_LABELS[k], porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla, mttrH: stats.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
   }});
 
   // KPIs de SLA mensal (um por mes, mais recente primeiro)
@@ -2593,7 +2607,7 @@ function initReuniaoMensal() {{
       'Meta de duvidas: reduzir 20% (baseline 61%)',
       `% duvidas atual no periodo: ${{pctDuvidasTotalKpi}}% · baseline: ${{META_DUVIDAS_BASELINE_PCT}}% · ${{metaBatida ? 'meta batida' : 'meta nao batida'}}`);
 
-  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + '<th>Outros</th><th>Total Fechados</th><th>% Duvidas</th><th>Reducao vs meta (baseline 61%)</th><th>% SLA no prazo</th>';
+  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + '<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs meta (baseline 61%)</th><th>% SLA no prazo</th>';
   const bodyRows = linhas.map(l => {{
     const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{l.porCategoria[c] || 0}}</td>`).join('');
     const corReducao = l.reducaoDuvidas >= META_DUVIDAS_REDUCAO_ALVO_PCT ? 'var(--ok)' : (l.reducaoDuvidas >= 0 ? 'var(--warn)' : 'var(--danger)');
@@ -2601,7 +2615,9 @@ function initReuniaoMensal() {{
       <td style="font-weight:600">${{esc(l.label)}}</td>
       ${{cols}}
       <td style="text-align:center">${{l.outros}}</td>
-      <td style="text-align:center; font-weight:700">${{l.total}}</td>
+      <td style="text-align:center; font-weight:700">${{l.atendidosSuporte}}</td>
+      <td style="text-align:center">${{l.mttrH !== null ? fmtH(l.mttrH) : '-'}}</td>
+      <td style="text-align:center">${{l.pctPrimeira}}%</td>
       <td style="text-align:center">${{l.pctDuvidas}}%</td>
       <td style="text-align:center; font-weight:700; color:${{corReducao}}">${{l.reducaoDuvidas > 0 ? '-' : (l.reducaoDuvidas < 0 ? '+' : '')}}${{Math.abs(l.reducaoDuvidas)}}%</td>
       <td style="text-align:center">${{l.pctSla !== null ? l.pctSla+'%' : '-'}}</td>
@@ -2615,6 +2631,8 @@ function initReuniaoMensal() {{
     ${{REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{totalGeral[c]}}</td>`).join('')}}
     <td style="text-align:center">${{totalGeralOutros}}</td>
     <td style="text-align:center">${{totalGeralFechados}}</td>
+    <td style="text-align:center">${{statsGeral.mttrH !== null ? fmtH(statsGeral.mttrH) : '-'}}</td>
+    <td style="text-align:center">${{statsGeral.pctPrimeira}}%</td>
     <td style="text-align:center">${{pctDuvidasTotal}}%</td>
     <td style="text-align:center; color:${{corReducaoTotal}}">${{reducaoTotal > 0 ? '-' : (reducaoTotal < 0 ? '+' : '')}}${{Math.abs(reducaoTotal)}}%</td>
     <td style="text-align:center">${{statsGeral.pctSla !== null ? statsGeral.pctSla+'%' : '-'}}</td>

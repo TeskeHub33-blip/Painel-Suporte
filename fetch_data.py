@@ -147,9 +147,13 @@ def main():
     })
     save("resolved_today.json", resolved_today)
 
-    # 3. Resolvidos nos ultimos 3 meses (sempre busca os 3 do zero — nao ha cache entre runs no GitHub Actions)
+    # 3. Resolvidos desde janeiro/2026 (sempre busca tudo do zero — nao ha cache entre runs no
+    # GitHub Actions). offset 0 = mes corrente, offset 1 = mes anterior, etc. — quantidade de meses
+    # cresce automaticamente conforme o tempo passa (nao fica travado em so' 3 meses).
+    JAN_2026 = datetime(2026, 1, 1)
+    meses_desde_jan2026 = (now_utc.year - JAN_2026.year) * 12 + (now_utc.month - JAN_2026.month) + 1
     resolved_months = {}
-    for offset in range(3):
+    for offset in range(meses_desde_jan2026):
         target = add_months(now_utc, -offset)
         data = fetch_month(target.year, target.month)
         resolved_months[offset] = data
