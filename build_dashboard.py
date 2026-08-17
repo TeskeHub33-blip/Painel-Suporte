@@ -100,6 +100,19 @@ def extract_org(clients_list):
                 return nome
     return 'Sem cliente'
 
+# Campo customizado "Motivo de Priorizacao" no Movidesk (customFieldId 248215) — lista suspensa
+# com o motivo pelo qual o chamado foi priorizado (ex.: "Whatsapp", "Carga parada (saida de
+# veiculo)"). Preenchido independente da tag "Priorizado" — alguns chamados tem so' a tag, outros
+# so' o campo, entao o painel considera priorizado se QUALQUER um dos dois estiver presente.
+MOTIVO_PRIORIZACAO_FIELD_ID = 248215
+def extract_motivo_priorizacao(custom_field_values):
+    for cf in (custom_field_values or []):
+        if cf.get('customFieldId') == MOTIVO_PRIORIZACAO_FIELD_ID:
+            items = cf.get('items') or []
+            if items:
+                return items[0].get('customFieldItem')
+    return None
+
 MESES_PT = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 def month_label(dt):
     return f"{MESES_PT[dt.month-1]}/{dt.year}"
@@ -135,6 +148,7 @@ for t in raw_tickets:
         'reopenedIn': t.get('reopenedIn'),
         'clientOrg': extract_org(t.get('clients')),
         'statusHistories': clean_status_histories(t.get('statusHistories')),
+        'motivoPriorizacao': extract_motivo_priorizacao(t.get('customFieldValues')),
     })
 
 clean_resolved = []
@@ -773,7 +787,10 @@ TICKETS.forEach(t => {{
   t._slaHoursLeft = t._sla ? (t._sla - NOW) / 3600000 : null;
   t._slaVencido = t._slaHoursLeft !== null && t._slaHoursLeft < 0;
   t._updatedToday = t._lastUpdate ? t._lastUpdate.toISOString().slice(0,10) === TODAY_STR : false;
-  t._isPriorizado = (t.tags || []).some(tg => (tg||'').toLowerCase().indexOf('priorizado') !== -1);
+  // Priorizado = tag 'Priorizado' OU o campo customizado "Motivo de Priorizacao" preenchido —
+  // alguns chamados so tem a tag, outros so o campo (ex.: motivo 'Carga parada (saida de
+  // veiculo)' sem a tag), entao qualquer um dos dois conta.
+  t._isPriorizado = (t.tags || []).some(tg => (tg||'').toLowerCase().indexOf('priorizado') !== -1) || !!t.motivoPriorizacao;
 }});
 
 // Alife e Vinicius sao os tecnicos do turno de contraturno
@@ -820,6 +837,10 @@ const FILTERS = {{
   novos: t => t.status === 'Novo',
   emAtendimento: t => t.status === 'Em atendimento',
   aguardandoCliente: t => t.status === 'Aguardando Cliente',
+  // KPIs do topo trocaram de "status atual" pra "urgencia de SLA": vence em 1h (ainda nao vencido,
+  // mas faltam <=60min) e vence hoje (data-limite do SLA cai no dia de hoje, vencido ou nao).
+  venceEm1Hora: t => t._slaHoursLeft !== null && t._slaHoursLeft > 0 && t._slaHoursLeft <= 1,
+  venceHoje: t => t._sla !== null && t._sla.toISOString().slice(0,10) === TODAY_STR,
   bouncing: t => t.ownerTeam === 'Suporte' && t.status === 'Em atendimento' && t._hoursSinceUpdate !== null && t._hoursSinceUpdate >= 48,
   priorizados: t => t.ownerTeam === 'Suporte' && t._isPriorizado
     && !isDevQueueStatus(t.status) && t.status !== 'Aguardando Cliente' && t.status !== 'Em atendimento - CS',
@@ -892,6 +913,26 @@ function barsHtml(aggEntries, filterName, maxRows) {{
     </div>`).join('');
 }}
 
+// Agrupa chamados priorizados pelo motivo (campo customizado "Motivo de Priorizacao" — ex.:
+// 'Whatsapp', 'Carga parada (saida de veiculo)'); chamados so com a tag e sem o campo caem em
+// 'Sem motivo informado'.
+function porMotivoPriorizacaoHtml(items) {{
+  const agg = {{}};
+  items.forEach(t => {{
+    const motivo = t.motivoPriorizacao || 'Sem motivo informado';
+    (agg[motivo] = agg[motivo] || []).push(t);
+  }});
+  const entries = Object.entries(agg).sort((a,b) => b[1].length - a[1].length);
+  if (!entries.length) return '<div class="empty-msg">Nenhum chamado priorizado agora</div>';
+  const top = Math.max(...entries.map(e => e[1].length));
+  return entries.map(([motivo, lista]) => `
+    <div class="bar-row" onclick="renderModal(${{jsStr(motivo + ' — priorizados')}}, TICKETS.filter(t=>(t.motivoPriorizacao||'Sem motivo informado')===${{jsStr(motivo)}} && t._isPriorizado), 'open')">
+      <div class="bar-label">${{esc(motivo)}}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${{(lista.length/top*100).toFixed(0)}}%"></div></div>
+      <div class="bar-value">${{lista.length}}</div>
+    </div>`).join('');
+}}
+
 function ticketLink(id, protocol) {{
   return `<a href="${{MOVIDESK_BASE}}${{id}}" target="_blank" rel="noopener" class="ticket-link">${{esc(protocol)}}</a>`;
 }}
@@ -949,6 +990,8 @@ const LABELS = {{
   novos: 'Chamados novos',
   emAtendimento: 'Em atendimento',
   aguardandoCliente: 'Aguardando cliente',
+  venceEm1Hora: 'Vencem em 1 hora',
+  venceHoje: 'Vencem hoje',
   bouncing: 'Aging — Em atendimento parado ha mais de 2 dias',
   priorizados: 'Priorizados (WhatsApp)',
   naoAtualizadosHoje: 'Nao atualizados hoje',
@@ -1658,6 +1701,8 @@ function indicadoresTecnico3Meses(tecnico) {{
 const novos = apply('novos');
 const emAtendimento = apply('emAtendimento');
 const aguardandoCliente = apply('aguardandoCliente');
+const venceEm1Hora = apply('venceEm1Hora');
+const venceHoje = apply('venceHoje');
 const bouncing = apply('bouncing');
 const priorizados = apply('priorizados');
 const naoAtualizadosHoje = apply('naoAtualizadosHoje');
@@ -1676,8 +1721,8 @@ function corPorFaixa(valor, okAte, warnAte) {{
 
 document.getElementById('kpiRow').innerHTML =
   kpiTile('neutral', novos.length, 'Novos (aguard. atend.)', 'novos') +
-  kpiTile(corPorFaixa(emAtendimento.length, 19, 50), emAtendimento.length, 'Em atendimento', 'emAtendimento') +
-  kpiTile(corPorFaixa(aguardandoCliente.length, 19, 50), aguardandoCliente.length, 'Aguardando cliente', 'aguardandoCliente') +
+  kpiTile(corPorFaixa(venceEm1Hora.length, 0, 5), venceEm1Hora.length, 'Vencem em 1 hora', 'venceEm1Hora') +
+  kpiTile(corPorFaixa(venceHoje.length, 5, 20), venceHoje.length, 'Vencem hoje', 'venceHoje') +
   kpiTile(corPorFaixa(bouncing.length, 0, 10), bouncing.length, 'Aging (Em atend. &gt;2 dias)', 'bouncing');
 
 // Tempo medio de resolucao: priorizados vs nao-priorizados (chamados resolvidos no mes, time Suporte)
@@ -1785,9 +1830,15 @@ document.getElementById('gridTop').innerHTML = `
     <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Aberto ha</th></tr></thead>
       <tbody>${{tableHtml(contraturno, 'open', 10)}}</tbody></table>
   </div>
+  <div class="panel">
+    <h2>📌 Priorizados por motivo${{exportButtonHtml("exportLiveList(priorizados, 'priorizados_por_motivo.txt')")}}</h2>
+    <div class="panel-sub">${{priorizados.length}} chamados priorizados (tag 'Priorizado' ou campo Motivo de Priorizacao preenchido) — clique num motivo para ver a lista</div>
+    <div id="barsPriorizados"></div>
+  </div>
 `;
 document.getElementById('barsEmAtendimento').innerHTML = barsHtml(byTecnico(emAtendimento), 'emAtendimento');
 document.getElementById('barsNaoAtualizados').innerHTML = barsHtml(byTecnico(naoAtualizadosHoje), 'naoAtualizadosHoje');
+document.getElementById('barsPriorizados').innerHTML = porMotivoPriorizacaoHtml(priorizados);
 
 document.getElementById('gridBottom').innerHTML = `
   <div class="panel">

@@ -145,9 +145,14 @@ def main():
     # silenciosamente os chamados abertos mais recentes assim que o backlog passa desse numero
     # (foi o que aconteceu: com $top=500 e ~744 chamados abertos, os ~244 mais novos sumiam do
     # painel inteiro, nao so' da busca do Fluxograma).
+    # customFieldValues($select=customFieldId,items) traz o campo customizado "Motivo de
+    # Priorizacao" (customFieldId 248215) usado pra detalhar o motivo do chamado ter sido
+    # priorizado (ex.: "Whatsapp", "Carga parada (saida de veiculo)", etc.) — igual ao padrao ja
+    # usado pra actions/statusHistories, e' uma colecao relacionada, entao precisa de $expand (nao
+    # $select simples).
     open_tickets_base_params = {
         "$select": "id,protocol,subject,category,urgency,status,ownerTeam,createdDate,lastUpdate,tags,slaSolutionDate,reopenedIn,origin",
-        "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1)",
+        "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1),customFieldValues($select=customFieldId,items)",
         "$filter": "status ne 'Fechado' and status ne 'Cancelado' and status ne 'Resolvido'",
     }
     open_tickets = []
