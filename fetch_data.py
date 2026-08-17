@@ -152,7 +152,7 @@ def main():
     # $select simples).
     open_tickets_base_params = {
         "$select": "id,protocol,subject,category,urgency,status,ownerTeam,createdDate,lastUpdate,tags,slaSolutionDate,reopenedIn,origin",
-        "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1),customFieldValues($select=customFieldId,items)",
+        "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1),customFieldValues",
         "$filter": "status ne 'Fechado' and status ne 'Cancelado' and status ne 'Resolvido'",
     }
     open_tickets = []
