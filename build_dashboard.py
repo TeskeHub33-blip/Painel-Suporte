@@ -775,7 +775,11 @@ Object.keys(RESOLVED_MONTHS_RAW).forEach(k => {{
 // literalmente 3 meses mesmo com o historico completo (desde jan/2026) crescendo em RESOLVED_MONTHS.
 const ULTIMOS_3_KEYS = Object.keys(MONTH_LABELS).sort((a,b) => Number(a) - Number(b)).slice(0, 3);
 const NOW = new Date("{now_iso}Z");
-const TODAY_STR = NOW.toISOString().slice(0,10);
+// Timestamps do Movidesk vem em UTC, mas o time trabalha no horario de Brasilia (UTC-3) — "hoje"
+// precisa ser o dia de calendario em Brasilia, senao chamados com vencimento tarde da noite (ex.:
+// 22h-23h59 Brasilia = 01h-02h59 UTC do dia seguinte) ficam incorretamente marcados como "amanha".
+function brasiliaDateStr(d) {{ return new Date(d.getTime() - 3*3600000).toISOString().slice(0,10); }}
+const TODAY_STR = brasiliaDateStr(NOW);
 
 function parseDt(s) {{ return s ? new Date(s.split('.')[0] + 'Z') : null; }}
 TICKETS.forEach(t => {{
@@ -786,7 +790,7 @@ TICKETS.forEach(t => {{
   t._hoursSinceUpdate = t._lastUpdate ? (NOW - t._lastUpdate) / 3600000 : null;
   t._slaHoursLeft = t._sla ? (t._sla - NOW) / 3600000 : null;
   t._slaVencido = t._slaHoursLeft !== null && t._slaHoursLeft < 0;
-  t._updatedToday = t._lastUpdate ? t._lastUpdate.toISOString().slice(0,10) === TODAY_STR : false;
+  t._updatedToday = t._lastUpdate ? brasiliaDateStr(t._lastUpdate) === TODAY_STR : false;
   // Priorizado = tag 'Priorizado' OU o campo customizado "Motivo de Priorizacao" preenchido —
   // alguns chamados so tem a tag, outros so o campo (ex.: motivo 'Carga parada (saida de
   // veiculo)' sem a tag), entao qualquer um dos dois conta.
@@ -842,7 +846,7 @@ const FILTERS = {{
   // KPIs do topo trocaram de "status atual" pra "urgencia de SLA": vence em 1h (ainda nao vencido,
   // mas faltam <=60min) e vence hoje (data-limite do SLA cai no dia de hoje, vencido ou nao).
   venceEm1Hora: t => t._slaHoursLeft !== null && t._slaHoursLeft > 0 && t._slaHoursLeft <= 1,
-  venceHoje: t => t._sla !== null && t._sla.toISOString().slice(0,10) === TODAY_STR,
+  venceHoje: t => t._sla !== null && brasiliaDateStr(t._sla) === TODAY_STR,
   bouncing: t => t.ownerTeam === 'Suporte' && t.status === 'Em atendimento' && t._hoursSinceUpdate !== null && t._hoursSinceUpdate >= 48,
   priorizados: t => t.ownerTeam === 'Suporte' && t._isPriorizado
     && !isDevQueueStatus(t.status) && t.status !== 'Aguardando Cliente' && t.status !== 'Em atendimento - CS',
