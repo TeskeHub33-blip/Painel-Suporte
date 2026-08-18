@@ -2596,17 +2596,17 @@ if (sessionStorage.getItem('reuniaoMensalUnlocked') === '1') {{
 }}
 
 const REUNIAO_MENSAL_CATEGORIAS = ['Bloqueio Sistema', 'Bug', 'Dúvida', 'Melhoria', 'Erro Operacional', 'Terceiros', 'Serviços', 'GNRE Pagamento'];
-// Meta de duvidas: baseline historico de 61% (media de ~7 meses, 3535 chamados de duvida) — a meta
-// e reduzir 20% desse percentual (nao 20 pontos percentuais, e sim 20% de reducao relativa ao baseline).
-// Meta de duvidas: baseline historico de 61% (media do ano passado); a meta e' reduzir 20 PONTOS
-// percentuais (nao 20% relativo) — ou seja, no maximo 41% dos chamados do mes sendo Duvida.
+// Meta de duvidas: baseline historico de 61% (media de ~7 meses, 3535 chamados de duvida). A meta
+// de reducao de 20% e' RELATIVA ao baseline (nao 20 pontos percentuais absolutos) — formula
+// conferida numero a numero com a planilha de referencia: reducao% = (61 - %Duvidas_do_mes) / 61
+// * 100. Ex.: mes com 45% de duvidas -> (61-45)/61*100 = 26% de reducao.
+// O acompanhamento da meta ao longo do ano e' pela MEDIA da reducao% de todos os meses fechados
+// ate agora (nao o mes mais recente isolado, nem a soma bruta) — bate a meta quando essa media
+// for >= 20%.
 const META_DUVIDAS_BASELINE_PCT = 61;
 const META_DUVIDAS_REDUCAO_ALVO_PCT = 20;
-const META_DUVIDAS_ALVO_PCT = META_DUVIDAS_BASELINE_PCT - META_DUVIDAS_REDUCAO_ALVO_PCT;
-// Retorna quantos PONTOS percentuais o % atual de duvidas esta abaixo (positivo) ou acima
-// (negativo) do baseline de 61% — bate a meta quando esse valor for >= 20 (ou seja, atual <= 41%).
 function reducaoDuvidas(pctAtual) {{
-  return Math.round(META_DUVIDAS_BASELINE_PCT - pctAtual);
+  return Math.round((META_DUVIDAS_BASELINE_PCT - pctAtual) / META_DUVIDAS_BASELINE_PCT * 100);
 }}
 let reuniaoMensalInited = false;
 function initReuniaoMensal() {{
@@ -2653,17 +2653,19 @@ function initReuniaoMensal() {{
   }});
   const statsGeral = statsForMonth(todosItensPeriodo);
 
-  // Meta de duvidas: baseline 61% (media do ano passado), meta = no maximo 41% (61 - 20 pontos)
+  // Meta de duvidas: progresso do ano = MEDIA da reducao% de cada mes fechado ate agora (nao o
+  // mes mais recente isolado, nem a reducao calculada sobre o total bruto do periodo) — bate a
+  // meta quando essa media atinge 20%.
   const pctDuvidasTotalKpi = totalGeralFechados ? Math.round((totalGeral['Dúvida']||0)/totalGeralFechados*100) : 0;
-  const reducaoTotalKpi = reducaoDuvidas(pctDuvidasTotalKpi);
-  const metaBatida = pctDuvidasTotalKpi <= META_DUVIDAS_ALVO_PCT;
+  const mediaReducaoAno = linhas.length ? Math.round(avg(linhas.map(l => l.reducaoDuvidas))) : 0;
+  const metaBatida = mediaReducaoAno >= META_DUVIDAS_REDUCAO_ALVO_PCT;
   document.getElementById('kpiReuniaoMensalMeta').innerHTML =
-    kpiTileStatic(metaBatida ? 'ok' : (reducaoTotalKpi >= 0 ? 'warn' : 'danger'),
-      `${{pctDuvidasTotalKpi}}%`,
-      `Meta de duvidas: no maximo ${{META_DUVIDAS_ALVO_PCT}}% (baseline ${{META_DUVIDAS_BASELINE_PCT}}% - ${{META_DUVIDAS_REDUCAO_ALVO_PCT}}pp)`,
-      `${{reducaoTotalKpi > 0 ? reducaoTotalKpi + 'pp abaixo' : (reducaoTotalKpi < 0 ? Math.abs(reducaoTotalKpi) + 'pp acima' : 'igual')}} do baseline de ${{META_DUVIDAS_BASELINE_PCT}}% · ${{metaBatida ? 'meta batida' : 'meta nao batida'}}`);
+    kpiTileStatic(metaBatida ? 'ok' : (mediaReducaoAno >= 0 ? 'warn' : 'danger'),
+      `${{mediaReducaoAno}}%`,
+      `Meta de duvidas: reduzir 20% (baseline ${{META_DUVIDAS_BASELINE_PCT}}%) — media do ano`,
+      `media da reducao% de ${{linhas.length}} mes(es) fechado(s) · ${{metaBatida ? 'meta batida' : `faltam ${{META_DUVIDAS_REDUCAO_ALVO_PCT - mediaReducaoAno}}pp na media`}}`);
 
-  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Meta duvidas (max ${{META_DUVIDAS_ALVO_PCT}}%)</th><th>% SLA no prazo</th>`;
+  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs meta (baseline ${{META_DUVIDAS_BASELINE_PCT}}%)</th><th>% SLA no prazo</th>`;
   const bodyRows = linhas.map(l => {{
     const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{l.porCategoria[c] || 0}}</td>`).join('');
     const corReducao = l.reducaoDuvidas >= META_DUVIDAS_REDUCAO_ALVO_PCT ? 'var(--ok)' : (l.reducaoDuvidas >= 0 ? 'var(--warn)' : 'var(--danger)');
@@ -2680,17 +2682,16 @@ function initReuniaoMensal() {{
     </tr>`;
   }}).join('');
   const pctDuvidasTotal = pctDuvidasTotalKpi;
-  const reducaoTotal = reducaoTotalKpi;
-  const corReducaoTotal = reducaoTotal >= META_DUVIDAS_REDUCAO_ALVO_PCT ? 'var(--ok)' : (reducaoTotal >= 0 ? 'var(--warn)' : 'var(--danger)');
+  const corReducaoTotal = mediaReducaoAno >= META_DUVIDAS_REDUCAO_ALVO_PCT ? 'var(--ok)' : (mediaReducaoAno >= 0 ? 'var(--warn)' : 'var(--danger)');
   const totalRow = `<tr style="border-top:2px solid var(--panel-border); font-weight:700;">
-    <td>Total</td>
+    <td>Media do ano</td>
     ${{REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{totalGeral[c]}}</td>`).join('')}}
     <td style="text-align:center">${{totalGeralOutros}}</td>
     <td style="text-align:center">${{totalGeralFechados}}</td>
     <td style="text-align:center">${{statsGeral.mttrH !== null ? fmtH(statsGeral.mttrH) : '-'}}</td>
     <td style="text-align:center">${{statsGeral.pctPrimeira}}%</td>
     <td style="text-align:center">${{pctDuvidasTotal}}%</td>
-    <td style="text-align:center; color:${{corReducaoTotal}}">${{reducaoTotal >= META_DUVIDAS_REDUCAO_ALVO_PCT ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - reducaoTotal}}pp faltando`}}</td>
+    <td style="text-align:center; color:${{corReducaoTotal}}">${{mediaReducaoAno}}% (media) — ${{metaBatida ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - mediaReducaoAno}}pp faltando`}}</td>
     <td style="text-align:center">${{statsGeral.pctSla !== null ? statsGeral.pctSla+'%' : '-'}}</td>
   </tr>`;
 
