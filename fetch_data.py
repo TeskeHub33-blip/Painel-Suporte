@@ -92,19 +92,28 @@ def month_window(year, month):
 def fetch_paginated(base_params, page_size=500, deadline_s=25):
     """Busca TODAS as paginas de um filtro, com $skip — um $top fixo sem paginacao (usado antes
     pra meses resolvidos) pode voltar incompleto silenciosamente (ex.: por rate-limit da API
-    devolvendo menos itens sem erro), e como nao ha como distinguir isso de 'a pagina realmente
-    acabou', o jeito seguro e' sempre paginar em blocos menores e so parar quando uma pagina
-    completa vier menor que o $top. Usa fetch_page_resilient (com bisecao) pra tambem sobreviver
-    a erros 500 pontuais numa pagina especifica. deadline_s baixo (bem menor que o usado pros
-    chamados abertos) pra nao deixar um mes com problema comer o tempo de todos os outros."""
+    devolvendo menos itens sem erro). Confirmado que a API pode devolver MENOS itens que o $top
+    pedido mesmo sem ter chegado ao fim de verdade (ex.: abril/2026 sempre voltava exatamente 89
+    chamados criados no mes, mesmo pedindo $top=500 ou $top=5000 — a API aplica um teto proprio,
+    bem menor, pra essa consulta pesada com $expand=statusHistories). Por isso NAO da pra usar
+    'pagina veio menor que o $top' como sinal de fim — so' avanca $skip pela quantidade REAL
+    recebida, e so para quando uma pagina de verdade vier vazia. Usa fetch_page_resilient (com
+    bisecao) pra tambem sobreviver a erros 500 pontuais numa pagina especifica. deadline_s baixo
+    (bem menor que o usado pros chamados abertos) pra nao deixar um mes com problema comer o tempo
+    de todos os outros."""
     items = []
     skip = 0
     while skip < 50000:
         page, completo = fetch_page_resilient(base_params, skip, page_size, time.time() + deadline_s)
         items += page
-        if completo and len(page) < page_size:
+        if not completo:
+            # pagina incompleta (erro/tempo esgotado) nao pode ser confundida com "acabou" — avanca
+            # pelo tamanho pedido mesmo sem saber quanto realmente existia ali, pra nao travar.
+            skip += page_size
+            continue
+        if not page:
             break
-        skip += page_size
+        skip += len(page)
     return items
 
 
@@ -196,9 +205,13 @@ def main():
             # painel inteiro em silencio, como aconteceu antes. Continua avancando mesmo assim.
             paginas_incompletas += 1
             print(f"[aviso] pagina em $skip={skip} ficou incompleta — seguindo para a proxima mesmo assim", flush=True)
-        elif len(page) < page_size:
+            skip += page_size
+            continue
+        if not page:
             break
-        skip += page_size
+        # Igual ao fetch_paginated: uma pagina menor que $top NAO significa fim de verdade — a API
+        # pode aplicar um teto proprio menor que o pedido. So avanca pelo tamanho REAL recebido.
+        skip += len(page)
     if paginas_incompletas:
         print(f"[aviso] total de paginas incompletas nesta sincronizacao: {paginas_incompletas}", flush=True)
     save("tickets_full.json", open_tickets)

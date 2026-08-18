@@ -611,6 +611,12 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
       <div class="kpi-row" id="kpiOneOnOneN2" style="grid-template-columns: repeat(3, 1fr); margin-top:-4px;"></div>
 
       <div class="panel" style="margin-top:18px;">
+        <h2>📈 Evolucao mensal — <span id="oneOnOneEvolNome"></span></h2>
+        <div class="panel-sub">Chamados resolvidos pelo tecnico em cada mes desde jan/2026 (contagem pela 1a resolucao, independente do mes de abertura do chamado) — mesma logica usada na Reuniao Mensal.</div>
+        <div id="oneOnOneEvolWrap" style="overflow-x:auto; margin-top:10px;"></div>
+      </div>
+
+      <div class="panel" style="margin-top:18px;">
         <h2>🎯 Apuracao de Metas — <span id="metasNivelBadge"></span></h2>
         <div class="panel-sub">Modelo oficial de metas por nivel (Tecnica 70% + Comportamental 20% + Visao do Gestor 10%). Clique numa celula do mes pra lancar o % de atingimento (0–120%) e justificar — fica salvo neste navegador. Nao inclui a parte salarial/reajuste, so a apuracao e a nota.</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin: 10px 0 14px;">
@@ -1685,6 +1691,30 @@ function mediaEquipe(periodoKey, tier) {{
   }};
 }}
 
+// Evolucao mensal de UM tecnico desde jan/2026 — usa RESOLVED_MONTHS (todos os meses ja
+// buscados/derivados, um por um a medida que o backfill historico completa), nao apenas os
+// ultimos 3 (ver ULTIMOS_3_KEYS acima, que e' so' pra baseline de meta).
+function oneOnOneEvolucaoHtml(tecnico) {{
+  const keys = Object.keys(MONTH_LABELS).sort((a,b) => Number(a) - Number(b));
+  const linhas = keys.map(k => {{
+    const items = (RESOLVED_MONTHS[k] || []).filter(r => r.ownerName === tecnico);
+    const ind = computeIndicadores(items);
+    const pctPrimeira = items.length ? Math.round(items.filter(isPrimeiraResposta).length / items.length * 100) : null;
+    return {{ key: k, label: MONTH_LABELS[k], ...ind, pctPrimeira }};
+  }});
+  if (!linhas.some(l => l.total > 0)) {{
+    return '<div class="empty-msg">Sem chamados resolvidos pelo tecnico no periodo (historico ainda sendo completado, ou tecnico novo no time)</div>';
+  }}
+  const rows = linhas.slice().reverse().map(l => `<tr>
+    <td>${{esc(l.label)}}</td>
+    <td>${{l.total}}</td>
+    <td>${{l.pctPrimeira !== null ? l.pctPrimeira+'%' : '-'}}</td>
+    <td>${{l.pctSla !== null ? l.pctSla+'%' : '-'}}</td>
+    <td>${{l.mttrH !== null ? fmtH(l.mttrH) : '-'}}</td>
+  </tr>`).join('');
+  return `<table><thead><tr><th>Mes</th><th>Resolvidos</th><th>1a resposta</th><th>SLA no prazo</th><th>MTTR</th></tr></thead><tbody>${{rows}}</tbody></table>`;
+}}
+
 // Media (baseline) dos ultimos 3 meses de um tecnico especifico — usada tanto no One-on-One
 // quanto na Gamificacao para calcular a meta de 10% de melhoria.
 function indicadoresTecnico3Meses(tecnico) {{
@@ -2372,6 +2402,9 @@ function initOneOnOne() {{
     badge.textContent = tier;
     badge.style.background = tier === 'N2' ? 'var(--pink)' : 'var(--ok)';
     badge.style.color = '#fff';
+
+    document.getElementById('oneOnOneEvolNome').textContent = tecnico || '-';
+    document.getElementById('oneOnOneEvolWrap').innerHTML = tecnico ? oneOnOneEvolucaoHtml(tecnico) : '';
 
     document.getElementById('kpiOneOnOne').innerHTML =
       kpiTileStatic('neutral', ind.total, 'Chamados resolvidos', `${{MONTH_LABELS[periodoKey]}} · media time ${{tier}}: ${{equipe.total !== null ? Math.round(equipe.total) : '-'}} (${{equipe.qtdTecnicos}} tec.) · ultimos 3m: ${{m3.comparativoTotal}}`) +
