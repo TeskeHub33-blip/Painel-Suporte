@@ -796,7 +796,9 @@ TICKETS.forEach(t => {{
 // Alife e Vinicius sao os tecnicos do turno de contraturno
 const CONTRATURNO_TECNICOS = ['Alife Caetano dos Santos', 'Vinicius Campestrini'];
 
-// "Carga parada": carga travada, ou problema na emissao de CIOT/MDFe/CTe
+// "Carga parada": carga travada, ou problema na emissao de CIOT/MDFe/CTe — verifica no assunto,
+// na descricao E no campo customizado "Motivo de Priorizacao" (um dos exemplos dados no proprio
+// campo no Movidesk e' literalmente "carga parada").
 const CARGA_PARADA_RE = /carga\s*(trava|parad)|travad|\bciot\b|\bmdf[-\s]?e\b|\bct[-\s]?e\b/i;
 
 // Classificacao incorreta: Melhoria, Bug e (alguns) Servicos legitimamente tem task associada
@@ -846,7 +848,7 @@ const FILTERS = {{
     && !isDevQueueStatus(t.status) && t.status !== 'Aguardando Cliente' && t.status !== 'Em atendimento - CS',
   contraturno: t => t.status === 'Em atendimento' && CONTRATURNO_TECNICOS.indexOf(t.ownerName) !== -1,
   naoAtualizadosHoje: t => (t.status === 'Em atendimento' || t.status === 'Aguardando Cliente') && !t._updatedToday,
-  cargaParada: t => t.status === 'Em atendimento' && (CARGA_PARADA_RE.test(t.subject || '') || CARGA_PARADA_RE.test(t.description || '')),
+  cargaParada: t => t.status === 'Em atendimento' && (CARGA_PARADA_RE.test(t.subject || '') || CARGA_PARADA_RE.test(t.description || '') || CARGA_PARADA_RE.test(t.motivoPriorizacao || '')),
   classificacaoIncorreta: t => t._classificacaoIncorreta,
   chatsEmAtendimento: t => t.status === 'Em atendimento' && (t.origin === 24 || !!t.chatGroup),
   chatsAguardando: t => t.status === 'Novo' && (t.origin === 24 || !!t.chatGroup),
