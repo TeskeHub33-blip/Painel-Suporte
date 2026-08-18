@@ -39,6 +39,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add index.html
-          git add resolved_month_*.json 2>/dev/null || true
+          git add created_raw_*.json 2>/dev/null || true
           git diff --staged --quiet || git commit -m "Atualizacao automatica $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           git push

@@ -5,11 +5,13 @@
 *.lock
 !index.html
 !ref_assets/logo_b64.txt
-# resolved_month_N.json (N>=2) sao meses ja encerrados/imutaveis — comitados como cache pra nao
-# precisar rebaixar o historico desde jan/2026 inteiro em toda sincronizacao (ver fetch_data.py).
-# offsets 0/1 (mes corrente + anterior) continuam ignorados — sao buscados de novo sempre.
-!resolved_month_*.json
-resolved_month_0.json
-resolved_month_0_actions.json
-resolved_month_1.json
+# created_raw_N.json (N>=2) sao chamados agrupados por MES DE CRIACAO ja buscados uma vez —
+# createdDate nunca muda, entao esse cache nunca fica desatualizado nesse sentido. Comitado pra
+# nao precisar rebaixar o historico desde jan/2026 inteiro em toda sincronizacao (fetch_data.py
+# deriva resolved_month_N.json a partir destes, recalculado do zero a cada execucao — por isso
+# resolved_month_*.json NAO precisa ser comitado, so os created_raw_*.json). offsets 0/1 (mes de
+# criacao corrente + anterior) continuam ignorados — sao buscados de novo sempre.
+!created_raw_*.json
+created_raw_0.json
+created_raw_1.json
 dashboard_suporte.html

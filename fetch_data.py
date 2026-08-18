@@ -108,14 +108,18 @@ def fetch_paginated(base_params, page_size=500, deadline_s=25):
     return items
 
 
-def fetch_month(year, month):
+def fetch_created_month(year, month):
+    """Busca TODOS os chamados CRIADOS num mes (qualquer status), com historico de status
+    completo. Diferente de filtrar por resolvedIn (ver comentario grande abaixo sobre o porque),
+    createdDate e' um campo estavel — uma vez criado, nunca muda — entao essa busca nao sofre
+    o mesmo problema de 'encolher' com o tempo."""
     start, mid, end = month_window(year, month)
 
     def fetch_window(a, b):
         return fetch_paginated({
             "$select": MONTH_SELECT,
             "$expand": MONTH_EXPAND,
-            "$filter": f"resolvedIn ge {a.strftime('%Y-%m-%d')}T00:00:00Z and resolvedIn lt {b.strftime('%Y-%m-%d')}T00:00:00Z",
+            "$filter": f"createdDate ge {a.strftime('%Y-%m-%d')}T00:00:00Z and createdDate lt {b.strftime('%Y-%m-%d')}T00:00:00Z",
         })
 
     result = fetch_window(start, mid) + fetch_window(mid, end)
@@ -124,14 +128,38 @@ def fetch_month(year, month):
     return result
 
 
-# Chamados resolvidos/mes historicamente sempre passam de umas poucas centenas — se um mes voltar
+def first_resolution_month(ticket):
+    """Mes (ano, mes) em que o chamado foi resolvido/fechado PELA PRIMEIRA VEZ, usando o
+    historico de status — nao o campo resolvedIn atual do chamado.
+
+    Por que nao usar resolvedIn direto: esse campo reflete a resolucao MAIS RECENTE, nao a
+    primeira. Um chamado criado e resolvido em abril, mas REABERTO (pela integracao do Azure ou
+    por um agente) e resolvido de novo em julho, passa a ter resolvedIn apontando pra julho — ele
+    simplesmente desaparece da contagem de abril, mesmo tendo sido resolvido la' originalmente.
+    Confirmado isso investigando abril/2026: dezenas de chamados criados naquele mes e resolvidos
+    na epoca foram reabertos meses depois, fazendo o filtro `resolvedIn em abril` da API devolver
+    so' uma fracao (15 de ~1100+) dos chamados que realmente foram resolvidos pela 1a vez em
+    abril. Por isso a busca agora e' por MES DE CRIACAO (campo estavel, nunca muda) e este
+    calculo deriva o mes da 1a resolucao a partir do historico de status de cada chamado."""
+    hist = ticket.get('statusHistories') or []
+    resolvidos = sorted(
+        (h for h in hist if h.get('status') in ('Resolvido', 'Fechado') and h.get('changedDate')),
+        key=lambda h: h['changedDate'],
+    )
+    if resolvidos:
+        dt_str = resolvidos[0]['changedDate']
+    elif ticket.get('resolvedIn'):
+        dt_str = ticket['resolvedIn']  # fallback se por algum motivo nao ha statusHistories
+    else:
+        return None
+    dt = datetime.fromisoformat(dt_str.split('.')[0])
+    return dt.year, dt.month
+
+
+# Chamados criados/mes historicamente sempre passam de umas poucas centenas — se um mes voltar
 # bem abaixo disso e' sinal de que a API devolveu uma resposta 200 incompleta (sem lancar erro,
-# entao nem a bisecao nem os retries do fetch() percebem). Confirmado com os numeros reais do
-# time: Jan/2026=970, Fev=921, Mar=1085, Abr=1142, Mai=1148, Jun=1635 — o piso fica um pouco
-# abaixo do mais baixo desses (921) pra pegar tanto truncamentos extremos (ex.: 15 chamados)
-# quanto truncamentos parciais (ex.: um mes voltando com so' 30-60% do volume real). Um mes
-# suspeito NAO e salvo/cacheado — fica pra tentar de novo no proximo ciclo, em vez de congelar um
-# numero errado pra sempre.
+# entao nem a bisecao nem os retries do fetch() percebem). Um mes suspeito NAO e salvo/cacheado —
+# fica pra tentar de novo no proximo ciclo, em vez de congelar um numero errado pra sempre.
 MES_TOTAL_MINIMO_SANIDADE = 700
 
 
@@ -184,50 +212,74 @@ def main():
     })
     save("resolved_today.json", resolved_today)
 
-    # 3. Resolvidos desde janeiro/2026. offset 0 = mes corrente, offset 1 = mes anterior, etc. —
-    # quantidade de meses cresce automaticamente conforme o tempo passa (nao fica travado em so' 3
-    # meses). Os offsets 0 e 1 (mes corrente + anterior, que ainda podem receber resolucoes
-    # tardias) sao buscados de novo em TODA sincronizacao; meses mais antigos que isso ja estao
-    # encerrados e nao mudam mais, entao sao buscados so' uma vez e depois ficam em cache — o
-    # arquivo resolved_month_N.json (N>=2) e commitado no repo (ver .gitignore/workflow).
+    # 3. Resolvidos desde janeiro/2026, agrupados pelo MES DA 1a RESOLUCAO (nao pelo resolvedIn
+    # atual — ver o comentario grande na funcao first_resolution_month acima sobre o porque).
     #
-    # So' faz o backfill de UM mes historico ainda sem cache por execucao (nao todos de uma vez):
-    # buscar os ~6-8 meses inteiros numa unica execucao levou quase 40 minutos e ainda assim varios
-    # meses vieram com uma fracao dos chamados reais (a API parece degradar/truncar silenciosamente
-    # — sem erro — depois de muitas requisicoes seguidas). Um mes por vez, com folego entre
-    # requisicoes, mantem cada execucao rapida e deixa o historico completar sozinho em alguns
-    # ciclos — e a checagem de sanidade evita congelar um mes com numero claramente errado.
+    # Passo A: busca os chamados por MES DE CRIACAO (createdDate, campo estavel) — offsets aqui
+    # sao relativos ao mes de criacao. offsets 0/1 (mes corrente + anterior) sao buscados de novo
+    # em toda sincronizacao; mais antigos que isso sao buscados uma unica vez e ficam em cache
+    # (created_raw_N.json, commitado no repo) — uma vez criado, um chamado nunca muda de mes de
+    # criacao, entao esse cache nunca fica desatualizado nesse sentido. So' faz o backfill de UM
+    # mes de criacao sem cache por execucao (nao todos de uma vez): buscar tudo numa unica
+    # execucao levou quase 40 minutos e ainda assim vinha truncado — um mes por vez, com folego
+    # entre requisicoes, mantem cada execucao rapida.
+    #
+    # Passo B: com todos os chamados criados desde jan/2026 disponiveis (cache + frescos), calcula
+    # o mes da 1a resolucao de cada um (a partir do statusHistories) e agrupa nesses baldes — essa
+    # parte e' recalculada do zero a cada execucao (rapida, em memoria, sem chamada de API), entao
+    # os baldes de resolucao sempre refletem o que ja foi buscado ate agora por criacao.
     JAN_2026 = datetime(2026, 1, 1)
     meses_desde_jan2026 = (now_utc.year - JAN_2026.year) * 12 + (now_utc.month - JAN_2026.month) + 1
     MESES_SEMPRE_FRESCOS = 2
-    resolved_months = {}
+    todos_criados = []
     backfill_feito = False
     for offset in range(meses_desde_jan2026):
-        path = os.path.join(BASE_DIR, f"resolved_month_{offset}.json")
+        path = os.path.join(BASE_DIR, f"created_raw_{offset}.json")
         if offset < MESES_SEMPRE_FRESCOS:
             target = add_months(now_utc, -offset)
-            print(f"[info] buscando mes offset={offset} ({target.year}-{target.month:02d})...", flush=True)
-            data = fetch_month(target.year, target.month)
-            save(f"resolved_month_{offset}.json", data)
-            print(f"[info] mes offset={offset}: {len(data)} chamados", flush=True)
+            print(f"[info] buscando mes de criacao offset={offset} ({target.year}-{target.month:02d})...", flush=True)
+            data = fetch_created_month(target.year, target.month)
+            save(f"created_raw_{offset}.json", data)
+            print(f"[info] mes de criacao offset={offset}: {len(data)} chamados", flush=True)
         elif os.path.exists(path):
             with open(path, encoding='utf-8-sig') as f:
                 data = json.load(f)
         elif not backfill_feito:
             backfill_feito = True
             target = add_months(now_utc, -offset)
-            print(f"[info] backfill: buscando mes historico offset={offset} ({target.year}-{target.month:02d})...", flush=True)
-            data = fetch_month(target.year, target.month)
+            print(f"[info] backfill: buscando mes de criacao historico offset={offset} ({target.year}-{target.month:02d})...", flush=True)
+            data = fetch_created_month(target.year, target.month)
             if len(data) < MES_TOTAL_MINIMO_SANIDADE:
-                print(f"[aviso] mes offset={offset} voltou com so' {len(data)} chamados (< {MES_TOTAL_MINIMO_SANIDADE}) — "
+                print(f"[aviso] mes de criacao offset={offset} voltou com so' {len(data)} chamados (< {MES_TOTAL_MINIMO_SANIDADE}) — "
                       f"provavel resposta incompleta da API; NAO cacheando, tenta de novo no proximo ciclo", flush=True)
                 data = []
             else:
-                save(f"resolved_month_{offset}.json", data)
-                print(f"[info] mes offset={offset}: {len(data)} chamados — cacheado", flush=True)
+                save(f"created_raw_{offset}.json", data)
+                print(f"[info] mes de criacao offset={offset}: {len(data)} chamados — cacheado", flush=True)
         else:
             data = []  # ainda sem cache e o backfill deste ciclo ja foi usado noutro mes
-        resolved_months[offset] = data
+        todos_criados.extend(data)
+
+    # Passo B: agrupa por mes da 1a resolucao (offset relativo ao mes CORRENTE, mesma numeracao
+    # 0=corrente/1=anterior/etc. usada pelo resto do painel).
+    resolved_months = {offset: [] for offset in range(meses_desde_jan2026)}
+    fora_do_periodo = 0
+    sem_resolucao = 0
+    for t in todos_criados:
+        ym = first_resolution_month(t)
+        if ym is None:
+            sem_resolucao += 1
+            continue
+        ano, mes = ym
+        offset_resolucao = (now_utc.year - ano) * 12 + (now_utc.month - mes)
+        if 0 <= offset_resolucao < meses_desde_jan2026:
+            resolved_months[offset_resolucao].append(t)
+        else:
+            fora_do_periodo += 1  # resolvido antes de jan/2026 (chamado antigo reaberto ha pouco) ou no futuro
+    print(f"[info] chamados criados desde jan/2026 buscados ate agora: {len(todos_criados)} "
+          f"({sem_resolucao} ainda sem resolucao, {fora_do_periodo} resolvidos fora do periodo jan/2026-atual)", flush=True)
+    for offset in range(meses_desde_jan2026):
+        save(f"resolved_month_{offset}.json", resolved_months[offset])
 
     # 4. Acoes/notas dos chamados tecnicos (Bug/Melhoria/Servicos) resolvidos no mes corrente — usadas
     # pra achar, no log do DevOps/Azure, o comentario que marca quando a task foi para validacao ou
