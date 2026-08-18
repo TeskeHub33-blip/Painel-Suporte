@@ -243,10 +243,19 @@ def main():
     # os baldes de resolucao sempre refletem o que ja foi buscado ate agora por criacao.
     JAN_2026 = datetime(2026, 1, 1)
     meses_desde_jan2026 = (now_utc.year - JAN_2026.year) * 12 + (now_utc.month - JAN_2026.month) + 1
+    # Um chamado CRIADO antes de jan/2026 mas RESOLVIDO pela 1a vez dentro de jan/2026-atual
+    # (backlog antigo sendo fechado) teria seu balde de resolucao correto (ex.: Janeiro) mas nunca
+    # aparece, porque so' buscamos chamados criados a partir de jan/2026 — o chamado em si nunca e'
+    # buscado, entao seu statusHistories nunca e' visto. MESES_BUFFER_ANTERIOR busca ALGUNS meses
+    # de criacao ANTES de jan/2026 so' pra capturar esse backlog; esses meses extras nao viram
+    # colunas visiveis (MONTH_LABELS/resolved_month_N.json continuam so' jan/2026-atual) — so'
+    # alimentam o balde de resolucao certo quando a 1a resolucao cair dentro do periodo exibido.
+    MESES_BUFFER_ANTERIOR = 6
+    total_meses_busca = meses_desde_jan2026 + MESES_BUFFER_ANTERIOR
     MESES_SEMPRE_FRESCOS = 2
     todos_criados = []
     backfill_feito = False
-    for offset in range(meses_desde_jan2026):
+    for offset in range(total_meses_busca):
         path = os.path.join(BASE_DIR, f"created_raw_{offset}.json")
         if offset < MESES_SEMPRE_FRESCOS:
             target = add_months(now_utc, -offset)
@@ -306,7 +315,8 @@ def main():
             resolved_months[offset_resolucao].append(t)
         else:
             fora_do_periodo += 1  # resolvido antes de jan/2026 (chamado antigo reaberto ha pouco) ou no futuro
-    print(f"[info] chamados criados desde jan/2026 buscados ate agora: {len(todos_criados)} "
+    print(f"[info] chamados buscados ate agora (inclui {MESES_BUFFER_ANTERIOR} meses de buffer antes de jan/2026 "
+          f"so' pra pegar backlog antigo resolvido no periodo exibido): {len(todos_criados)} "
           f"({sem_resolucao} ainda sem resolucao, {fora_do_periodo} resolvidos fora do periodo jan/2026-atual)", flush=True)
     for offset in range(meses_desde_jan2026):
         save(f"resolved_month_{offset}.json", resolved_months[offset])
