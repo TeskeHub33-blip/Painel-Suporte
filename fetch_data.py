@@ -150,9 +150,11 @@ def first_resolution_month(ticket):
     so' uma fracao (15 de ~1100+) dos chamados que realmente foram resolvidos pela 1a vez em
     abril. Por isso a busca agora e' por MES DE CRIACAO (campo estavel, nunca muda) e este
     calculo deriva o mes da 1a resolucao a partir do historico de status de cada chamado."""
+    # So' 'Resolvido' conta como resolucao — 'Fechado' e' a data de FECHAMENTO (etapa seguinte,
+    # manual ou automatica apos 3 dias), nunca deve ser usada no lugar da data de resolucao.
     hist = ticket.get('statusHistories') or []
     resolvidos = sorted(
-        (h for h in hist if h.get('status') in ('Resolvido', 'Fechado') and h.get('changedDate')),
+        (h for h in hist if h.get('status') == 'Resolvido' and h.get('changedDate')),
         key=lambda h: h['changedDate'],
     )
     if resolvidos:
