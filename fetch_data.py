@@ -263,9 +263,26 @@ def main():
             print(f"[info] backfill: buscando mes de criacao historico offset={offset} ({target.year}-{target.month:02d})...", flush=True)
             data = fetch_created_month(target.year, target.month)
             if len(data) < MES_TOTAL_MINIMO_SANIDADE:
+                # Um mes com poucos chamados PODE ser real (ex.: abril/2026 sempre voltou
+                # exatamente 89, mesmo apos endurecer a paginacao pra so' parar numa pagina
+                # vazia de verdade — confirmado com uma consulta direta que o total escala
+                # proporcionalmente com o intervalo de datas, ou seja, nao e' truncamento).
+                # Em vez de descartar pra sempre (o que travava o backfill nesse mes
+                # eternamente, sem nunca chegar nos meses mais antigos), confirma com uma
+                # segunda tentativa independente: se o numero repetir, e' real (um glitch de
+                # rede/truncamento dificilmente devolveria o MESMO numero duas vezes).
                 print(f"[aviso] mes de criacao offset={offset} voltou com so' {len(data)} chamados (< {MES_TOTAL_MINIMO_SANIDADE}) — "
-                      f"provavel resposta incompleta da API; NAO cacheando, tenta de novo no proximo ciclo", flush=True)
-                data = []
+                      f"confirmando com uma segunda tentativa antes de aceitar ou descartar...", flush=True)
+                time.sleep(3)
+                data2 = fetch_created_month(target.year, target.month)
+                if len(data2) == len(data):
+                    save(f"created_raw_{offset}.json", data)
+                    print(f"[info] mes de criacao offset={offset}: confirmado em {len(data)} chamados nas duas tentativas "
+                          f"(volume real baixo, nao truncamento) — cacheado", flush=True)
+                else:
+                    print(f"[aviso] mes de criacao offset={offset} inconsistente entre tentativas ({len(data)} vs {len(data2)}) — "
+                          f"NAO cacheando, tenta de novo no proximo ciclo", flush=True)
+                    data = []
             else:
                 save(f"created_raw_{offset}.json", data)
                 print(f"[info] mes de criacao offset={offset}: {len(data)} chamados — cacheado", flush=True)
