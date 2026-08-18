@@ -171,14 +171,6 @@ def main():
         elif len(page) < page_size:
             break
         skip += page_size
-    # DEBUG TEMPORARIO: confirma se o $expand de customFieldValues esta vindo preenchido.
-    for _t in open_tickets[:5]:
-        print(f"[debug] protocol={_t.get('protocol')} customFieldValues={_t.get('customFieldValues')}", flush=True)
-    _com_campo = [_t for _t in open_tickets if _t.get('customFieldValues')]
-    print(f"[debug] tickets com customFieldValues nao-vazio: {len(_com_campo)} de {len(open_tickets)}", flush=True)
-    if _com_campo:
-        print(f"[debug] exemplo: {_com_campo[0].get('protocol')} -> {_com_campo[0].get('customFieldValues')}", flush=True)
-
     if paginas_incompletas:
         print(f"[aviso] total de paginas incompletas nesta sincronizacao: {paginas_incompletas}", flush=True)
     save("tickets_full.json", open_tickets)
