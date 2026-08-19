@@ -267,8 +267,13 @@ def main():
     # motivou toda a reescrita desta busca (um mes inteiro nunca chega a ser buscado). Por isso o
     # nome do arquivo usa o mes/ano de verdade — ele so' e' considerado cache valido pro mes que
     # genuinamente representa, nao importa quantos ciclos ou meses se passem.
+    # Quantos meses historicos sem cache buscar POR EXECUCAO (nao so' 1) — cada execucao roda a
+    # cada ~10-15min, entao com so' 1/ciclo um backfill grande (ex.: estender o buffer mais pra
+    # tras) levaria muitas horas. 3/ciclo acelera bastante (cabe tranquilo no tempo do job — cada
+    # mes leva uns 20-60s + 3s de folego) sem sobrecarregar a API com uma rajada gigante.
+    MESES_BACKFILL_POR_CICLO = 3
     todos_criados = []
-    backfill_feito = False
+    backfill_feitos = 0
     for offset in range(total_meses_busca):
         target = add_months(now_utc, -offset)
         key = month_key(target)
@@ -281,8 +286,8 @@ def main():
         elif os.path.exists(path):
             with open(path, encoding='utf-8-sig') as f:
                 data = json.load(f)
-        elif not backfill_feito:
-            backfill_feito = True
+        elif backfill_feitos < MESES_BACKFILL_POR_CICLO:
+            backfill_feitos += 1
             print(f"[info] backfill: buscando mes de criacao historico {key} (offset={offset})...", flush=True)
             data = fetch_created_month(target.year, target.month)
             if len(data) < MES_TOTAL_MINIMO_SANIDADE:
