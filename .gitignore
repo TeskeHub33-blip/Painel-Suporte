@@ -5,13 +5,14 @@
 *.lock
 !index.html
 !ref_assets/logo_b64.txt
-# created_raw_N.json (N>=2) sao chamados agrupados por MES DE CRIACAO ja buscados uma vez —
-# createdDate nunca muda, entao esse cache nunca fica desatualizado nesse sentido. Comitado pra
-# nao precisar rebaixar o historico desde jan/2026 inteiro em toda sincronizacao (fetch_data.py
-# deriva resolved_month_N.json a partir destes, recalculado do zero a cada execucao — por isso
-# resolved_month_*.json NAO precisa ser comitado, so os created_raw_*.json). offsets 0/1 (mes de
-# criacao corrente + anterior) continuam ignorados — sao buscados de novo sempre.
+# created_raw_AAAA-MM.json sao chamados agrupados por MES DE CRIACAO (nome pelo mes ABSOLUTO, nao
+# por offset relativo a hoje — um offset como "2" significa um mes diferente a cada mes que passa,
+# entao nomear o arquivo por offset faria o cache de um mes antigo ser reaproveitado por engano
+# como se fosse de um mes novo na virada do mes). createdDate nunca muda, entao esse cache nunca
+# fica desatualizado nesse sentido. Comitado pra nao precisar rebuscar o historico desde jan/2026
+# inteiro em toda sincronizacao (fetch_data.py deriva resolved_month_N.json a partir destes,
+# recalculado do zero a cada execucao — por isso resolved_month_*.json NAO precisa ser comitado, so
+# os created_raw_AAAA-MM.json). Os meses corrente/anterior sao sempre buscados de novo e comitados
+# tambem (harmless — so mantem esses dois arquivos atualizados a cada ciclo).
 !created_raw_*.json
-created_raw_0.json
-created_raw_1.json
 dashboard_suporte.html

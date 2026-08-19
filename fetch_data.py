@@ -255,23 +255,35 @@ def main():
     MESES_BUFFER_ANTERIOR = 6
     total_meses_busca = meses_desde_jan2026 + MESES_BUFFER_ANTERIOR
     MESES_SEMPRE_FRESCOS = 2
+
+    def month_key(dt):
+        return f"{dt.year}-{dt.month:02d}"
+
+    # IMPORTANTE: o cache em disco e' identificado pelo MES ABSOLUTO (ex.: "2026-06"), nao pelo
+    # offset relativo a agora. offset=2 hoje pode ser Junho/2026, mas offset=2 no mes que vem sera'
+    # Julho/2026 — se o arquivo fosse salvo como "created_raw_2.json" (nome baseado so' no offset),
+    # na virada do mes o codigo acharia que esse arquivo (na verdade Junho) ja' e' o cache de Julho
+    # e nunca buscaria Julho de verdade, reintroduzindo silenciosamente o mesmo tipo de buraco que
+    # motivou toda a reescrita desta busca (um mes inteiro nunca chega a ser buscado). Por isso o
+    # nome do arquivo usa o mes/ano de verdade — ele so' e' considerado cache valido pro mes que
+    # genuinamente representa, nao importa quantos ciclos ou meses se passem.
     todos_criados = []
     backfill_feito = False
     for offset in range(total_meses_busca):
-        path = os.path.join(BASE_DIR, f"created_raw_{offset}.json")
+        target = add_months(now_utc, -offset)
+        key = month_key(target)
+        path = os.path.join(BASE_DIR, f"created_raw_{key}.json")
         if offset < MESES_SEMPRE_FRESCOS:
-            target = add_months(now_utc, -offset)
-            print(f"[info] buscando mes de criacao offset={offset} ({target.year}-{target.month:02d})...", flush=True)
+            print(f"[info] buscando mes de criacao {key} (offset={offset}, sempre fresco)...", flush=True)
             data = fetch_created_month(target.year, target.month)
-            save(f"created_raw_{offset}.json", data)
-            print(f"[info] mes de criacao offset={offset}: {len(data)} chamados", flush=True)
+            save(f"created_raw_{key}.json", data)
+            print(f"[info] mes de criacao {key}: {len(data)} chamados", flush=True)
         elif os.path.exists(path):
             with open(path, encoding='utf-8-sig') as f:
                 data = json.load(f)
         elif not backfill_feito:
             backfill_feito = True
-            target = add_months(now_utc, -offset)
-            print(f"[info] backfill: buscando mes de criacao historico offset={offset} ({target.year}-{target.month:02d})...", flush=True)
+            print(f"[info] backfill: buscando mes de criacao historico {key} (offset={offset})...", flush=True)
             data = fetch_created_month(target.year, target.month)
             if len(data) < MES_TOTAL_MINIMO_SANIDADE:
                 # Um mes com poucos chamados PODE ser real (ex.: abril/2026 sempre voltou
@@ -282,21 +294,21 @@ def main():
                 # eternamente, sem nunca chegar nos meses mais antigos), confirma com uma
                 # segunda tentativa independente: se o numero repetir, e' real (um glitch de
                 # rede/truncamento dificilmente devolveria o MESMO numero duas vezes).
-                print(f"[aviso] mes de criacao offset={offset} voltou com so' {len(data)} chamados (< {MES_TOTAL_MINIMO_SANIDADE}) — "
+                print(f"[aviso] mes de criacao {key} voltou com so' {len(data)} chamados (< {MES_TOTAL_MINIMO_SANIDADE}) — "
                       f"confirmando com uma segunda tentativa antes de aceitar ou descartar...", flush=True)
                 time.sleep(3)
                 data2 = fetch_created_month(target.year, target.month)
                 if len(data2) == len(data):
-                    save(f"created_raw_{offset}.json", data)
-                    print(f"[info] mes de criacao offset={offset}: confirmado em {len(data)} chamados nas duas tentativas "
+                    save(f"created_raw_{key}.json", data)
+                    print(f"[info] mes de criacao {key}: confirmado em {len(data)} chamados nas duas tentativas "
                           f"(volume real baixo, nao truncamento) — cacheado", flush=True)
                 else:
-                    print(f"[aviso] mes de criacao offset={offset} inconsistente entre tentativas ({len(data)} vs {len(data2)}) — "
+                    print(f"[aviso] mes de criacao {key} inconsistente entre tentativas ({len(data)} vs {len(data2)}) — "
                           f"NAO cacheando, tenta de novo no proximo ciclo", flush=True)
                     data = []
             else:
-                save(f"created_raw_{offset}.json", data)
-                print(f"[info] mes de criacao offset={offset}: {len(data)} chamados — cacheado", flush=True)
+                save(f"created_raw_{key}.json", data)
+                print(f"[info] mes de criacao {key}: {len(data)} chamados — cacheado", flush=True)
         else:
             data = []  # ainda sem cache e o backfill deste ciclo ja foi usado noutro mes
         todos_criados.extend(data)
