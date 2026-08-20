@@ -146,6 +146,11 @@ def fetch_created_month(year, month, historico=False):
             "$select": MONTH_SELECT,
             "$expand": MONTH_EXPAND,
             "$filter": f"createdDate ge {a.strftime('%Y-%m-%d')}T00:00:00Z and createdDate lt {b.strftime('%Y-%m-%d')}T00:00:00Z",
+            # $orderby estavel (id nunca muda) — mesma razao do open_tickets_base_params: sem isso
+            # a API ordena por lastUpdate desc, e um chamado desse mes que for tocado durante a
+            # propria busca (ex.: reaberto ou atualizado hoje) pode reordenar a lista e escapar da
+            # paginacao por $skip.
+            "$orderby": "id asc",
         }, base_url=url)
 
     result = fetch_window(start, mid) + fetch_window(mid, end)
@@ -210,6 +215,16 @@ def main():
         "$select": "id,protocol,subject,category,urgency,status,ownerTeam,createdDate,lastUpdate,tags,slaSolutionDate,reopenedIn,origin",
         "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1),customFieldValues",
         "$filter": "status ne 'Fechado' and status ne 'Cancelado' and status ne 'Resolvido'",
+        # $orderby explicito por id (campo estavel, nunca muda) — sem isso a API ordena por
+        # lastUpdate desc por padrao, e como chamados abertos tem lastUpdate mudando o tempo todo
+        # (agentes respondendo em tempo real enquanto a paginacao roda), a lista inteira reordena
+        # entre uma pagina e outra: um chamado dormente (sem update ha semanas) pode ser empurrado
+        # pra frente da posicao que o $skip da proxima pagina espera, e nunca aparecer em pagina
+        # nenhuma. Confirmado no caso do cliente 3ZX: 4 chamados dormentes em 'Aguardando
+        # Desenvolvimento' desapareciam do backlog mesmo sendo encontrados na hora ao filtrar por
+        # protocolo direto — nao era limite do endpoint, era paginacao instavel por falta de ordem
+        # fixa.
+        "$orderby": "id asc",
     }
     def fetch_all_pages(base_params, page_size, base_url):
         items = []
