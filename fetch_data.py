@@ -211,28 +211,45 @@ def main():
         "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1),customFieldValues",
         "$filter": "status ne 'Fechado' and status ne 'Cancelado' and status ne 'Resolvido'",
     }
-    open_tickets = []
+    def fetch_all_pages(base_params, page_size, base_url):
+        items = []
+        skip = 0
+        paginas_incompletas = 0
+        while skip < 20000:  # teto de seguranca — evita loop infinito se a API estiver persistentemente fora
+            page, completo = fetch_page_resilient(base_params, skip, page_size, base_url=base_url)
+            items += page
+            if not completo:
+                # Pagina incompleta (desistiu por erro/tempo) NAO pode ser confundida com "chegou ao
+                # fim" — senao os chamados das paginas seguintes (tipicamente os mais novos) somem do
+                # painel inteiro em silencio, como aconteceu antes. Continua avancando mesmo assim.
+                paginas_incompletas += 1
+                print(f"[aviso] pagina em $skip={skip} ({base_url}) ficou incompleta — seguindo para a proxima mesmo assim", flush=True)
+                skip += page_size
+                continue
+            if not page:
+                break
+            # Igual ao fetch_paginated: uma pagina menor que $top NAO significa fim de verdade — a API
+            # pode aplicar um teto proprio menor que o pedido. So avanca pelo tamanho REAL recebido.
+            skip += len(page)
+        if paginas_incompletas:
+            print(f"[aviso] total de paginas incompletas nesta sincronizacao ({base_url}): {paginas_incompletas}", flush=True)
+        return items
+
     page_size = 200
-    skip = 0
-    paginas_incompletas = 0
-    while skip < 20000:  # teto de seguranca — evita loop infinito se a API estiver persistentemente fora
-        page, completo = fetch_page_resilient(open_tickets_base_params, skip, page_size)
-        open_tickets += page
-        if not completo:
-            # Pagina incompleta (desistiu por erro/tempo) NAO pode ser confundida com "chegou ao
-            # fim" — senao os chamados das paginas seguintes (tipicamente os mais novos) somem do
-            # painel inteiro em silencio, como aconteceu antes. Continua avancando mesmo assim.
-            paginas_incompletas += 1
-            print(f"[aviso] pagina em $skip={skip} ficou incompleta — seguindo para a proxima mesmo assim", flush=True)
-            skip += page_size
-            continue
-        if not page:
-            break
-        # Igual ao fetch_paginated: uma pagina menor que $top NAO significa fim de verdade — a API
-        # pode aplicar um teto proprio menor que o pedido. So avanca pelo tamanho REAL recebido.
-        skip += len(page)
-    if paginas_incompletas:
-        print(f"[aviso] total de paginas incompletas nesta sincronizacao: {paginas_incompletas}", flush=True)
+    open_tickets_fresco = fetch_all_pages(open_tickets_base_params, page_size, BASE_URL)
+    # Um chamado aberto ha muito tempo mas SEM atividade recente (ex.: parado na fila de
+    # Desenvolvimento ha semanas) sofre da mesma limitacao do /tickets normal ja identificada pros
+    # meses historicos — so' fica visivel via /tickets/past. Sem isso, chamados abertos antigos e
+    # dormentes (ex.: parados em 'Aguardando Desenvolvimento' desde 2024/2025, so' tocados numa
+    # atualizacao em lote ha algumas semanas) desapareciam do backlog/Fluxograma/aba Clientes,
+    # mesmo estando genuinamente abertos ainda. Busca tambem por /tickets/past com o mesmo filtro
+    # e junta (por id) com o que o /tickets normal ja trouxe.
+    open_tickets_historico = fetch_all_pages(open_tickets_base_params, page_size, PAST_URL)
+    vistos = {t['id'] for t in open_tickets_fresco}
+    open_tickets = open_tickets_fresco + [t for t in open_tickets_historico if t['id'] not in vistos]
+    print(f"[info] chamados abertos: {len(open_tickets_fresco)} via /tickets + "
+          f"{len(open_tickets) - len(open_tickets_fresco)} adicionais via /tickets/past "
+          f"= {len(open_tickets)} no total", flush=True)
     save("tickets_full.json", open_tickets)
 
     # 2. Resolvidos hoje
