@@ -806,10 +806,11 @@ TICKETS.forEach(t => {{
 // Alife e Vinicius sao os tecnicos do turno de contraturno
 const CONTRATURNO_TECNICOS = ['Alife Caetano dos Santos', 'Vinicius Campestrini'];
 
-// "Carga parada": carga travada, ou problema na emissao de CIOT/MDFe/CTe — verifica no assunto,
-// na descricao E no campo customizado "Motivo de Priorizacao" (um dos exemplos dados no proprio
-// campo no Movidesk e' literalmente "carga parada").
-const CARGA_PARADA_RE = /carga\s*(trava|parad)|travad|\bciot\b|\bmdf[-\s]?e\b|\bct[-\s]?e\b/i;
+// "Carga parada": usa SO' o campo customizado "Motivo de Priorizacao" marcado no chamado — nao
+// mais o texto livre do assunto/descricao (gerava falso positivo em qualquer chamado que so'
+// mencionasse CIOT/MDFe/CTe sem ter carga parada de fato). So' conta quando o motivo marcado for
+// especificamente sobre carga parada/travada (ex.: "Carga parada (saida de veiculo)").
+const CARGA_PARADA_RE = /carga\s*(trava|parad)|travad/i;
 
 // Classificacao incorreta: Melhoria, Bug e (alguns) Servicos legitimamente tem task associada
 // (passam pela fila de dev). Duvida, Erro Operacional e Terceiros NAO deveriam ter task —
@@ -858,7 +859,7 @@ const FILTERS = {{
     && !isDevQueueStatus(t.status) && t.status !== 'Aguardando Cliente' && t.status !== 'Em atendimento - CS',
   contraturno: t => t.status === 'Em atendimento' && CONTRATURNO_TECNICOS.indexOf(t.ownerName) !== -1,
   naoAtualizadosHoje: t => (t.status === 'Em atendimento' || t.status === 'Aguardando Cliente') && !t._updatedToday,
-  cargaParada: t => t.status === 'Em atendimento' && (CARGA_PARADA_RE.test(t.subject || '') || CARGA_PARADA_RE.test(t.description || '') || CARGA_PARADA_RE.test(t.motivoPriorizacao || '')),
+  cargaParada: t => t.status === 'Em atendimento' && CARGA_PARADA_RE.test(t.motivoPriorizacao || ''),
   classificacaoIncorreta: t => t._classificacaoIncorreta,
   chatsEmAtendimento: t => t.status === 'Em atendimento' && (t.origin === 24 || !!t.chatGroup),
   chatsAguardando: t => t.status === 'Novo' && (t.origin === 24 || !!t.chatGroup),
@@ -1008,7 +1009,7 @@ const LABELS = {{
   priorizados: 'Priorizados (WhatsApp)',
   naoAtualizadosHoje: 'Nao atualizados hoje',
   contraturno: 'Contraturno (Alife e Vinicius) — em atendimento',
-  cargaParada: 'Carga parada / emissao CIOT-MDFe-CTe',
+  cargaParada: 'Carga parada (Motivo de Priorizacao)',
   classificacaoIncorreta: 'Possivel classificacao incorreta',
   chatsEmAtendimento: 'Chats em atendimento (aproximado)',
   chatsAguardando: 'Chats aguardando atendimento (aproximado)',
@@ -1773,7 +1774,7 @@ const hintPriorizados = `Tempo medio de resolucao (mes) — priorizados: ${{mttr
 document.getElementById('kpiRow2').innerHTML =
   kpiTile('neutral', priorizados.length, 'Priorizados (WhatsApp)', 'priorizados', hintPriorizados) +
   kpiTile('neutral', contraturno.length, 'Contraturno em atendimento', 'contraturno') +
-  kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Carga parada / CIOT-MDFe-CTe', 'cargaParada') +
+  kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Carga parada (Motivo de Priorizacao)', 'cargaParada') +
   kpiTile(classificacaoIncorreta.length === 0 ? 'ok' : 'warn', classificacaoIncorreta.length, 'Possivel classificacao incorreta', 'classificacaoIncorreta');
 
 document.getElementById('gridChatsLive').innerHTML = `
@@ -1890,8 +1891,8 @@ document.getElementById('gridBottom').innerHTML = `
       <tbody>${{tableHtml(naoAtualizadosHoje.sort((a,b)=>(b._hoursOpen||0)-(a._hoursOpen||0)), 'open', 14)}}</tbody></table>
   </div>
   <div class="panel">
-    <h2>🚛 Carga parada / emissao CIOT-MDFe-CTe${{exportButtonHtml("exportLiveList(cargaParada, 'carga_parada.txt')")}}</h2>
-    <div class="panel-sub">${{cargaParada.length}} chamados abertos com carga travada ou problema de emissao de CIOT, MDFe ou CTe</div>
+    <h2>🚛 Carga parada (Motivo de Priorizacao)${{exportButtonHtml("exportLiveList(cargaParada, 'carga_parada.txt')")}}</h2>
+    <div class="panel-sub">${{cargaParada.length}} chamados abertos com o campo "Motivo de Priorizacao" marcado como carga parada/travada</div>
     <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Aberto ha</th></tr></thead>
       <tbody>${{tableHtml(cargaParada.sort((a,b)=>(b._hoursOpen||0)-(a._hoursOpen||0)), 'open', 14)}}</tbody></table>
   </div>
