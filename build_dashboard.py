@@ -2635,17 +2635,17 @@ if (sessionStorage.getItem('reuniaoMensalUnlocked') === '1') {{
 }}
 
 const REUNIAO_MENSAL_CATEGORIAS = ['Bloqueio Sistema', 'Bug', 'Dúvida', 'Melhoria', 'Erro Operacional', 'Terceiros', 'Serviços', 'GNRE Pagamento'];
-// Meta de duvidas: baseline historico de 61% (media de ~7 meses, 3535 chamados de duvida). A meta
-// de reducao de 20% e' RELATIVA ao baseline (nao 20 pontos percentuais absolutos) — formula
-// conferida numero a numero com a planilha de referencia: reducao% = (61 - %Duvidas_do_mes) / 61
-// * 100. Ex.: mes com 45% de duvidas -> (61-45)/61*100 = 26% de reducao.
-// O acompanhamento da meta ao longo do ano e' pela MEDIA da reducao% de todos os meses fechados
-// ate agora (nao o mes mais recente isolado, nem a soma bruta) — bate a meta quando essa media
-// for >= 20%.
+// Meta de duvidas: baseline historico de 61% (media de ~7 meses, 3535 chamados de duvida). A
+// reducao de um mes e' a diferenca em PONTOS PERCENTUAIS absolutos contra o baseline (nao relativa
+// ao baseline) — confirmado pelo usuario: "61% e' a media, em janeiro foi 56%, entao tivemos
+// reducao de 5%". Ex.: mes com 45% de duvidas -> 61-45 = 16pp de reducao.
+// A meta de 20% e' CUMULATIVA ao longo do ano (YTD): o progresso e' a MEDIA da reducao (em pp) de
+// todos os meses fechados ate agora (nao o mes mais recente isolado) — bate a meta quando essa
+// media for >= 20pp.
 const META_DUVIDAS_BASELINE_PCT = 61;
 const META_DUVIDAS_REDUCAO_ALVO_PCT = 20;
 function reducaoDuvidas(pctAtual) {{
-  return Math.round((META_DUVIDAS_BASELINE_PCT - pctAtual) / META_DUVIDAS_BASELINE_PCT * 100);
+  return Math.round(META_DUVIDAS_BASELINE_PCT - pctAtual);
 }}
 let reuniaoMensalInited = false;
 function initReuniaoMensal() {{
