@@ -384,7 +384,7 @@ def main():
     # lendo o log/comentario do chamado. Restrito, a pedido, a chamados atendidos (resolvidos) em 2026
     # que estouraram o SLA, mais todos os chamados que ainda estao abertos — nao busca acao de TODOS os
     # chamados resolvidos (custo de payload alto demais), so dos candidatos reais a essa exclusao.
-    def fetch_actions_for_ids(ids, chunk_size=20):
+    def fetch_actions_for_ids(ids, chunk_size=20, base_url=BASE_URL):
         ids = sorted(set(ids))
         out = []
         for i in range(0, len(ids), chunk_size):
@@ -395,21 +395,33 @@ def main():
                 "$expand": "actions($select=description,createdDate,type)",
                 "$filter": filt,
                 "$top": chunk_size,
-            })
+            }, base_url=base_url)
         return out
 
-    gov_check_ids = set()
+    # Mesma logica do backfill de meses: chamados de offsets antigos (>= MESES_SEMPRE_FRESCOS) so
+    # sao visiveis de forma completa via /tickets/past, nao /tickets — senao esse lookup por id
+    # perderia silenciosamente os candidatos a expurgo de SLA dos meses mais antigos (jan-mar/2026,
+    # por exemplo), do mesmo jeito que a busca por mes de criacao perdia a maioria dos chamados
+    # antes da correcao.
+    gov_check_ids_fresco = set()
+    gov_check_ids_historico = set()
     for offset, data in resolved_months.items():
         for r in data:
             if (r.get('ownerTeam') == 'Suporte' and r.get('resolvedIn') and r.get('slaSolutionDate')
                     and r['resolvedIn'] > r['slaSolutionDate']
                     and (r.get('resolvedIn') or '').startswith('2026')):
-                gov_check_ids.add(r['id'])
+                if offset < MESES_SEMPRE_FRESCOS:
+                    gov_check_ids_fresco.add(r['id'])
+                else:
+                    gov_check_ids_historico.add(r['id'])
     for t in open_tickets:
         if t.get('id') is not None:
-            gov_check_ids.add(t['id'])
+            gov_check_ids_fresco.add(t['id'])
 
-    gov_actions = fetch_actions_for_ids(gov_check_ids)
+    gov_actions = (
+        fetch_actions_for_ids(gov_check_ids_fresco, base_url=BASE_URL)
+        + fetch_actions_for_ids(gov_check_ids_historico, base_url=PAST_URL)
+    )
     save("gov_check_actions.json", gov_actions)
 
 
