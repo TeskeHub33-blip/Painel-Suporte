@@ -250,7 +250,14 @@ def main():
             print(f"[aviso] total de paginas incompletas nesta sincronizacao ({base_url}): {paginas_incompletas}", flush=True)
         return items
 
-    page_size = 200
+    # page_size reduzido de 200 pra 50: confirmado (caso 3ZX) que com $top=200 alguns chamados
+    # somem da resposta SEM erro nenhum logado (nao e' bisecao pulando registro problematico —
+    # foi conferido que nao ha aviso de bisecao no log) mesmo aparecendo normalmente numa consulta
+    # simples sem $expand. O payload combinado de statusHistories+actions+customFieldValues de 200
+    # chamados de uma vez parece estourar algum limite de tamanho de resposta da API, que trunca
+    # silenciosamente QUAIS chamados entram na pagina (nao necessariamente os ultimos por posicao).
+    # Paginas menores reduzem o payload por requisicao e evitam esse truncamento.
+    page_size = 50
     open_tickets_fresco = fetch_all_pages(open_tickets_base_params, page_size, BASE_URL)
     # Um chamado aberto ha muito tempo mas SEM atividade recente (ex.: parado na fila de
     # Desenvolvimento ha semanas) sofre da mesma limitacao do /tickets normal ja identificada pros
