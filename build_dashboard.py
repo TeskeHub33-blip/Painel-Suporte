@@ -2693,22 +2693,25 @@ function initReuniaoMensal() {{
   }});
   const statsGeral = statsForMonth(todosItensPeriodo);
 
-  // Meta de duvidas: progresso do ano = MEDIA da reducao% de cada mes fechado ate agora (nao o
-  // mes mais recente isolado, nem a reducao calculada sobre o total bruto do periodo) — bate a
-  // meta quando essa media atinge 20%.
+  // Meta de duvidas: os 20pp de reducao sao CUMULATIVOS ao longo do ano (YTD) — o progresso e' a
+  // SOMA da reducao (pp) de cada mes fechado ate agora (nao a media, nem o mes isolado). Ex.:
+  // janeiro 5pp + fevereiro 6pp = YTD de 11pp. A comparacao com a meta de 20pp so' faz sentido
+  // nesse acumulado — cada mes individualmente so' mostra se ficou acima (reducao) ou abaixo
+  // (aumento) do baseline, sem comparar com os 20pp isoladamente.
   const pctDuvidasTotalKpi = totalGeralFechados ? Math.round((totalGeral['Dúvida']||0)/totalGeralFechados*100) : 0;
-  const mediaReducaoAno = linhas.length ? Math.round(avg(linhas.map(l => l.reducaoDuvidas))) : 0;
-  const metaBatida = mediaReducaoAno >= META_DUVIDAS_REDUCAO_ALVO_PCT;
+  const ytdReducaoDuvidas = linhas.length ? linhas.reduce((s, l) => s + l.reducaoDuvidas, 0) : 0;
+  const metaBatida = ytdReducaoDuvidas >= META_DUVIDAS_REDUCAO_ALVO_PCT;
   document.getElementById('kpiReuniaoMensalMeta').innerHTML =
-    kpiTileStatic(metaBatida ? 'ok' : (mediaReducaoAno >= 0 ? 'warn' : 'danger'),
-      `${{mediaReducaoAno}}%`,
-      `Meta de duvidas: reduzir 20% (baseline ${{META_DUVIDAS_BASELINE_PCT}}%) — media do ano`,
-      `media da reducao% de ${{linhas.length}} mes(es) fechado(s) · ${{metaBatida ? 'meta batida' : `faltam ${{META_DUVIDAS_REDUCAO_ALVO_PCT - mediaReducaoAno}}pp na media`}}`);
+    kpiTileStatic(metaBatida ? 'ok' : (ytdReducaoDuvidas >= 0 ? 'warn' : 'danger'),
+      `${{ytdReducaoDuvidas}}pp`,
+      `Meta de duvidas: reduzir 20pp (baseline ${{META_DUVIDAS_BASELINE_PCT}}%) — YTD acumulado`,
+      `soma da reducao (pp) de ${{linhas.length}} mes(es) fechado(s) · ${{metaBatida ? 'meta batida' : `faltam ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp no acumulado`}}`);
 
-  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs meta (baseline ${{META_DUVIDAS_BASELINE_PCT}}%)</th><th>% SLA no prazo</th>`;
+  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs baseline (${{META_DUVIDAS_BASELINE_PCT}}%)</th><th>% SLA no prazo</th>`;
   const bodyRows = linhas.map(l => {{
     const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{l.porCategoria[c] || 0}}</td>`).join('');
-    const corReducao = l.reducaoDuvidas >= META_DUVIDAS_REDUCAO_ALVO_PCT ? 'var(--ok)' : (l.reducaoDuvidas >= 0 ? 'var(--warn)' : 'var(--danger)');
+    const corReducao = l.reducaoDuvidas > 0 ? 'var(--ok)' : (l.reducaoDuvidas === 0 ? 'var(--warn)' : 'var(--danger)');
+    const reducaoTexto = l.reducaoDuvidas > 0 ? `✓ ${{l.reducaoDuvidas}}pp de reducao` : (l.reducaoDuvidas === 0 ? '– sem variacao' : `✗ ${{Math.abs(l.reducaoDuvidas)}}pp de aumento`);
     return `<tr>
       <td style="font-weight:600">${{esc(l.label)}}</td>
       ${{cols}}
@@ -2717,21 +2720,21 @@ function initReuniaoMensal() {{
       <td style="text-align:center">${{l.mttrH !== null ? fmtH(l.mttrH) : '-'}}</td>
       <td style="text-align:center">${{l.pctPrimeira}}%</td>
       <td style="text-align:center">${{l.pctDuvidas}}%</td>
-      <td style="text-align:center; font-weight:700; color:${{corReducao}}">${{l.reducaoDuvidas}}pp — ${{l.reducaoDuvidas >= META_DUVIDAS_REDUCAO_ALVO_PCT ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - l.reducaoDuvidas}}pp faltando`}}</td>
+      <td style="text-align:center; font-weight:700; color:${{corReducao}}">${{reducaoTexto}}</td>
       <td style="text-align:center">${{l.pctSla !== null ? l.pctSla+'%' : '-'}}</td>
     </tr>`;
   }}).join('');
   const pctDuvidasTotal = pctDuvidasTotalKpi;
-  const corReducaoTotal = mediaReducaoAno >= META_DUVIDAS_REDUCAO_ALVO_PCT ? 'var(--ok)' : (mediaReducaoAno >= 0 ? 'var(--warn)' : 'var(--danger)');
+  const corReducaoTotal = metaBatida ? 'var(--ok)' : (ytdReducaoDuvidas >= 0 ? 'var(--warn)' : 'var(--danger)');
   const totalRow = `<tr style="border-top:2px solid var(--panel-border); font-weight:700;">
-    <td>Media do ano</td>
+    <td>YTD (acumulado do ano)</td>
     ${{REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{totalGeral[c]}}</td>`).join('')}}
     <td style="text-align:center">${{totalGeralOutros}}</td>
     <td style="text-align:center">${{totalGeralFechados}}</td>
     <td style="text-align:center">${{statsGeral.mttrH !== null ? fmtH(statsGeral.mttrH) : '-'}}</td>
     <td style="text-align:center">${{statsGeral.pctPrimeira}}%</td>
     <td style="text-align:center">${{pctDuvidasTotal}}%</td>
-    <td style="text-align:center; color:${{corReducaoTotal}}">${{mediaReducaoAno}}% (media) — ${{metaBatida ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - mediaReducaoAno}}pp faltando`}}</td>
+    <td style="text-align:center; color:${{corReducaoTotal}}">${{ytdReducaoDuvidas}}pp (YTD) — ${{metaBatida ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp faltando`}}</td>
     <td style="text-align:center">${{statsGeral.pctSla !== null ? statsGeral.pctSla+'%' : '-'}}</td>
   </tr>`;
 
