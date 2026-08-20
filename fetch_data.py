@@ -13,19 +13,28 @@ import requests
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_URL = "https://api.movidesk.com/public/v1/tickets"
+# /tickets/past: endpoint documentado separadamente pela Movidesk especificamente pra dados
+# historicos ("retorna todos os chamados no formato D-1, com base na data de ultima atualizacao —
+# chamados atualizados no dia corrente devem ser buscados pela rota /tickets"). Aceita os mesmos
+# parametros OData ($select/$filter/$top/$skip). Usado pra meses historicos (nao o mes corrente/
+# anterior) porque a rota /tickets normal parecia devolver so' uma fracao dos chamados realmente
+# existentes pra meses antigos (confirmado comparando com uma exportacao direta do Movidesk de
+# chamados resolvidos desde jan/2026 — a maioria dos protocolos antigos simplesmente nao aparecia
+# via /tickets, mesmo filtrando por createdDate/protocol corretamente).
+PAST_URL = "https://api.movidesk.com/public/v1/tickets/past"
 TOKEN = os.environ["MOVIDESK_TOKEN"]
 
 MONTH_SELECT = "id,protocol,category,urgency,resolvedIn,slaSolutionDate,status,origin,createdDate,resolvedInFirstCall,actionCount,subject,ownerTeam,reopenedIn,tags"
 MONTH_EXPAND = "owner($select=businessName),clients,statusHistories"
 
 
-def fetch(params, retries=2):
+def fetch(params, retries=2, base_url=BASE_URL):
     params = dict(params)
     params["token"] = TOKEN
     last_exc = None
     for attempt in range(retries):
         try:
-            resp = requests.get(BASE_URL, params=params, timeout=90)
+            resp = requests.get(base_url, params=params, timeout=90)
             resp.raise_for_status()
             return resp.json()
         except requests.exceptions.RequestException as exc:
@@ -42,7 +51,7 @@ def fetch(params, retries=2):
 BISECT_DEADLINE_S = 150
 
 
-def fetch_page_resilient(base_params, skip, top, deadline=None):
+def fetch_page_resilient(base_params, skip, top, deadline=None, base_url=BASE_URL):
     """Busca uma pagina ($skip/$top); se a API devolver erro (ex.: 500 por um registro
     corrompido especifico numa das paginas — o que vinha travando TODA a sincronizacao desde
     2026-08-03 ~19h), particiona a pagina em blocos menores pra isolar e pular so' o(s) registro(s)
@@ -59,14 +68,14 @@ def fetch_page_resilient(base_params, skip, top, deadline=None):
         print(f"[aviso] tempo de bisecao esgotado — pulando o restante da pagina em $skip={skip} $top={top}", flush=True)
         return [], False
     try:
-        return fetch({**base_params, "$top": top, "$skip": skip}), True
+        return fetch({**base_params, "$top": top, "$skip": skip}, base_url=base_url), True
     except requests.exceptions.RequestException:
         if top <= 1:
             print(f"[aviso] pulando registro problematico em $skip={skip} (a API rejeitou mesmo isolado)", flush=True)
             return [], False
         half = top // 2
-        first, ok1 = fetch_page_resilient(base_params, skip, half, deadline)
-        second, ok2 = fetch_page_resilient(base_params, skip + half, top - half, deadline)
+        first, ok1 = fetch_page_resilient(base_params, skip, half, deadline, base_url)
+        second, ok2 = fetch_page_resilient(base_params, skip + half, top - half, deadline, base_url)
         return first + second, ok1 and ok2
 
 
@@ -89,7 +98,7 @@ def month_window(year, month):
     return start, mid, end
 
 
-def fetch_paginated(base_params, page_size=500, deadline_s=25):
+def fetch_paginated(base_params, page_size=500, deadline_s=25, base_url=BASE_URL):
     """Busca TODAS as paginas de um filtro, com $skip — um $top fixo sem paginacao (usado antes
     pra meses resolvidos) pode voltar incompleto silenciosamente (ex.: por rate-limit da API
     devolvendo menos itens sem erro). Confirmado que a API pode devolver MENOS itens que o $top
@@ -104,7 +113,7 @@ def fetch_paginated(base_params, page_size=500, deadline_s=25):
     items = []
     skip = 0
     while skip < 50000:
-        page, completo = fetch_page_resilient(base_params, skip, page_size, time.time() + deadline_s)
+        page, completo = fetch_page_resilient(base_params, skip, page_size, time.time() + deadline_s, base_url)
         items += page
         if not completo:
             # pagina incompleta (erro/tempo esgotado) nao pode ser confundida com "acabou" — avanca
@@ -117,19 +126,27 @@ def fetch_paginated(base_params, page_size=500, deadline_s=25):
     return items
 
 
-def fetch_created_month(year, month):
+def fetch_created_month(year, month, historico=False):
     """Busca TODOS os chamados CRIADOS num mes (qualquer status), com historico de status
     completo. Diferente de filtrar por resolvedIn (ver comentario grande abaixo sobre o porque),
     createdDate e' um campo estavel — uma vez criado, nunca muda — entao essa busca nao sofre
-    o mesmo problema de 'encolher' com o tempo."""
+    o mesmo problema de 'encolher' com o tempo.
+
+    historico=True usa a rota /tickets/past (ver comentario no PAST_URL acima) em vez de /tickets —
+    usada pros meses que NAO sao o corrente/anterior. A Movidesk documenta /tickets/past como a
+    rota certa pra dados historicos (baseada em D-1/lastUpdate); confirmado que /tickets sozinha
+    devolvia so' uma fracao dos chamados de meses antigos comparando com uma exportacao direta do
+    Movidesk (chamados resolvidos desde jan/2026) — a maioria dos protocolos dessa exportacao pra
+    meses antigos simplesmente nao existia via /tickets, mesmo com o filtro correto."""
     start, mid, end = month_window(year, month)
+    url = PAST_URL if historico else BASE_URL
 
     def fetch_window(a, b):
         return fetch_paginated({
             "$select": MONTH_SELECT,
             "$expand": MONTH_EXPAND,
             "$filter": f"createdDate ge {a.strftime('%Y-%m-%d')}T00:00:00Z and createdDate lt {b.strftime('%Y-%m-%d')}T00:00:00Z",
-        })
+        }, base_url=url)
 
     result = fetch_window(start, mid) + fetch_window(mid, end)
     time.sleep(3)  # respiro generoso — a API parece degradar (devolver poucos itens, sem erro) apos
@@ -289,7 +306,7 @@ def main():
         elif backfill_feitos < MESES_BACKFILL_POR_CICLO:
             backfill_feitos += 1
             print(f"[info] backfill: buscando mes de criacao historico {key} (offset={offset})...", flush=True)
-            data = fetch_created_month(target.year, target.month)
+            data = fetch_created_month(target.year, target.month, historico=True)
             if len(data) < MES_TOTAL_MINIMO_SANIDADE:
                 # Um mes com poucos chamados PODE ser real (ex.: abril/2026 sempre voltou
                 # exatamente 89, mesmo apos endurecer a paginacao pra so' parar numa pagina
@@ -302,7 +319,7 @@ def main():
                 print(f"[aviso] mes de criacao {key} voltou com so' {len(data)} chamados (< {MES_TOTAL_MINIMO_SANIDADE}) — "
                       f"confirmando com uma segunda tentativa antes de aceitar ou descartar...", flush=True)
                 time.sleep(3)
-                data2 = fetch_created_month(target.year, target.month)
+                data2 = fetch_created_month(target.year, target.month, historico=True)
                 if len(data2) == len(data):
                     save(f"created_raw_{key}.json", data)
                     print(f"[info] mes de criacao {key}: confirmado em {len(data)} chamados nas duas tentativas "
