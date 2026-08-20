@@ -2716,7 +2716,7 @@ function initReuniaoMensal() {{
       <td style="text-align:center">${{l.mttrH !== null ? fmtH(l.mttrH) : '-'}}</td>
       <td style="text-align:center">${{l.pctPrimeira}}%</td>
       <td style="text-align:center">${{l.pctDuvidas}}%</td>
-      <td style="text-align:center; font-weight:700; color:${{corReducao}}">${{l.reducaoDuvidas >= META_DUVIDAS_REDUCAO_ALVO_PCT ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - l.reducaoDuvidas}}pp faltando`}}</td>
+      <td style="text-align:center; font-weight:700; color:${{corReducao}}">${{l.reducaoDuvidas}}pp — ${{l.reducaoDuvidas >= META_DUVIDAS_REDUCAO_ALVO_PCT ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - l.reducaoDuvidas}}pp faltando`}}</td>
       <td style="text-align:center">${{l.pctSla !== null ? l.pctSla+'%' : '-'}}</td>
     </tr>`;
   }}).join('');
