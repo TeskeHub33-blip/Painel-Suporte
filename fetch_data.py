@@ -272,15 +272,6 @@ def main():
     print(f"[info] chamados abertos: {len(open_tickets_fresco)} via /tickets + "
           f"{len(open_tickets) - len(open_tickets_fresco)} adicionais via /tickets/past "
           f"= {len(open_tickets)} no total", flush=True)
-    # DEBUG temporario — rastreando por que 4 chamados dormentes do cliente 3ZX (ids 30528,
-    # 20976, 19994, 11485) somem do backlog mesmo com $expand reduzido/page_size menor/orderby
-    # estavel/merge com /tickets/past. Confirma em qual das duas fontes (ou nenhuma) cada um
-    # aparece, pra isolar se o problema e' na busca ou em alguma etapa depois.
-    debug_ids_3zx = {30528, 20976, 19994, 11485}
-    fresco_ids = {t['id'] for t in open_tickets_fresco}
-    historico_ids = {t['id'] for t in open_tickets_historico}
-    for did in debug_ids_3zx:
-        print(f"[debug-3zx] id={did}: fresco={did in fresco_ids} historico={did in historico_ids}", flush=True)
     save("tickets_full.json", open_tickets)
 
     # 2. Resolvidos hoje
