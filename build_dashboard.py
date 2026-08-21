@@ -100,17 +100,26 @@ def extract_org(clients_list):
                 return nome
     return 'Sem cliente'
 
-# Campo customizado "Motivo de Priorizacao" no Movidesk (customFieldId 248215) — lista suspensa
-# com o motivo pelo qual o chamado foi priorizado (ex.: "Whatsapp", "Carga parada (saida de
-# veiculo)"). Preenchido independente da tag "Priorizado" — alguns chamados tem so' a tag, outros
-# so' o campo, entao o painel considera priorizado se QUALQUER um dos dois estiver presente.
+# Campo customizado "Motivo de Priorizacao" no Movidesk (customFieldId 248215) — MULTI-SELECAO
+# (o agente pode marcar mais de um motivo ao mesmo tempo, ex.: "Carga parada (saida de veiculo)"
+# E "Whatsapp" juntos no mesmo chamado). Valores possiveis confirmados: "Carga parada (saida de
+# veiculo)", "Posto fiscal", "Impacto financeiro", "Outros", "Whatsapp". Preenchido independente
+# da tag "Priorizado" — alguns chamados tem so' a tag, outros so' o campo, entao o painel
+# considera priorizado se QUALQUER um dos dois estiver presente.
+#
+# Retorna TODOS os itens marcados juntos numa string separada por "; " (nao so' o primeiro) — um
+# extract que pegasse so' items[0] perderia chamados onde o motivo relevante (ex.: carga parada)
+# fosse o SEGUNDO item marcado, nao o primeiro. O separador "; " deixa buscas por substring (via
+# regex/includes) funcionando normalmente pra checar se UM motivo especifico esta entre os
+# marcados, e quem precisa da lista completa (ex.: breakdown por motivo) faz split("; ").
 MOTIVO_PRIORIZACAO_FIELD_ID = 248215
 def extract_motivo_priorizacao(custom_field_values):
     for cf in (custom_field_values or []):
         if cf.get('customFieldId') == MOTIVO_PRIORIZACAO_FIELD_ID:
             items = cf.get('items') or []
-            if items:
-                return items[0].get('customFieldItem')
+            nomes = [it.get('customFieldItem') for it in items if it.get('customFieldItem')]
+            if nomes:
+                return '; '.join(nomes)
     return None
 
 MESES_PT = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
@@ -926,20 +935,25 @@ function barsHtml(aggEntries, filterName, maxRows) {{
     </div>`).join('');
 }}
 
-// Agrupa chamados priorizados pelo motivo (campo customizado "Motivo de Priorizacao" — ex.:
-// 'Whatsapp', 'Carga parada (saida de veiculo)'); chamados so com a tag e sem o campo caem em
-// 'Sem motivo informado'.
+// Agrupa chamados priorizados pelo motivo (campo customizado "Motivo de Priorizacao" — MULTI-
+// SELECAO: um chamado pode ter mais de um motivo marcado ao mesmo tempo, ex.: 'Whatsapp' E 'Carga
+// parada (saida de veiculo)' juntos). O valor vem como string "Motivo A; Motivo B" (ver
+// extract_motivo_priorizacao no lado Python) — cada chamado conta em CADA motivo que tiver
+// marcado (nao so' no primeiro), entao a soma das barras pode passar do total de chamados
+// priorizados. Chamados so com a tag e sem o campo caem em 'Sem motivo informado'.
+function motivosDoTicket(t) {{
+  return t.motivoPriorizacao ? t.motivoPriorizacao.split('; ') : ['Sem motivo informado'];
+}}
 function porMotivoPriorizacaoHtml(items) {{
   const agg = {{}};
   items.forEach(t => {{
-    const motivo = t.motivoPriorizacao || 'Sem motivo informado';
-    (agg[motivo] = agg[motivo] || []).push(t);
+    motivosDoTicket(t).forEach(motivo => {{ (agg[motivo] = agg[motivo] || []).push(t); }});
   }});
   const entries = Object.entries(agg).sort((a,b) => b[1].length - a[1].length);
   if (!entries.length) return '<div class="empty-msg">Nenhum chamado priorizado agora</div>';
   const top = Math.max(...entries.map(e => e[1].length));
   return entries.map(([motivo, lista]) => `
-    <div class="bar-row" onclick="renderModal(${{jsStr(motivo + ' — priorizados')}}, TICKETS.filter(t=>(t.motivoPriorizacao||'Sem motivo informado')===${{jsStr(motivo)}} && t._isPriorizado), 'open')">
+    <div class="bar-row" onclick="renderModal(${{jsStr(motivo + ' — priorizados')}}, TICKETS.filter(t=>motivosDoTicket(t).indexOf(${{jsStr(motivo)}})!==-1 && t._isPriorizado), 'open')">
       <div class="bar-label">${{esc(motivo)}}</div>
       <div class="bar-track"><div class="bar-fill" style="width:${{(lista.length/top*100).toFixed(0)}}%"></div></div>
       <div class="bar-value">${{lista.length}}</div>
