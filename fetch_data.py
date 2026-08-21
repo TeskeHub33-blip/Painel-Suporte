@@ -277,6 +277,12 @@ def main():
           f"= {len(open_tickets)} no total", flush=True)
     # Segunda passada so' pra customFieldValues (ver comentario acima sobre a divergencia da API
     # nesse campo especifico) — em lotes pequenos por id, filtro "id eq X or id eq Y or ...".
+    # IMPORTANTE: precisa de $expand=customFieldValues($expand=items) — expand ANINHADO — pra
+    # popular a colecao "items" dentro de cada customFieldValues (confirmado na documentacao da
+    # Movidesk). So' "customFieldValues" (sem o expand aninhado de items) faz campos que tem
+    # SOMENTE items (sem "value"), como "Motivo de Priorizacao" (multi-selecao), saírem vazios da
+    # resposta do endpoint de listagem — mesmo aparecendo certo no endpoint de chamado unico
+    # (get_ticket), que nao depende desse mecanismo de expand.
     def fetch_custom_field_values_por_id(ids, chunk_size=20):
         ids = sorted(set(ids))
         out = {}
@@ -285,7 +291,7 @@ def main():
             filt = " or ".join(f"id eq {tid}" for tid in chunk)
             pagina = fetch({
                 "$select": "id",
-                "$expand": "customFieldValues",
+                "$expand": "customFieldValues($expand=items)",
                 "$filter": filt,
                 "$top": chunk_size,
             })
