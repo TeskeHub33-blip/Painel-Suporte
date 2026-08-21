@@ -272,6 +272,14 @@ def main():
     print(f"[info] chamados abertos: {len(open_tickets_fresco)} via /tickets + "
           f"{len(open_tickets) - len(open_tickets_fresco)} adicionais via /tickets/past "
           f"= {len(open_tickets)} no total", flush=True)
+    # DEBUG temporario — motivoPriorizacao esta vindo null pra TODOS os chamados abertos (era
+    # esperado ter varios preenchidos, ex.: id=32193/protocolo 202608001239 confirmado via
+    # get_ticket com o campo "Carga parada (saida de veiculo)" marcado). Rastreia o customFieldValues
+    # bruto desse chamado especifico como veio desta busca (lista+expand), pra comparar com o que
+    # get_ticket (endpoint de chamado unico) mostra.
+    debug_ticket = next((t for t in open_tickets if t.get('id') == 32193), None)
+    print(f"[debug-motivo] id=32193 encontrado={debug_ticket is not None} "
+          f"customFieldValues={debug_ticket.get('customFieldValues') if debug_ticket else 'N/A'}", flush=True)
     save("tickets_full.json", open_tickets)
 
     # 2. Resolvidos hoje
