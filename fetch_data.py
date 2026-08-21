@@ -206,14 +206,17 @@ def main():
     # silenciosamente os chamados abertos mais recentes assim que o backlog passa desse numero
     # (foi o que aconteceu: com $top=500 e ~744 chamados abertos, os ~244 mais novos sumiam do
     # painel inteiro, nao so' da busca do Fluxograma).
-    # customFieldValues($select=customFieldId,items) traz o campo customizado "Motivo de
-    # Priorizacao" (customFieldId 248215) usado pra detalhar o motivo do chamado ter sido
-    # priorizado (ex.: "Whatsapp", "Carga parada (saida de veiculo)", etc.) — igual ao padrao ja
-    # usado pra actions/statusHistories, e' uma colecao relacionada, entao precisa de $expand (nao
-    # $select simples).
+    # customFieldValues (campo customizado "Motivo de Priorizacao", customFieldId 248215) NAO entra
+    # no $expand combinado abaixo — confirmado que o endpoint de LISTAGEM devolve essa colecao
+    # vazia ([]) pra chamados que genuinamente tem o campo marcado (confirmado comparando com
+    # get_ticket, o endpoint de chamado unico, que mostra os valores certos pro mesmo id). E' uma
+    # divergencia real da API entre os dois endpoints pra essa colecao especifica, nao um erro
+    # nosso. Por isso customFieldValues e' buscado numa segunda passada, em lotes pequenos por id
+    # (mesmo padrao usado em fetch_actions_for_ids/gov_check_ids, que nunca apresentou esse
+    # problema) — ver bloco apos o fetch principal de chamados abertos.
     open_tickets_base_params = {
         "$select": "id,protocol,subject,category,urgency,status,ownerTeam,createdDate,lastUpdate,tags,slaSolutionDate,reopenedIn,origin",
-        "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1),customFieldValues",
+        "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1)",
         "$filter": "status ne 'Fechado' and status ne 'Cancelado' and status ne 'Resolvido'",
         # $orderby explicito por id (campo estavel, nunca muda) — sem isso a API ordena por
         # lastUpdate desc por padrao, e como chamados abertos tem lastUpdate mudando o tempo todo
@@ -272,14 +275,31 @@ def main():
     print(f"[info] chamados abertos: {len(open_tickets_fresco)} via /tickets + "
           f"{len(open_tickets) - len(open_tickets_fresco)} adicionais via /tickets/past "
           f"= {len(open_tickets)} no total", flush=True)
-    # DEBUG temporario — motivoPriorizacao esta vindo null pra TODOS os chamados abertos (era
-    # esperado ter varios preenchidos, ex.: id=32193/protocolo 202608001239 confirmado via
-    # get_ticket com o campo "Carga parada (saida de veiculo)" marcado). Rastreia o customFieldValues
-    # bruto desse chamado especifico como veio desta busca (lista+expand), pra comparar com o que
-    # get_ticket (endpoint de chamado unico) mostra.
-    debug_ticket = next((t for t in open_tickets if t.get('id') == 32193), None)
-    print(f"[debug-motivo] id=32193 encontrado={debug_ticket is not None} "
-          f"customFieldValues={debug_ticket.get('customFieldValues') if debug_ticket else 'N/A'}", flush=True)
+    # Segunda passada so' pra customFieldValues (ver comentario acima sobre a divergencia da API
+    # nesse campo especifico) — em lotes pequenos por id, filtro "id eq X or id eq Y or ...".
+    def fetch_custom_field_values_por_id(ids, chunk_size=20):
+        ids = sorted(set(ids))
+        out = {}
+        for i in range(0, len(ids), chunk_size):
+            chunk = ids[i:i + chunk_size]
+            filt = " or ".join(f"id eq {tid}" for tid in chunk)
+            pagina = fetch({
+                "$select": "id",
+                "$expand": "customFieldValues",
+                "$filter": filt,
+                "$top": chunk_size,
+            })
+            for t in pagina:
+                out[t['id']] = t.get('customFieldValues') or []
+        return out
+
+    custom_fields_por_id = fetch_custom_field_values_por_id([t['id'] for t in open_tickets])
+    for t in open_tickets:
+        t['customFieldValues'] = custom_fields_por_id.get(t['id'], [])
+    com_motivo = sum(1 for v in custom_fields_por_id.values()
+                      if any(cf.get('customFieldId') == 248215 and cf.get('items') for cf in v))
+    print(f"[info] customFieldValues buscado em lotes por id: {com_motivo} chamados com "
+          f"Motivo de Priorizacao marcado", flush=True)
     save("tickets_full.json", open_tickets)
 
     # 2. Resolvidos hoje

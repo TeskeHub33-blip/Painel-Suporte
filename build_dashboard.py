@@ -815,8 +815,8 @@ TICKETS.forEach(t => {{
 // Alife e Vinicius sao os tecnicos do turno de contraturno
 const CONTRATURNO_TECNICOS = ['Alife Caetano dos Santos', 'Vinicius Campestrini'];
 
-// "Priorizados por outros motivos": usa SO' o campo customizado "Motivo de Priorizacao" marcado
-// no chamado — nao mais o texto livre do assunto/descricao (gerava falso positivo em qualquer
+// "Chamados alto impacto": usa SO' o campo customizado "Motivo de Priorizacao" marcado no
+// chamado — nao mais o texto livre do assunto/descricao (gerava falso positivo em qualquer
 // chamado que so' mencionasse CIOT/MDFe/CTe sem ter carga parada de fato). Motivo e' multi-
 // selecao (ver extract_motivo_priorizacao/motivosDoTicket) — conta quando QUALQUER motivo
 // marcado for diferente de Whatsapp (Carga parada (saida de veiculo), Posto fiscal, Impacto
@@ -1024,7 +1024,7 @@ const LABELS = {{
   priorizados: 'Priorizados (WhatsApp)',
   naoAtualizadosHoje: 'Nao atualizados hoje',
   contraturno: 'Contraturno (Alife e Vinicius) — em atendimento',
-  cargaParada: 'Priorizados por outros motivos (nao Whatsapp)',
+  cargaParada: 'Chamados alto impacto',
   classificacaoIncorreta: 'Possivel classificacao incorreta',
   chatsEmAtendimento: 'Chats em atendimento (aproximado)',
   chatsAguardando: 'Chats aguardando atendimento (aproximado)',
@@ -1789,7 +1789,7 @@ const hintPriorizados = `Tempo medio de resolucao (mes) — priorizados: ${{mttr
 document.getElementById('kpiRow2').innerHTML =
   kpiTile('neutral', priorizados.length, 'Priorizados (WhatsApp)', 'priorizados', hintPriorizados) +
   kpiTile('neutral', contraturno.length, 'Contraturno em atendimento', 'contraturno') +
-  kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Priorizados por outros motivos', 'cargaParada') +
+  kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Chamados alto impacto', 'cargaParada') +
   kpiTile(classificacaoIncorreta.length === 0 ? 'ok' : 'warn', classificacaoIncorreta.length, 'Possivel classificacao incorreta', 'classificacaoIncorreta');
 
 document.getElementById('gridChatsLive').innerHTML = `
@@ -1906,7 +1906,7 @@ document.getElementById('gridBottom').innerHTML = `
       <tbody>${{tableHtml(naoAtualizadosHoje.sort((a,b)=>(b._hoursOpen||0)-(a._hoursOpen||0)), 'open', 14)}}</tbody></table>
   </div>
   <div class="panel">
-    <h2>🚛 Priorizados por outros motivos${{exportButtonHtml("exportLiveList(cargaParada, 'carga_parada.txt')")}}</h2>
+    <h2>🚛 Chamados alto impacto${{exportButtonHtml("exportLiveList(cargaParada, 'carga_parada.txt')")}}</h2>
     <div class="panel-sub">${{cargaParada.length}} chamados abertos com o campo "Motivo de Priorizacao" marcado (Carga parada, Posto fiscal, Impacto financeiro ou Outros) — nao inclui os que so tem Whatsapp marcado</div>
     <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Aberto ha</th></tr></thead>
       <tbody>${{tableHtml(cargaParada.sort((a,b)=>(b._hoursOpen||0)-(a._hoursOpen||0)), 'open', 14)}}</tbody></table>
