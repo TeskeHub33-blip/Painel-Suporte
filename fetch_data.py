@@ -25,7 +25,12 @@ PAST_URL = "https://api.movidesk.com/public/v1/tickets/past"
 TOKEN = os.environ["MOVIDESK_TOKEN"]
 
 MONTH_SELECT = "id,protocol,category,urgency,resolvedIn,slaSolutionDate,status,origin,createdDate,resolvedInFirstCall,actionCount,subject,ownerTeam,reopenedIn,tags"
-MONTH_EXPAND = "owner($select=businessName),clients,statusHistories"
+# clients($expand=organization): quando o contato do chamado e' uma PESSOA (personType 1, ex.: o
+# usuario que abriu o chamado) em vez da propria organizacao (personType 2), o Movidesk so' devolve
+# a empresa vinculada a esse contato (campo "organization" dentro do client) se ela for
+# explicitamente expandida — mesmo padrao ja confirmado com customFieldValues($expand=items): sem
+# o expand aninhado, o campo simplesmente vem ausente/null, nao com erro nenhum.
+MONTH_EXPAND = "owner($select=businessName),clients($expand=organization),statusHistories"
 
 
 def fetch(params, retries=2, base_url=BASE_URL):
@@ -241,7 +246,11 @@ def main():
     # problema) — ver bloco apos o fetch principal de chamados abertos.
     open_tickets_base_params = {
         "$select": "id,protocol,subject,category,urgency,status,ownerTeam,createdDate,lastUpdate,tags,slaSolutionDate,reopenedIn,origin",
-        "$expand": "owner($select=businessName),clients,statusHistories,actions($select=description,type,origin;$top=1)",
+        # clients($expand=organization) — ver comentario em MONTH_EXPAND: sem o expand aninhado, a
+        # empresa vinculada a um contato pessoa fisica (personType 1) vem ausente, e o dashboard cai
+        # no fallback (dominio do email) que gera um nome diferente do nome oficial da organizacao,
+        # fragmentando o mesmo cliente em dois grupos distintos na aba Clientes (caso real: 3ZX).
+        "$expand": "owner($select=businessName),clients($expand=organization),statusHistories,actions($select=description,type,origin;$top=1)",
         "$filter": "status ne 'Fechado' and status ne 'Cancelado' and status ne 'Resolvido'",
         # $orderby explicito por id (campo estavel, nunca muda) — sem isso a API ordena por
         # lastUpdate desc por padrao, e como chamados abertos tem lastUpdate mudando o tempo todo

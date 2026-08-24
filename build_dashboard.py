@@ -84,13 +84,24 @@ def company_name_from_domain(domain):
 def extract_org(clients_list):
     # Sempre resolve para a EMPRESA do cliente, nunca para o nome de uma pessoa fisica:
     # 1) se o Movidesk retornou um client do tipo organizacao (personType == 2), usa o nome dele.
-    # 2) senao, tenta inferir a empresa a partir do dominio do e-mail do contato (ignorando
-    #    provedores genericos como gmail/hotmail/outlook).
-    # 3) se nada disso for possivel, marca como "Sem cliente" (nunca usa nome de pessoa).
+    # 2) senao, o client e' uma PESSOA (personType 1, ex.: quem abriu o chamado) — nesse caso a
+    #    organizacao real vem aninhada em client["organization"] (precisa do $expand aninhado
+    #    clients($expand=organization) no fetch_data.py; sem isso o campo vem ausente). Usa o nome
+    #    OFICIAL da organizacao aqui, em vez de adivinhar pelo dominio do email — caso contrario o
+    #    mesmo cliente fica fragmentado em dois nomes diferentes na aba Clientes (ex.: chamados com
+    #    contato pessoa ca[iam] em "3zx", inferido do dominio do email, enquanto chamados com a
+    #    organizacao como client direto ficavam em "✴️ 3ZX (24x7)", o nome oficial — confirmado
+    #    2026-08-24: cliente 3ZX com 6 chamados abertos no Movidesk, so' 2 apareciam no painel).
+    # 3) so' cai pro dominio do e-mail se nem isso existir (contato sem organizacao vinculada).
+    # 4) se nada disso for possivel, marca como "Sem cliente" (nunca usa nome de pessoa).
     clients_list = clients_list or []
     orgs = [c for c in clients_list if c.get('personType') == 2]
     if orgs:
         return orgs[0].get('businessName') or 'Sem cliente'
+    for c in clients_list:
+        org = c.get('organization')
+        if org and org.get('businessName'):
+            return org['businessName']
     for c in clients_list:
         email = c.get('email') or ''
         m = re.search(r'@([\w.-]+)$', email)
