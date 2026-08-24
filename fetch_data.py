@@ -196,6 +196,31 @@ def first_resolution_month(ticket):
 MES_TOTAL_MINIMO_SANIDADE = 700
 
 
+# Busca customFieldValues (campo "Motivo de Priorizacao", customFieldId 248215) em lotes pequenos
+# por id ("id eq X or id eq Y or ..."). IMPORTANTE: precisa de $expand=customFieldValues($expand=
+# items) — expand ANINHADO — pra popular a colecao "items" dentro de cada customFieldValues
+# (confirmado na documentacao da Movidesk). So' "customFieldValues" (sem o expand aninhado de
+# items) faz campos que tem SOMENTE items (sem "value"), como esse (multi-selecao), saírem vazios
+# da resposta do endpoint de listagem — mesmo aparecendo certo no endpoint de chamado unico
+# (get_ticket), que nao depende desse mecanismo de expand. Usado tanto pros chamados abertos
+# quanto pros resolvidos do mes corrente (ver main()).
+def fetch_custom_field_values_por_id(ids, chunk_size=20):
+    ids = sorted(set(ids))
+    out = {}
+    for i in range(0, len(ids), chunk_size):
+        chunk = ids[i:i + chunk_size]
+        filt = " or ".join(f"id eq {tid}" for tid in chunk)
+        pagina = fetch({
+            "$select": "id",
+            "$expand": "customFieldValues($expand=items)",
+            "$filter": filt,
+            "$top": chunk_size,
+        })
+        for t in pagina:
+            out[t['id']] = t.get('customFieldValues') or []
+    return out
+
+
 def main():
     now_utc = datetime.utcnow()
     today_str = now_utc.strftime("%Y-%m-%d")
@@ -275,30 +300,6 @@ def main():
     print(f"[info] chamados abertos: {len(open_tickets_fresco)} via /tickets + "
           f"{len(open_tickets) - len(open_tickets_fresco)} adicionais via /tickets/past "
           f"= {len(open_tickets)} no total", flush=True)
-    # Segunda passada so' pra customFieldValues (ver comentario acima sobre a divergencia da API
-    # nesse campo especifico) — em lotes pequenos por id, filtro "id eq X or id eq Y or ...".
-    # IMPORTANTE: precisa de $expand=customFieldValues($expand=items) — expand ANINHADO — pra
-    # popular a colecao "items" dentro de cada customFieldValues (confirmado na documentacao da
-    # Movidesk). So' "customFieldValues" (sem o expand aninhado de items) faz campos que tem
-    # SOMENTE items (sem "value"), como "Motivo de Priorizacao" (multi-selecao), saírem vazios da
-    # resposta do endpoint de listagem — mesmo aparecendo certo no endpoint de chamado unico
-    # (get_ticket), que nao depende desse mecanismo de expand.
-    def fetch_custom_field_values_por_id(ids, chunk_size=20):
-        ids = sorted(set(ids))
-        out = {}
-        for i in range(0, len(ids), chunk_size):
-            chunk = ids[i:i + chunk_size]
-            filt = " or ".join(f"id eq {tid}" for tid in chunk)
-            pagina = fetch({
-                "$select": "id",
-                "$expand": "customFieldValues($expand=items)",
-                "$filter": filt,
-                "$top": chunk_size,
-            })
-            for t in pagina:
-                out[t['id']] = t.get('customFieldValues') or []
-        return out
-
     custom_fields_por_id = fetch_custom_field_values_por_id([t['id'] for t in open_tickets])
     for t in open_tickets:
         t['customFieldValues'] = custom_fields_por_id.get(t['id'], [])
@@ -427,6 +428,15 @@ def main():
     print(f"[info] chamados buscados ate agora (inclui {MESES_BUFFER_ANTERIOR} meses de buffer antes de jan/2026 "
           f"so' pra pegar backlog antigo resolvido no periodo exibido): {len(todos_criados)} "
           f"({sem_resolucao} ainda sem resolucao, {fora_do_periodo} resolvidos fora do periodo jan/2026-atual)", flush=True)
+    # customFieldValues (Motivo de Priorizacao) so' e' buscado pro mes CORRENTE (offset 0) dos
+    # resolvidos — usado pro hint de tempo medio de resolucao "alto impacto vs demais" no card
+    # Ao Vivo. Nao busca pra todos os meses/anos de historico (custo alto demais, milhares de
+    # chamados) — so' faz sentido pro mes corrente, igual ao resto do painel (N1/N2 tecnico etc.)
+    # ja so' calcula pro mes corrente por causa do mesmo tipo de limitacao de custo.
+    if resolved_months.get(0):
+        custom_fields_resolvidos_mes0 = fetch_custom_field_values_por_id([t['id'] for t in resolved_months[0]])
+        for t in resolved_months[0]:
+            t['customFieldValues'] = custom_fields_resolvidos_mes0.get(t['id'], [])
     for offset in range(meses_desde_jan2026):
         save(f"resolved_month_{offset}.json", resolved_months[offset])
 

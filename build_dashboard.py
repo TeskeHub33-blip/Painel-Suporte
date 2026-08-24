@@ -199,6 +199,10 @@ def clean_month_record(t, keep_status_histories):
     }
     if keep_status_histories:
         rec['statusHistories'] = clean_status_histories(t.get('statusHistories'))
+        # customFieldValues (Motivo de Priorizacao) so' e' buscado pelo fetch_data.py pro mes
+        # CORRENTE dos resolvidos (mesmo custo-beneficio de so' manter statusHistories no mes
+        # corrente) — por isso condicionado ao mesmo flag keep_status_histories.
+        rec['motivoPriorizacao'] = extract_motivo_priorizacao(t.get('customFieldValues'))
     return rec
 
 # Carrega todos os meses disponiveis desde janeiro/2026 (0 = corrente, 1 = mes anterior, etc.) —
@@ -1786,10 +1790,21 @@ const mttrPriorizados = avg(resolvidosComTag.filter(r => r._isPriorizado && r.cr
 const mttrNaoPriorizados = avg(resolvidosComTag.filter(r => !r._isPriorizado && r.createdDate && r.resolvedIn).map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000));
 const hintPriorizados = `Tempo medio de resolucao (mes) — priorizados: ${{mttrPriorizados !== null ? fmtH(mttrPriorizados) : '-'}} · nao priorizados: ${{mttrNaoPriorizados !== null ? fmtH(mttrNaoPriorizados) : '-'}}`;
 
+// Mesma logica, mas pro criterio de "Chamados alto impacto" (Motivo de Priorizacao != Whatsapp) —
+// so' calculavel pro mes corrente, ja que motivoPriorizacao so' e' buscado pros resolvidos do mes
+// corrente (ver comentario em clean_month_record).
+const resolvidosComMotivo = RESOLVED_MONTH_ALL.map(r => ({{
+  ...r,
+  _altoImpacto: !!r.motivoPriorizacao && r.motivoPriorizacao.split('; ').some(m => m !== 'Whatsapp'),
+}}));
+const mttrAltoImpacto = avg(resolvidosComMotivo.filter(r => r._altoImpacto && r.createdDate && r.resolvedIn).map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000));
+const mttrNaoAltoImpacto = avg(resolvidosComMotivo.filter(r => !r._altoImpacto && r.createdDate && r.resolvedIn).map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000));
+const hintAltoImpacto = `Tempo medio de resolucao (mes) — alto impacto: ${{mttrAltoImpacto !== null ? fmtH(mttrAltoImpacto) : '-'}} · demais: ${{mttrNaoAltoImpacto !== null ? fmtH(mttrNaoAltoImpacto) : '-'}}`;
+
 document.getElementById('kpiRow2').innerHTML =
   kpiTile('neutral', priorizados.length, 'Priorizados (WhatsApp)', 'priorizados', hintPriorizados) +
   kpiTile('neutral', contraturno.length, 'Contraturno em atendimento', 'contraturno') +
-  kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Chamados alto impacto', 'cargaParada') +
+  kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Chamados alto impacto', 'cargaParada', hintAltoImpacto) +
   kpiTile(classificacaoIncorreta.length === 0 ? 'ok' : 'warn', classificacaoIncorreta.length, 'Possivel classificacao incorreta', 'classificacaoIncorreta');
 
 document.getElementById('gridChatsLive').innerHTML = `
