@@ -38,7 +38,28 @@ jobs:
           cp dashboard_suporte.html index.html
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add index.html
-          git add created_raw_*.json 2>/dev/null || true
-          git diff --staged --quiet || git commit -m "Atualizacao automatica $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-          git push
+          # Retry automatico em caso de race de push (outro run/push concorrente chegou primeiro) —
+          # em vez de falhar o job inteiro, resincroniza com a origin mais recente e tenta de novo.
+          # git reset --mixed move o HEAD pra origin/main mas MANTEM as mudancas no working tree
+          # (index.html/created_raw_*.json continuam la', so' "sem commit ainda"), entao a cada
+          # tentativa a gente recomita so' os arquivos que este job gerou (fonte da verdade pra
+          # este run), por cima do que quer que tenha chegado entre o checkout e agora — evita
+          # conflito de merge num arquivo gerado, onde nao faz sentido tentar reconciliar diffs.
+          for i in 1 2 3 4 5; do
+            git add index.html
+            git add created_raw_*.json 2>/dev/null || true
+            if git diff --staged --quiet; then
+              echo "Nada para publicar (sem mudancas)."
+              exit 0
+            fi
+            git commit -m "Atualizacao automatica $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            if git push; then
+              exit 0
+            fi
+            echo "Push falhou (tentativa $i/5) — resincronizando com origin/main e tentando de novo..."
+            git fetch origin main
+            git reset --mixed origin/main
+            sleep $(( (RANDOM % 8) + 3 ))
+          done
+          echo "Todas as tentativas de push falharam."
+          exit 1
