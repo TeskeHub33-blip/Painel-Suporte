@@ -1599,7 +1599,7 @@ function tierDoTecnico(tecnico) {{ return N2_TECNICOS.indexOf(tecnico) !== -1 ? 
 // faziam o calculo automatico ficar silenciosamente vazio pra essas pessoas).
 const ROSTER_METAS = [
   {{ nome: 'Alexander G. Junior', nivel: 'N1' }},
-  {{ nome: 'Bruna Beatriz', nivel: 'N1' }},
+  {{ nome: 'Bruna Rocha', nivel: 'N1' }},
   {{ nome: 'Guilherme Paredes', nivel: 'N1' }},
   {{ nome: 'Guilherme Meyer', nivel: 'N1' }},
   {{ nome: 'Maria Paula', nivel: 'N1' }},
