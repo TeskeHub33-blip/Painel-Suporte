@@ -2752,11 +2752,11 @@ function initReuniaoMensal() {{
     const corReducao = l.reducaoDuvidas > 0 ? 'var(--ok)' : (l.reducaoDuvidas === 0 ? 'var(--warn)' : 'var(--danger)');
     const reducaoTexto = l.reducaoDuvidas > 0 ? `✓ ${{l.reducaoDuvidas}}pp de reducao` : (l.reducaoDuvidas === 0 ? '– sem variacao' : `✗ ${{Math.abs(l.reducaoDuvidas)}}pp de aumento`);
     return `<tr>
-      <td style="font-weight:600">${{esc(l.label)}}</td>
+      <td style="font-weight:600; cursor:pointer;" title="Ver detalhamento" onclick="openModalReuniaoMensalTotal(${{jsStr(l.mesKey)}})">${{esc(l.label)}}</td>
       ${{cols}}
       ${{tdClick(`openModalReuniaoMensalOutros(${{jsStr(l.mesKey)}})`, l.outros)}}
       ${{tdClick(`openModalReuniaoMensalTotal(${{jsStr(l.mesKey)}})`, l.atendidosSuporte, ' font-weight:700;')}}
-      <td style="text-align:center">${{l.mttrH !== null ? fmtH(l.mttrH) : '-'}}</td>
+      ${{tdClick(`openModalReuniaoMensalTotal(${{jsStr(l.mesKey)}})`, l.mttrH !== null ? fmtH(l.mttrH) : '-')}}
       ${{tdClick(`openModalReuniaoMensalPrimeiraResposta(${{jsStr(l.mesKey)}})`, l.pctPrimeira+'%')}}
       ${{tdClick(`openModalReuniaoMensalCategoria(${{jsStr(l.mesKey)}}, 'Dúvida')`, l.pctDuvidas+'%')}}
       ${{tdClick(`openModalReuniaoMensalCategoria(${{jsStr(l.mesKey)}}, 'Dúvida')`, reducaoTexto, ` font-weight:700; color:${{corReducao}};`)}}
@@ -2767,11 +2767,11 @@ function initReuniaoMensal() {{
   const pctDuvidasTotal = pctDuvidasTotalKpi;
   const corReducaoTotal = metaBatida ? 'var(--ok)' : (ytdReducaoDuvidas >= 0 ? 'var(--warn)' : 'var(--danger)');
   const totalRow = `<tr style="border-top:2px solid var(--panel-border); font-weight:700;">
-    <td>YTD (acumulado do ano)</td>
+    <td style="cursor:pointer;" title="Ver detalhamento" onclick="openModalReuniaoMensalTotal('total')">YTD (acumulado do ano)</td>
     ${{REUNIAO_MENSAL_CATEGORIAS.map(c => tdClick(`openModalReuniaoMensalCategoria('total', ${{jsStr(c)}})`, totalGeral[c])).join('')}}
     ${{tdClick(`openModalReuniaoMensalOutros('total')`, totalGeralOutros)}}
     ${{tdClick(`openModalReuniaoMensalTotal('total')`, totalGeralFechados)}}
-    <td style="text-align:center">${{statsGeral.mttrH !== null ? fmtH(statsGeral.mttrH) : '-'}}</td>
+    ${{tdClick(`openModalReuniaoMensalTotal('total')`, statsGeral.mttrH !== null ? fmtH(statsGeral.mttrH) : '-')}}
     ${{tdClick(`openModalReuniaoMensalPrimeiraResposta('total')`, statsGeral.pctPrimeira+'%')}}
     ${{tdClick(`openModalReuniaoMensalCategoria('total', 'Dúvida')`, pctDuvidasTotal+'%')}}
     ${{tdClick(`openModalReuniaoMensalCategoria('total', 'Dúvida')`, `${{ytdReducaoDuvidas}}pp (YTD) — ${{metaBatida ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp faltando`}}`, ` color:${{corReducaoTotal}};`)}}
