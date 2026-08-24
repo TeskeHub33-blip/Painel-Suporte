@@ -1621,7 +1621,9 @@ const METAS_TECNICAS_N1 = [
   'SLA de resposta (Em atendimento)',
   'SLA de chamados por urgência',
   'Resolvidos na primeira resposta',
-  'Assertividade na passagem de bugs com urgência correta',
+  // "Assertividade na passagem de bugs com urgencia correta" foi REMOVIDO (2026-08-24, a pedido do
+  // usuario) — o Movidesk nao guarda historico de mudancas de urgencia, so' o valor atual/final, entao
+  // nao ha como saber se a urgencia foi alterada apos o repasse pro N2. Nao automatizavel nem manual.
   'Assertividade de análise (não devolvido pelo N2)',
   'Atendimento de X% das telas do EmiteAI',
 ];
@@ -1676,7 +1678,11 @@ function metaChave(colaborador, indicador) {{ return colaborador + '|' + indicad
 // manuais por falta de fonte de dados. "alvoPct" e' a meta oficial usada pra converter o % bruto
 // numa nota de atingimento (v=1.0 significa meta batida), na mesma escala 0-1+ do lancamento manual.
 const META_AUTO_INDICADORES = {{
-  'Resolvidos na primeira resposta': {{ alvoPct: 95 }},
+  'Resolvidos na primeira resposta': {{ alvoPct: 95, filtro: isPrimeiraResposta, rotulo: 'de primeira resposta' }},
+  // Proatividade (N3): chamados nas categorias "Monitoramento Proatívo"/"Monitoramento Shopee" (ambas
+  // comecam com "Monitoramento") sobre o total resolvido no mes pelo colaborador. Meta 10% confirmada
+  // com o usuario 2026-08-24.
+  'Metas de proatividade de chamados': {{ alvoPct: 10, filtro: r => (r.category || '').indexOf('Monitoramento') === 0, rotulo: 'de chamados de monitoramento (proatividade)' }},
 }};
 // Converte a chave "AAAA-MM" da grade de Apuracao de Metas (calendario fixo, definida em
 // ultimosMesesMetas) pro offset "0".."N" usado em RESOLVED_MONTHS (0 = mes corrente) — sao dois
@@ -1693,9 +1699,9 @@ function calcularMetaAutomatica(colaborador, indicador, mesKey) {{
   if (!(offset in MONTH_LABELS)) return null; // mes futuro ou fora da janela de dados disponivel
   const items = (RESOLVED_MONTHS[offset] || []).filter(r => r.ownerName === colaborador);
   if (!items.length) return null;
-  const pct = items.filter(isPrimeiraResposta).length / items.length;
+  const pct = items.filter(cfg.filtro).length / items.length;
   const v = pct / (cfg.alvoPct / 100);
-  return {{ v, j: `Automatico: ${{Math.round(pct*100)}}% de primeira resposta neste mes (meta ${{cfg.alvoPct}}%)`, automatico: true }};
+  return {{ v, j: `Automatico: ${{Math.round(pct*100)}}% ${{cfg.rotulo}} neste mes (meta ${{cfg.alvoPct}}%)`, automatico: true }};
 }}
 function getMetaEntry(colaborador, indicador, mesKey) {{
   const auto = calcularMetaAutomatica(colaborador, indicador, mesKey);
