@@ -30,7 +30,7 @@ MONTH_SELECT = "id,protocol,category,urgency,resolvedIn,slaSolutionDate,status,o
 # a empresa vinculada a esse contato (campo "organization" dentro do client) se ela for
 # explicitamente expandida — mesmo padrao ja confirmado com customFieldValues($expand=items): sem
 # o expand aninhado, o campo simplesmente vem ausente/null, nao com erro nenhum.
-MONTH_EXPAND = "owner($select=businessName),clients($expand=organization),statusHistories"
+MONTH_EXPAND = "owner($select=businessName),clients($expand=organization),statusHistories,ownerHistories"
 
 
 def fetch(params, retries=2, base_url=BASE_URL):

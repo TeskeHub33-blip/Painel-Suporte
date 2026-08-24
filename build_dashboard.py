@@ -39,6 +39,21 @@ def clean_status_histories(raw_list):
         })
     return out
 
+# Historico de troca de RESPONSAVEL (dono) do chamado — usado pro indicador N2 "tempo pra assumir
+# chamado na fila N2" e "tempo de atendimento depois que assumiu": statusHistories sozinho so' diz
+# QUANDO o chamado entrou no status 'Em atendimento - N2', nao QUEM/QUANDO um tecnico N2 de fato
+# assumiu a titularidade dele. So' mantido pro mes corrente (mesmo motivo do statusHistories).
+def clean_owner_histories(raw_list):
+    out = []
+    for h in (raw_list or []):
+        owner = h.get('owner') or {}
+        out.append({
+            'ownerTeam': h.get('ownerTeam'),
+            'ownerName': owner.get('businessName'),
+            'changedDate': h.get('changedDate'),
+        })
+    return out
+
 
 # Notas/acoes de chamados as vezes trazem links de anexo com URLs assinadas do S3 do Movidesk
 # (AWSAccessKeyId=...&Signature=...) ou outras credenciais coladas por engano — removidas antes de
@@ -210,6 +225,7 @@ def clean_month_record(t, keep_status_histories):
     }
     if keep_status_histories:
         rec['statusHistories'] = clean_status_histories(t.get('statusHistories'))
+        rec['ownerHistories'] = clean_owner_histories(t.get('ownerHistories'))
         # customFieldValues (Motivo de Priorizacao) so' e' buscado pelo fetch_data.py pro mes
         # CORRENTE dos resolvidos (mesmo custo-beneficio de so' manter statusHistories no mes
         # corrente) — por isso condicionado ao mesmo flag keep_status_histories.
@@ -1482,12 +1498,34 @@ function calcularCicloAtendimentoTecnico(r) {{
       : hist.filter(h => isDevQueueStatus(h.status)).reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0);
   }}
 
+  // "tempo pra assumir" (N2): statusHistories so' diz QUANDO o chamado entrou na fila N2, nao QUEM/
+  // QUANDO um tecnico de fato assumiu a titularidade — por isso usa ownerHistories (troca de dono),
+  // pegando a primeira troca de dono que aconteceu NA OU DEPOIS da entrada no status N2. "tempo de
+  // atendimento depois que assumiu" e' so' resolvedIn menos essa data de assuncao.
+  let tempoAssumirN2H = null;
+  let assumirN2Date = null;
+  if (idxN2 !== -1 && (r.ownerHistories || []).length) {{
+    const entradaN2Date = hist[idxN2]._d;
+    const assumiu = r.ownerHistories
+      .map(h => ({{ ...h, _d: parseDt(h.changedDate) }}))
+      .filter(h => h._d && entradaN2Date && h._d >= entradaN2Date)
+      .sort((a,b) => a._d - b._d)[0];
+    if (assumiu) {{
+      tempoAssumirN2H = (assumiu._d - entradaN2Date) / 3600000;
+      assumirN2Date = assumiu._d;
+    }}
+  }}
+  const resolvidoDate = parseDt(r.resolvedIn);
+  const tempoAtendimentoAposAssumirH = (assumirN2Date && resolvidoDate) ? (resolvidoDate - assumirN2Date) / 3600000 : null;
+
   return {{
     protocol: r.protocol,
     urgency: r.urgency,
     ownerName: r.ownerName,
     tempoRepasseN1H,
     tempoAberturaTaskH,
+    tempoAssumirN2H,
+    tempoAtendimentoAposAssumirH,
     devopsH: devopsSeconds !== null ? devopsSeconds / 3600 : null,
     passouPorN2: idxN2 !== -1,
     passouPorTask: idxDevQueueAny !== -1,
@@ -1678,11 +1716,19 @@ function metaChave(colaborador, indicador) {{ return colaborador + '|' + indicad
 // manuais por falta de fonte de dados. "alvoPct" e' a meta oficial usada pra converter o % bruto
 // numa nota de atingimento (v=1.0 significa meta batida), na mesma escala 0-1+ do lancamento manual.
 const META_AUTO_INDICADORES = {{
-  'Resolvidos na primeira resposta': {{ alvoPct: 95, filtro: isPrimeiraResposta, rotulo: 'de primeira resposta' }},
+  'Resolvidos na primeira resposta': {{ tipo: 'pct', alvoPct: 95, filtro: isPrimeiraResposta, rotulo: 'de primeira resposta' }},
   // Proatividade (N3): chamados nas categorias "Monitoramento Proatívo"/"Monitoramento Shopee" (ambas
   // comecam com "Monitoramento") sobre o total resolvido no mes pelo colaborador. Meta 10% confirmada
   // com o usuario 2026-08-24.
-  'Metas de proatividade de chamados': {{ alvoPct: 10, filtro: r => (r.category || '').indexOf('Monitoramento') === 0, rotulo: 'de chamados de monitoramento (proatividade)' }},
+  'Metas de proatividade de chamados': {{ tipo: 'pct', alvoPct: 10, filtro: r => (r.category || '').indexOf('Monitoramento') === 0, rotulo: 'de chamados de monitoramento (proatividade)' }},
+  // Indicadores de tempo do N2 — so' calculaveis pro MES CORRENTE (statusHistories/ownerHistories so'
+  // sao mantidos pro mes atual, nao ha como calcular retroativo). Sem historico de meses anteriores
+  // pra usar de baseline individual do proprio colaborador, a meta e' "10% melhor que a MEDIA DO TIME
+  // N2 no mesmo mes" (ver mediaTimeN2ParaCampo) — decisao registrada aqui pra ficar clara caso o
+  // criterio precise mudar depois.
+  'Tempo para assumir chamado (fila N2, em nome de um N1)': {{ tipo: 'tempo', campo: 'tempoAssumirN2H' }},
+  'Tempo de atendimento depois que assumiu': {{ tipo: 'tempo', campo: 'tempoAtendimentoAposAssumirH' }},
+  'Tempo de abertura de task': {{ tipo: 'tempo', campo: 'tempoAberturaTaskH' }},
 }};
 // Converte a chave "AAAA-MM" da grade de Apuracao de Metas (calendario fixo, definida em
 // ultimosMesesMetas) pro offset "0".."N" usado em RESOLVED_MONTHS (0 = mes corrente) — sao dois
@@ -1692,11 +1738,35 @@ function offsetResolvedMonthsDeMesKey(mesKeyAnoMes) {{
   const hoje = new Date();
   return String((hoje.getFullYear() - ano) * 12 + (hoje.getMonth() + 1 - mes));
 }}
+// Media do TIME N2 inteiro (todo mundo com nivel N2 no ROSTER_METAS) pra um campo de tempo, no mes
+// corrente — usada como baseline dos indicadores de tempo do N2 (ver comentario em META_AUTO_INDICADORES).
+function mediaTimeN2ParaCampo(campo) {{
+  const nomesN2 = ROSTER_METAS.filter(c => c.nivel === 'N2').map(c => c.nome);
+  const medias = nomesN2.map(nome => {{
+    const items = (RESOLVED_MONTHS['0'] || []).filter(r => r.ownerName === nome && CATEGORIAS_TECNICAS_N2.indexOf(r.category) !== -1);
+    const ciclos = items.map(calcularCicloAtendimentoTecnico).filter(Boolean);
+    return avg(ciclos.map(c => c[campo]).filter(v => v !== null && v !== undefined));
+  }}).filter(v => v !== null);
+  return avg(medias);
+}}
 function calcularMetaAutomatica(colaborador, indicador, mesKey) {{
   const cfg = META_AUTO_INDICADORES[indicador];
   if (!cfg) return undefined; // undefined = "nao e' automatico", diferente de null ("automatico mas sem dado")
   const offset = offsetResolvedMonthsDeMesKey(mesKey);
   if (!(offset in MONTH_LABELS)) return null; // mes futuro ou fora da janela de dados disponivel
+  if (cfg.tipo === 'tempo') {{
+    if (offset !== '0') return null; // so' mes corrente — statusHistories/ownerHistories nao existe pros demais
+    const items = (RESOLVED_MONTHS['0'] || []).filter(r => r.ownerName === colaborador && CATEGORIAS_TECNICAS_N2.indexOf(r.category) !== -1);
+    const ciclos = items.map(calcularCicloAtendimentoTecnico).filter(Boolean);
+    const valores = ciclos.map(c => c[cfg.campo]).filter(v => v !== null && v !== undefined);
+    if (!valores.length) return null;
+    const valorMedio = avg(valores);
+    const mediaTime = mediaTimeN2ParaCampo(cfg.campo);
+    if (mediaTime === null || mediaTime <= 0) return null;
+    const meta = mediaTime * 0.9;
+    const v = valorMedio > 0 ? meta / valorMedio : 1;
+    return {{ v, j: `Automatico: media de ${{fmtH(valorMedio)}} neste mes (meta: 10% melhor que a media do time N2 = ${{fmtH(meta)}})`, automatico: true }};
+  }}
   const items = (RESOLVED_MONTHS[offset] || []).filter(r => r.ownerName === colaborador);
   if (!items.length) return null;
   const pct = items.filter(cfg.filtro).length / items.length;
