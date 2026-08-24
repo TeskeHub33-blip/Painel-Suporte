@@ -534,6 +534,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
   width: min(920px, 92vw); max-height: 82vh; display: flex; flex-direction: column;
   box-shadow: 0 24px 64px rgba(26,26,44,0.22), 0 4px 16px rgba(0,0,0,0.10);
 }}
+.modal-box-lg {{ width: min(1240px, 96vw); }}
 .modal-head {{ display: flex; justify-content: space-between; align-items: center; padding: 21px 26px 16px; }}
 .modal-head h3 {{ margin: 0; font-size: 20px; font-weight: 600; color: var(--text); }}
 .modal-head .modal-count {{ color: var(--text3); font-size: 13px; margin-top: 2px; }}
@@ -736,6 +737,31 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 
   <div class="footer-note">
     Board gerado a partir do Movidesk (chamados nao fechados/cancelados/resolvidos) · Atualizacao agendada a cada 5 minutos · "Aging" = Em atendimento sem update ha 48h+ · "Contraturno" = chamados em atendimento com Alife Caetano dos Santos ou Vinicius Campestrini
+  </div>
+</div>
+
+<div class="modal-overlay" id="painelExecOverlay">
+  <div class="modal-box modal-box-lg">
+    <div class="modal-head">
+      <div>
+        <h3 id="painelExecTitle">Painel executivo</h3>
+        <div class="modal-count" id="painelExecCount"></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="export-btn" title="Exportar para Excel (.txt)" onclick="exportCurrentModal()">⬇ Excel</span>
+        <button class="modal-close" id="painelExecCloseBtn" aria-label="Fechar">✕</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="kpi-row" id="painelExecKpis" style="grid-template-columns: repeat(5, 1fr);"></div>
+      <div class="grid" id="painelExecCharts" style="margin-top: 4px;"></div>
+      <div class="panel" style="margin-top: 18px; flex-basis:100%; width:100%; min-height:unset;">
+        <h2>📋 Chamados (amostra)</h2>
+        <div class="panel-sub" id="painelExecTbodySub">Lista completa disponivel pelo botao "Exportar Excel" acima</div>
+        <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Categoria</th><th>Resolvido em</th></tr></thead>
+          <tbody id="painelExecTbody"></tbody></table>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1128,6 +1154,86 @@ function openModalHistTecnico(source, tecnico) {{
   const label = source === 'chats' ? 'Chats resolvidos' : 'Chamados resolvidos';
   renderModalHist(`${{label}} — ${{tecnico}} (mes)`, items);
 }}
+
+// --- Painel executivo: indicadores e graficos (KPIs + ranking por tecnico/cliente/categoria) por
+// tras de um numero, em vez de uma lista simples de chamados — usado nos drill-downs gerenciais
+// (ex.: tabela "Chamados fechados por categoria" da Reuniao Mensal).
+let PAINEL_EXEC_ITEMS = [];
+let PAINEL_EXEC_TITLE = '';
+let PAINEL_EXEC_GRUPOS = {{}};
+function topNPorChave(items, keyFn, n) {{
+  const counts = {{}};
+  items.forEach(r => {{ const k = keyFn(r) || 'Nao informado'; counts[k] = (counts[k] || 0) + 1; }});
+  return Object.entries(counts).sort((a,b) => b[1] - a[1]).slice(0, n || 10);
+}}
+function painelExecBarsHtml(pares, dim) {{
+  if (!pares.length) return '<div class="empty-msg">Sem dados</div>';
+  const top = Math.max(...pares.map(e => e[1]));
+  return pares.map(([nome, count], i) => `
+    <div class="bar-row" onclick="abrirPainelExecDrill('${{dim}}', ${{i}})">
+      <div class="bar-label">${{esc(nome)}}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${{(count/top*100).toFixed(0)}}%"></div></div>
+      <div class="bar-value">${{count}}</div>
+    </div>`).join('');
+}}
+function abrirPainelExecDrill(dim, idx) {{
+  const grupo = PAINEL_EXEC_GRUPOS[dim];
+  if (!grupo || !grupo[idx]) return;
+  const nome = grupo[idx][0];
+  const keyFn = dim === 'tecnico' ? (r => r.ownerName || 'Nao informado')
+    : dim === 'cliente' ? (r => r.clientOrg || 'Nao informado')
+    : (r => r.category || 'Sem categoria');
+  renderModalHist(`${{PAINEL_EXEC_TITLE}} — ${{nome}}`, PAINEL_EXEC_ITEMS.filter(r => keyFn(r) === nome));
+}}
+function renderPainelExecutivo(title, items, opts) {{
+  opts = opts || {{}};
+  PAINEL_EXEC_ITEMS = items;
+  PAINEL_EXEC_TITLE = title;
+  document.getElementById('painelExecTitle').textContent = title;
+  document.getElementById('painelExecCount').textContent = items.length + ' chamado(s)';
+
+  const ind = computeIndicadores(items);
+  const pctPrimeira = items.length ? Math.round(items.filter(isPrimeiraResposta).length / items.length * 100) : 0;
+  document.getElementById('painelExecKpis').innerHTML =
+    kpiTileStatic('neutral', items.length, 'Total de chamados', '') +
+    kpiTileStatic('warn', ind.mttrH !== null ? fmtH(ind.mttrH) : '-', 'Tempo medio de atendimento', `${{items.filter(r=>r.createdDate && r.resolvedIn).length}} com tempo calculavel`) +
+    kpiTileStatic(ind.pctSla !== null && ind.pctSla < 70 ? 'danger' : 'ok', ind.pctSla !== null ? `${{ind.pctSla}}%` : '-', 'SLA no prazo', `${{ind.comSlaLength}} com SLA definido`) +
+    kpiTileStatic('neutral', `${{pctPrimeira}}%`, '% 1a resposta', '') +
+    kpiTileStatic(ind.reincidencia > 0 ? 'danger' : 'ok', ind.reincidencia, 'Reincidencia (reabertos)', `${{ind.pctReincidencia}}% do total`);
+
+  const porTecnico = topNPorChave(items, r => r.ownerName, 10);
+  const porCliente = topNPorChave(items, r => r.clientOrg, 10);
+  const porCategoria = topNPorChave(items, r => r.category, 10);
+  PAINEL_EXEC_GRUPOS = {{ tecnico: porTecnico, cliente: porCliente, categoria: porCategoria }};
+
+  document.getElementById('painelExecCharts').innerHTML = `
+    <div class="panel" style="flex:1 1 320px; min-height:unset;">
+      <h2>👤 Por tecnico</h2>
+      <div>${{painelExecBarsHtml(porTecnico, 'tecnico')}}</div>
+    </div>
+    <div class="panel" style="flex:1 1 320px; min-height:unset;">
+      <h2>🏢 Por cliente</h2>
+      <div>${{painelExecBarsHtml(porCliente, 'cliente')}}</div>
+    </div>
+    ${{opts.ocultarCategoria ? '' : `<div class="panel" style="flex:1 1 320px; min-height:unset;">
+      <h2>🏷 Por categoria</h2>
+      <div>${{painelExecBarsHtml(porCategoria, 'categoria')}}</div>
+    </div>`}}
+  `;
+
+  const amostra = items.slice().sort((a,b) => new Date(b.resolvedIn) - new Date(a.resolvedIn));
+  document.getElementById('painelExecTbodySub').textContent = `Mostrando ${{Math.min(15, amostra.length)}} de ${{amostra.length}} — lista completa disponivel pelo botao "Exportar Excel" acima`;
+  document.getElementById('painelExecTbody').innerHTML = tableHtmlHist(amostra, 15);
+  document.getElementById('painelExecOverlay').classList.add('open');
+  CURRENT_MODAL_ITEMS = items;
+  CURRENT_MODAL_KIND = 'hist';
+}}
+document.getElementById('painelExecCloseBtn').addEventListener('click', () => {{
+  document.getElementById('painelExecOverlay').classList.remove('open');
+}});
+document.getElementById('painelExecOverlay').addEventListener('click', (e) => {{
+  if (e.target.id === 'painelExecOverlay') e.currentTarget.classList.remove('open');
+}});
 // Situacoes recorrentes no mes: agrupa os chamados resolvidos por assunto normalizado, listando os
 // que se repetiram 2+ vezes e quais clientes ("ofensores") tiveram esse mesmo problema.
 function normalizeSubjectHist(s) {{
@@ -1182,7 +1288,10 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {{
   if (e.target.id === 'modalOverlay') e.currentTarget.classList.remove('open');
 }});
 document.addEventListener('keydown', (e) => {{
-  if (e.key === 'Escape') document.getElementById('modalOverlay').classList.remove('open');
+  if (e.key === 'Escape') {{
+    document.getElementById('modalOverlay').classList.remove('open');
+    document.getElementById('painelExecOverlay').classList.remove('open');
+  }}
 }});
 
 // Titulos/nomes dos cards principais podem ser editados (duplo clique) — a alteracao fica
@@ -2797,25 +2906,25 @@ function labelReuniaoMensalMes(mesKey) {{
 }}
 function openModalReuniaoMensalCategoria(mesKey, categoria) {{
   const items = itensReuniaoMensalPorMes(mesKey).filter(r => (r.category || 'Sem categoria') === categoria);
-  renderModalHist(`${{categoria}} — ${{labelReuniaoMensalMes(mesKey)}}`, items);
+  renderPainelExecutivo(`${{categoria}} — ${{labelReuniaoMensalMes(mesKey)}}`, items, {{ ocultarCategoria: true }});
 }}
 function openModalReuniaoMensalOutros(mesKey) {{
   const items = itensReuniaoMensalPorMes(mesKey).filter(r => REUNIAO_MENSAL_CATEGORIAS.indexOf(r.category || 'Sem categoria') === -1);
-  renderModalHist(`Outros — ${{labelReuniaoMensalMes(mesKey)}}`, items);
+  renderPainelExecutivo(`Outros — ${{labelReuniaoMensalMes(mesKey)}}`, items);
 }}
 function openModalReuniaoMensalTotal(mesKey) {{
-  renderModalHist(`Chamados atendidos (Suporte) — ${{labelReuniaoMensalMes(mesKey)}}`, itensReuniaoMensalPorMes(mesKey));
+  renderPainelExecutivo(`Chamados atendidos (Suporte) — ${{labelReuniaoMensalMes(mesKey)}}`, itensReuniaoMensalPorMes(mesKey));
 }}
 function openModalReuniaoMensalPrimeiraResposta(mesKey) {{
   const items = itensReuniaoMensalPorMes(mesKey).filter(isPrimeiraResposta);
-  renderModalHist(`Resolvidos c/ 1a resposta — ${{labelReuniaoMensalMes(mesKey)}}`, items);
+  renderPainelExecutivo(`Resolvidos c/ 1a resposta — ${{labelReuniaoMensalMes(mesKey)}}`, items);
 }}
 function openModalReuniaoMensalSla(mesKey, escopo) {{
   let items = itensReuniaoMensalPorMes(mesKey);
   if (escopo === 'suporte') items = items.filter(r => CATEGORIAS_EXCLUIDAS_SLA_SUPORTE.indexOf(r.category || 'Sem categoria') === -1);
   items = items.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r));
   const escopoLabel = escopo === 'suporte' ? 'Suporte' : 'EmiteAi';
-  renderModalHist(`Chamados considerados no SLA ${{escopoLabel}} — ${{labelReuniaoMensalMes(mesKey)}}`, items);
+  renderPainelExecutivo(`Chamados considerados no SLA ${{escopoLabel}} — ${{labelReuniaoMensalMes(mesKey)}}`, items);
 }}
 
 // ============================================================
@@ -3440,7 +3549,8 @@ tick();
 // Usa uma URL com timestamp (em vez de location.reload()) para forcar o navegador a buscar
 // a versao mais nova do HTML na rede, sem risco de servir uma copia antiga do cache.
 setInterval(() => {{
-  const modalOpen = document.getElementById('modalOverlay') && document.getElementById('modalOverlay').classList.contains('open');
+  const modalOpen = (document.getElementById('modalOverlay') && document.getElementById('modalOverlay').classList.contains('open'))
+    || (document.getElementById('painelExecOverlay') && document.getElementById('painelExecOverlay').classList.contains('open'));
   if (!modalOpen) location.href = location.pathname + '?t=' + Date.now();
 }}, 5 * 60 * 1000);
 </script>
