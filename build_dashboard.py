@@ -514,6 +514,9 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 .meta-cell.meta-warn {{ border-color: var(--warn-bord); color: var(--warn); background: var(--warn-dim); }}
 .meta-cell.meta-danger {{ border-color: var(--danger-bord); color: var(--danger); background: var(--danger-dim); }}
 .meta-cell.meta-just::after {{ content: '📝'; font-size: 8px; margin-left: 3px; }}
+.meta-cell.meta-auto {{ cursor: default; }}
+.meta-cell.meta-auto:hover {{ border-color: var(--panel-border); }}
+.meta-cell.meta-auto::after {{ content: '🤖'; font-size: 8px; margin-left: 3px; }}
 .metas-resumo-cell {{ color: var(--text3); font-size: 11px; text-align: center; }}
 .meta-editor-overlay {{
   position: fixed; inset: 0; background: rgba(26,26,44,0.55); z-index: 80;
@@ -1589,19 +1592,24 @@ function tierDoTecnico(tecnico) {{ return N2_TECNICOS.indexOf(tecnico) !== -1 ? 
 // so a apuracao e a nota. Os dados sao lancados aqui (clique na celula do mes) e ficam salvos no
 // localStorage deste navegador (nao ha backend — nao sincroniza entre maquinas/pessoas).
 // ============================================================
+// "nome" precisa bater EXATAMENTE com o ownerName real do Movidesk (o mesmo usado em
+// RESOLVED_MONTHS/TICKETS) — e' a chave usada tanto pro lancamento manual quanto pro calculo
+// automatico de indicadores (ver META_AUTO_INDICADORES). Nomes corrigidos em 2026-08-24 apos
+// confirmar contra os 8 meses reais de producao (varios estavam com variacoes/truncamentos que
+// faziam o calculo automatico ficar silenciosamente vazio pra essas pessoas).
 const ROSTER_METAS = [
-  {{ nome: 'Alexander Junior', nivel: 'N1' }},
+  {{ nome: 'Alexander G. Junior', nivel: 'N1' }},
   {{ nome: 'Bruna Beatriz', nivel: 'N1' }},
   {{ nome: 'Guilherme Paredes', nivel: 'N1' }},
-  {{ nome: 'Guilherme Prochnow Meyer', nivel: 'N1' }},
-  {{ nome: 'Maria Paula de Olivera', nivel: 'N1' }},
+  {{ nome: 'Guilherme Meyer', nivel: 'N1' }},
+  {{ nome: 'Maria Paula', nivel: 'N1' }},
   {{ nome: 'João Victor Matoso', nivel: 'N1' }},
-  {{ nome: 'Laura Machado', nivel: 'N1' }},
-  {{ nome: 'Vitor G. Andrade', nivel: 'N1' }},
+  {{ nome: 'Laura A. Machado', nivel: 'N1' }},
+  {{ nome: 'Vitor Andrade', nivel: 'N1' }},
   {{ nome: 'Alife Caetano dos Santos', nivel: 'N2' }},
   {{ nome: 'Gabriel Schmitt Müller', nivel: 'N2' }},
   {{ nome: 'Vinicius Campestrini', nivel: 'N2' }},
-  {{ nome: 'Monique Zeferino', nivel: 'N2' }},
+  {{ nome: 'Monique A. Zeferino', nivel: 'N2' }},
   {{ nome: 'Vitor Hugo Siegel da Silva', nivel: 'N3' }},
 ];
 function nivelDoColaboradorMetas(nome) {{
@@ -1661,7 +1669,37 @@ function metasStoreLoad() {{
 }}
 function metasStoreSave(store) {{ localStorage.setItem(METAS_STORE_KEY, JSON.stringify(store)); }}
 function metaChave(colaborador, indicador) {{ return colaborador + '|' + indicador; }}
+
+// Indicadores tecnicos calculados automaticamente a partir dos chamados do Movidesk, em vez de
+// lancamento manual na Apuracao de Metas — decisao do usuario (2026-08-24): so' os indicadores que
+// ja tem dado confiavel no pipeline viram automaticos; os demais (Azure DevOps, FAQs, etc.) seguem
+// manuais por falta de fonte de dados. "alvoPct" e' a meta oficial usada pra converter o % bruto
+// numa nota de atingimento (v=1.0 significa meta batida), na mesma escala 0-1+ do lancamento manual.
+const META_AUTO_INDICADORES = {{
+  'Resolvidos na primeira resposta': {{ alvoPct: 95 }},
+}};
+// Converte a chave "AAAA-MM" da grade de Apuracao de Metas (calendario fixo, definida em
+// ultimosMesesMetas) pro offset "0".."N" usado em RESOLVED_MONTHS (0 = mes corrente) — sao dois
+// esquemas de chave diferentes pro mesmo conceito de mes, cada um adequado ao seu consumidor.
+function offsetResolvedMonthsDeMesKey(mesKeyAnoMes) {{
+  const [ano, mes] = mesKeyAnoMes.split('-').map(Number);
+  const hoje = new Date();
+  return String((hoje.getFullYear() - ano) * 12 + (hoje.getMonth() + 1 - mes));
+}}
+function calcularMetaAutomatica(colaborador, indicador, mesKey) {{
+  const cfg = META_AUTO_INDICADORES[indicador];
+  if (!cfg) return undefined; // undefined = "nao e' automatico", diferente de null ("automatico mas sem dado")
+  const offset = offsetResolvedMonthsDeMesKey(mesKey);
+  if (!(offset in MONTH_LABELS)) return null; // mes futuro ou fora da janela de dados disponivel
+  const items = (RESOLVED_MONTHS[offset] || []).filter(r => r.ownerName === colaborador);
+  if (!items.length) return null;
+  const pct = items.filter(isPrimeiraResposta).length / items.length;
+  const v = pct / (cfg.alvoPct / 100);
+  return {{ v, j: `Automatico: ${{Math.round(pct*100)}}% de primeira resposta neste mes (meta ${{cfg.alvoPct}}%)`, automatico: true }};
+}}
 function getMetaEntry(colaborador, indicador, mesKey) {{
+  const auto = calcularMetaAutomatica(colaborador, indicador, mesKey);
+  if (auto !== undefined) return auto;
   const store = metasStoreLoad();
   const linha = store[metaChave(colaborador, indicador)];
   return (linha && linha[mesKey]) ? linha[mesKey] : null;
@@ -1762,14 +1800,18 @@ function metasGridHtml(colaborador) {{
     const preenchidos = serie.filter(s => s.entry !== null).length;
     const m3 = metaMediaUltimosN(serie, 3);
     const m6 = metaMediaUltimosN(serie, 6);
+    const automatico = !!META_AUTO_INDICADORES[nome];
     const cells = serie.map(s => {{
       const v = s.entry ? s.entry.v : null;
       const temJust = s.entry && s.entry.j;
+      if (automatico) {{
+        return `<td><span class="meta-cell meta-auto ${{metaCellCls(v)}}" title="${{temJust ? esc(s.entry.j) : 'Calculado automaticamente — sem chamados suficientes neste mes'}}">${{v === null ? '–' : Math.round(v*100)+'%'}}</span></td>`;
+      }}
       return `<td><span class="meta-cell ${{metaCellCls(v)}} ${{temJust ? 'meta-just' : ''}}" title="${{temJust ? esc(s.entry.j) : 'Clique para lancar'}}" onclick="abrirEditorMeta(${{jsStr(colaborador)}}, ${{jsStr(nome)}}, ${{jsStr(s.key)}}, ${{jsStr(s.label)}})">${{v === null ? '–' : Math.round(v*100)+'%'}}</span></td>`;
     }}).join('');
     const rowCls = tipo === 'Gestor' ? 'metas-row-gestor' : '';
     return `<tr class="${{rowCls}}">
-      <td class="metas-indicador">${{esc(nome)}}</td>
+      <td class="metas-indicador">${{esc(nome)}}${{automatico ? ' <span title="Calculado automaticamente a partir dos chamados do Movidesk, nao e lancado manualmente" style="font-size:10px;">🤖</span>' : ''}}</td>
       <td class="metas-tipo">${{tipo}}</td>
       ${{cells}}
       <td class="metas-resumo-cell">${{preenchidos}}/12</td>
