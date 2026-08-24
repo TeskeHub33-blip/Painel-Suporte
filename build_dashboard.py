@@ -2746,42 +2746,76 @@ function initReuniaoMensal() {{
       `soma da reducao (pp) de ${{linhas.length}} mes(es) fechado(s) · ${{metaBatida ? 'meta batida' : `faltam ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp no acumulado`}}`);
 
   const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs baseline (${{META_DUVIDAS_BASELINE_PCT}}%)</th><th>% SLA EmiteAi</th><th>% SLA Suporte</th>`;
+  const tdClick = (onclickExpr, content, extraStyle) => `<td style="text-align:center; cursor:pointer;${{extraStyle||''}}" title="Ver detalhamento" onclick="${{onclickExpr}}">${{content}}</td>`;
   const bodyRows = linhas.map(l => {{
-    const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{l.porCategoria[c] || 0}}</td>`).join('');
+    const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => tdClick(`openModalReuniaoMensalCategoria(${{jsStr(l.mesKey)}}, ${{jsStr(c)}})`, l.porCategoria[c] || 0)).join('');
     const corReducao = l.reducaoDuvidas > 0 ? 'var(--ok)' : (l.reducaoDuvidas === 0 ? 'var(--warn)' : 'var(--danger)');
     const reducaoTexto = l.reducaoDuvidas > 0 ? `✓ ${{l.reducaoDuvidas}}pp de reducao` : (l.reducaoDuvidas === 0 ? '– sem variacao' : `✗ ${{Math.abs(l.reducaoDuvidas)}}pp de aumento`);
     return `<tr>
       <td style="font-weight:600">${{esc(l.label)}}</td>
       ${{cols}}
-      <td style="text-align:center">${{l.outros}}</td>
-      <td style="text-align:center; font-weight:700">${{l.atendidosSuporte}}</td>
+      ${{tdClick(`openModalReuniaoMensalOutros(${{jsStr(l.mesKey)}})`, l.outros)}}
+      ${{tdClick(`openModalReuniaoMensalTotal(${{jsStr(l.mesKey)}})`, l.atendidosSuporte, ' font-weight:700;')}}
       <td style="text-align:center">${{l.mttrH !== null ? fmtH(l.mttrH) : '-'}}</td>
-      <td style="text-align:center">${{l.pctPrimeira}}%</td>
-      <td style="text-align:center">${{l.pctDuvidas}}%</td>
-      <td style="text-align:center; font-weight:700; color:${{corReducao}}">${{reducaoTexto}}</td>
-      <td style="text-align:center">${{l.pctSla !== null ? l.pctSla+'%' : '-'}}</td>
-      <td style="text-align:center">${{l.pctSlaSuporte !== null ? l.pctSlaSuporte+'%' : '-'}}</td>
+      ${{tdClick(`openModalReuniaoMensalPrimeiraResposta(${{jsStr(l.mesKey)}})`, l.pctPrimeira+'%')}}
+      ${{tdClick(`openModalReuniaoMensalCategoria(${{jsStr(l.mesKey)}}, 'Dúvida')`, l.pctDuvidas+'%')}}
+      ${{tdClick(`openModalReuniaoMensalCategoria(${{jsStr(l.mesKey)}}, 'Dúvida')`, reducaoTexto, ` font-weight:700; color:${{corReducao}};`)}}
+      ${{tdClick(`openModalReuniaoMensalSla(${{jsStr(l.mesKey)}}, 'geral')`, l.pctSla !== null ? l.pctSla+'%' : '-')}}
+      ${{tdClick(`openModalReuniaoMensalSla(${{jsStr(l.mesKey)}}, 'suporte')`, l.pctSlaSuporte !== null ? l.pctSlaSuporte+'%' : '-')}}
     </tr>`;
   }}).join('');
   const pctDuvidasTotal = pctDuvidasTotalKpi;
   const corReducaoTotal = metaBatida ? 'var(--ok)' : (ytdReducaoDuvidas >= 0 ? 'var(--warn)' : 'var(--danger)');
   const totalRow = `<tr style="border-top:2px solid var(--panel-border); font-weight:700;">
     <td>YTD (acumulado do ano)</td>
-    ${{REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{totalGeral[c]}}</td>`).join('')}}
-    <td style="text-align:center">${{totalGeralOutros}}</td>
-    <td style="text-align:center">${{totalGeralFechados}}</td>
+    ${{REUNIAO_MENSAL_CATEGORIAS.map(c => tdClick(`openModalReuniaoMensalCategoria('total', ${{jsStr(c)}})`, totalGeral[c])).join('')}}
+    ${{tdClick(`openModalReuniaoMensalOutros('total')`, totalGeralOutros)}}
+    ${{tdClick(`openModalReuniaoMensalTotal('total')`, totalGeralFechados)}}
     <td style="text-align:center">${{statsGeral.mttrH !== null ? fmtH(statsGeral.mttrH) : '-'}}</td>
-    <td style="text-align:center">${{statsGeral.pctPrimeira}}%</td>
-    <td style="text-align:center">${{pctDuvidasTotal}}%</td>
-    <td style="text-align:center; color:${{corReducaoTotal}}">${{ytdReducaoDuvidas}}pp (YTD) — ${{metaBatida ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp faltando`}}</td>
-    <td style="text-align:center">${{statsGeral.pctSla !== null ? statsGeral.pctSla+'%' : '-'}}</td>
-    <td style="text-align:center">${{statsGeralSuporte.pctSla !== null ? statsGeralSuporte.pctSla+'%' : '-'}}</td>
+    ${{tdClick(`openModalReuniaoMensalPrimeiraResposta('total')`, statsGeral.pctPrimeira+'%')}}
+    ${{tdClick(`openModalReuniaoMensalCategoria('total', 'Dúvida')`, pctDuvidasTotal+'%')}}
+    ${{tdClick(`openModalReuniaoMensalCategoria('total', 'Dúvida')`, `${{ytdReducaoDuvidas}}pp (YTD) — ${{metaBatida ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp faltando`}}`, ` color:${{corReducaoTotal}};`)}}
+    ${{tdClick(`openModalReuniaoMensalSla('total', 'geral')`, statsGeral.pctSla !== null ? statsGeral.pctSla+'%' : '-')}}
+    ${{tdClick(`openModalReuniaoMensalSla('total', 'suporte')`, statsGeralSuporte.pctSla !== null ? statsGeralSuporte.pctSla+'%' : '-')}}
   </tr>`;
 
   document.getElementById('tabelaReuniaoMensal').innerHTML = `
     <table><thead><tr><th>Mes</th>${{headerCols}}</tr></thead>
       <tbody>${{bodyRows}}${{totalRow}}</tbody></table>
   `;
+}}
+// Todos os "numeros" da tabela de Reuniao Mensal abrem um painel de detalhamento (lista dos
+// chamados por tras daquele valor) — mesKey 'total' agrega todos os meses da tabela (YTD).
+function itensReuniaoMensalPorMes(mesKey) {{
+  if (mesKey === 'total') {{
+    return Object.keys(MONTH_LABELS).reduce((acc, k) => acc.concat(RESOLVED_MONTHS[k] || []), []);
+  }}
+  return RESOLVED_MONTHS[mesKey] || [];
+}}
+function labelReuniaoMensalMes(mesKey) {{
+  return mesKey === 'total' ? 'YTD (acumulado do ano)' : MONTH_LABELS[mesKey];
+}}
+function openModalReuniaoMensalCategoria(mesKey, categoria) {{
+  const items = itensReuniaoMensalPorMes(mesKey).filter(r => (r.category || 'Sem categoria') === categoria);
+  renderModalHist(`${{categoria}} — ${{labelReuniaoMensalMes(mesKey)}}`, items);
+}}
+function openModalReuniaoMensalOutros(mesKey) {{
+  const items = itensReuniaoMensalPorMes(mesKey).filter(r => REUNIAO_MENSAL_CATEGORIAS.indexOf(r.category || 'Sem categoria') === -1);
+  renderModalHist(`Outros — ${{labelReuniaoMensalMes(mesKey)}}`, items);
+}}
+function openModalReuniaoMensalTotal(mesKey) {{
+  renderModalHist(`Chamados atendidos (Suporte) — ${{labelReuniaoMensalMes(mesKey)}}`, itensReuniaoMensalPorMes(mesKey));
+}}
+function openModalReuniaoMensalPrimeiraResposta(mesKey) {{
+  const items = itensReuniaoMensalPorMes(mesKey).filter(isPrimeiraResposta);
+  renderModalHist(`Resolvidos c/ 1a resposta — ${{labelReuniaoMensalMes(mesKey)}}`, items);
+}}
+function openModalReuniaoMensalSla(mesKey, escopo) {{
+  let items = itensReuniaoMensalPorMes(mesKey);
+  if (escopo === 'suporte') items = items.filter(r => CATEGORIAS_EXCLUIDAS_SLA_SUPORTE.indexOf(r.category || 'Sem categoria') === -1);
+  items = items.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r));
+  const escopoLabel = escopo === 'suporte' ? 'Suporte' : 'EmiteAi';
+  renderModalHist(`Chamados considerados no SLA ${{escopoLabel}} — ${{labelReuniaoMensalMes(mesKey)}}`, items);
 }}
 
 // ============================================================
