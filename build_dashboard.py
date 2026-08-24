@@ -2666,6 +2666,12 @@ if (sessionStorage.getItem('reuniaoMensalUnlocked') === '1') {{
 }}
 
 const REUNIAO_MENSAL_CATEGORIAS = ['Bloqueio Sistema', 'Bug', 'Dúvida', 'Melhoria', 'Erro Operacional', 'Terceiros', 'Serviços', 'GNRE Pagamento'];
+// "% SLA no prazo" (geral) considera TODAS as categorias — e' o SLA EmiteAi como um todo. "% SLA
+// Suporte" e' um recorte especifico so' das categorias de atendimento direto ao cliente (Bloqueio
+// Sistema, Duvida, Erro Operacional, GNRE Pagamento), desconsiderando Bug/Melhoria/Terceiros/
+// Servicos — que passam pela fila de Desenvolvimento e tem dinamica de prazo diferente (nao e'
+// atendimento puro de Suporte).
+const CATEGORIAS_EXCLUIDAS_SLA_SUPORTE = ['Bug', 'Melhoria', 'Terceiros', 'Serviços'];
 // Meta de duvidas: baseline historico de 61% (media de ~7 meses, 3535 chamados de duvida). A
 // reducao de um mes e' a diferenca em PONTOS PERCENTUAIS absolutos contra o baseline (nao relativa
 // ao baseline) — confirmado pelo usuario: "61% e' a media, em janeiro foi 56%, entao tivemos
@@ -2701,7 +2707,8 @@ function initReuniaoMensal() {{
     const duvidas = porCategoria['Dúvida'] || 0;
     const pctDuvidas = total ? Math.round(duvidas / total * 100) : 0;
     const stats = statsForMonth(items);
-    return {{ mesKey: k, label: MONTH_LABELS[k], porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla, mttrH: stats.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
+    const statsSuporte = statsForMonth(items.filter(r => CATEGORIAS_EXCLUIDAS_SLA_SUPORTE.indexOf(r.category || 'Sem categoria') === -1));
+    return {{ mesKey: k, label: MONTH_LABELS[k], porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla, pctSlaSuporte: statsSuporte.pctSla, mttrH: stats.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
   }});
 
   // KPIs de SLA mensal (um por mes, mais recente primeiro)
@@ -2722,6 +2729,7 @@ function initReuniaoMensal() {{
     todosItensPeriodo.push(...(RESOLVED_MONTHS[l.mesKey] || []));
   }});
   const statsGeral = statsForMonth(todosItensPeriodo);
+  const statsGeralSuporte = statsForMonth(todosItensPeriodo.filter(r => CATEGORIAS_EXCLUIDAS_SLA_SUPORTE.indexOf(r.category || 'Sem categoria') === -1));
 
   // Meta de duvidas: os 20pp de reducao sao CUMULATIVOS ao longo do ano (YTD) — o progresso e' a
   // SOMA da reducao (pp) de cada mes fechado ate agora (nao a media, nem o mes isolado). Ex.:
@@ -2737,7 +2745,7 @@ function initReuniaoMensal() {{
       `Meta de duvidas: reduzir 20pp (baseline ${{META_DUVIDAS_BASELINE_PCT}}%) — YTD acumulado`,
       `soma da reducao (pp) de ${{linhas.length}} mes(es) fechado(s) · ${{metaBatida ? 'meta batida' : `faltam ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp no acumulado`}}`);
 
-  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs baseline (${{META_DUVIDAS_BASELINE_PCT}}%)</th><th>% SLA no prazo</th>`;
+  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs baseline (${{META_DUVIDAS_BASELINE_PCT}}%)</th><th>% SLA EmiteAi</th><th>% SLA Suporte</th>`;
   const bodyRows = linhas.map(l => {{
     const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<td style="text-align:center">${{l.porCategoria[c] || 0}}</td>`).join('');
     const corReducao = l.reducaoDuvidas > 0 ? 'var(--ok)' : (l.reducaoDuvidas === 0 ? 'var(--warn)' : 'var(--danger)');
@@ -2752,6 +2760,7 @@ function initReuniaoMensal() {{
       <td style="text-align:center">${{l.pctDuvidas}}%</td>
       <td style="text-align:center; font-weight:700; color:${{corReducao}}">${{reducaoTexto}}</td>
       <td style="text-align:center">${{l.pctSla !== null ? l.pctSla+'%' : '-'}}</td>
+      <td style="text-align:center">${{l.pctSlaSuporte !== null ? l.pctSlaSuporte+'%' : '-'}}</td>
     </tr>`;
   }}).join('');
   const pctDuvidasTotal = pctDuvidasTotalKpi;
@@ -2766,6 +2775,7 @@ function initReuniaoMensal() {{
     <td style="text-align:center">${{pctDuvidasTotal}}%</td>
     <td style="text-align:center; color:${{corReducaoTotal}}">${{ytdReducaoDuvidas}}pp (YTD) — ${{metaBatida ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp faltando`}}</td>
     <td style="text-align:center">${{statsGeral.pctSla !== null ? statsGeral.pctSla+'%' : '-'}}</td>
+    <td style="text-align:center">${{statsGeralSuporte.pctSla !== null ? statsGeralSuporte.pctSla+'%' : '-'}}</td>
   </tr>`;
 
   document.getElementById('tabelaReuniaoMensal').innerHTML = `
