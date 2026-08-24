@@ -1656,7 +1656,8 @@ function nivelDoColaboradorMetas(nome) {{
 }}
 
 const METAS_TECNICAS_N1 = [
-  'SLA de resposta (Em atendimento)',
+  // "SLA de resposta (Em atendimento)" nao existe como indicador separado (confirmado com o usuario
+  // 2026-08-24) — a meta real e' "Resolvidos na primeira resposta", abaixo.
   'SLA de chamados por urgência',
   'Resolvidos na primeira resposta',
   // "Assertividade na passagem de bugs com urgencia correta" foi REMOVIDO (2026-08-24, a pedido do
@@ -1716,11 +1717,20 @@ function metaChave(colaborador, indicador) {{ return colaborador + '|' + indicad
 // manuais por falta de fonte de dados. "alvoPct" e' a meta oficial usada pra converter o % bruto
 // numa nota de atingimento (v=1.0 significa meta batida), na mesma escala 0-1+ do lancamento manual.
 const META_AUTO_INDICADORES = {{
-  'Resolvidos na primeira resposta': {{ tipo: 'pct', alvoPct: 95, filtro: isPrimeiraResposta, rotulo: 'de primeira resposta' }},
+  // Meta revisada de 95% pra 50% a pedido do usuario (2026-08-24) — nao existe indicador separado de
+  // "SLA de resposta", essa e' a meta real de primeira resposta.
+  'Resolvidos na primeira resposta': {{ tipo: 'pct', alvoPct: 50, filtro: isPrimeiraResposta, rotulo: 'de primeira resposta' }},
   // Proatividade (N3): chamados nas categorias "Monitoramento Proatívo"/"Monitoramento Shopee" (ambas
   // comecam com "Monitoramento") sobre o total resolvido no mes pelo colaborador. Meta 10% confirmada
   // com o usuario 2026-08-24.
   'Metas de proatividade de chamados': {{ tipo: 'pct', alvoPct: 10, filtro: r => (r.category || '').indexOf('Monitoramento') === 0, rotulo: 'de chamados de monitoramento (proatividade)' }},
+  // SLA por urgencia — meta 95%, considerando TODAS as urgencias (confirmado 2026-08-24). Denominador
+  // e' so' os chamados com SLA definido (mesmo criterio do resto do painel), nao o total de chamados.
+  'SLA de chamados por urgência': {{
+    tipo: 'pct', alvoPct: 95, rotulo: 'de SLA no prazo (todas urgencias)',
+    filtroDenominador: r => r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r),
+    filtro: r => parseDt(r.resolvedIn) <= parseDt(r.slaSolutionDate),
+  }},
   // Indicadores de tempo do N2 — so' calculaveis pro MES CORRENTE (statusHistories/ownerHistories so'
   // sao mantidos pro mes atual, nao ha como calcular retroativo). Sem historico de meses anteriores
   // pra usar de baseline individual do proprio colaborador, a meta e' "10% melhor que a MEDIA DO TIME
@@ -1767,7 +1777,8 @@ function calcularMetaAutomatica(colaborador, indicador, mesKey) {{
     const v = valorMedio > 0 ? meta / valorMedio : 1;
     return {{ v, j: `Automatico: media de ${{fmtH(valorMedio)}} neste mes (meta: 10% melhor que a media do time N2 = ${{fmtH(meta)}})`, automatico: true }};
   }}
-  const items = (RESOLVED_MONTHS[offset] || []).filter(r => r.ownerName === colaborador);
+  const todos = (RESOLVED_MONTHS[offset] || []).filter(r => r.ownerName === colaborador);
+  const items = cfg.filtroDenominador ? todos.filter(cfg.filtroDenominador) : todos;
   if (!items.length) return null;
   const pct = items.filter(cfg.filtro).length / items.length;
   const v = pct / (cfg.alvoPct / 100);
