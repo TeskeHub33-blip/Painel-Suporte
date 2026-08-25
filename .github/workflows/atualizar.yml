@@ -35,17 +35,26 @@ jobs:
 
       - name: Publicar index.html
         run: |
-          cp dashboard_suporte.html index.html
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           # Retry automatico em caso de race de push (outro run/push concorrente chegou primeiro) —
           # em vez de falhar o job inteiro, resincroniza com a origin mais recente e tenta de novo.
           # git reset --mixed move o HEAD pra origin/main mas MANTEM as mudancas no working tree
-          # (index.html/created_raw_*.json continuam la', so' "sem commit ainda"), entao a cada
-          # tentativa a gente recomita so' os arquivos que este job gerou (fonte da verdade pra
-          # este run), por cima do que quer que tenha chegado entre o checkout e agora — evita
-          # conflito de merge num arquivo gerado, onde nao faz sentido tentar reconciliar diffs.
+          # (created_raw_*.json continuam la', so' "sem commit ainda"), entao a cada tentativa a
+          # gente recomita os arquivos que este job gerou (fonte da verdade pra este run), por cima
+          # do que quer que tenha chegado entre o checkout e agora — evita conflito de merge num
+          # arquivo gerado, onde nao faz sentido tentar reconciliar diffs.
+          #
+          # IMPORTANTE (bug corrigido 2026-08-25): apos o reset, a origin pode ter avancado com um
+          # commit de CODIGO (build_dashboard.py) que chegou entre o checkout deste job e agora — se
+          # so recopiarmos o dashboard_suporte.html já gerado no inicio do job (com o codigo ANTIGO)
+          # por cima da nova base, publicamos um index.html desatualizado mesmo o commit aparecendo
+          # depois do commit de codigo no historico do git (o conteudo nao reflete o codigo novo).
+          # Por isso o dashboard e' REGERADO a cada tentativa, com o build_dashboard.py que estiver
+          # no working tree NAQUELE momento (ja atualizado pelo reset).
           for i in 1 2 3 4 5; do
+            python build_dashboard.py
+            cp dashboard_suporte.html index.html
             git add index.html
             git add created_raw_*.json 2>/dev/null || true
             if git diff --staged --quiet; then
