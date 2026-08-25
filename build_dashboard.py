@@ -788,7 +788,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
       <div class="panel" style="margin-top: 18px; flex-basis:100%; width:100%; min-height:unset;">
         <h2>📋 Chamados (amostra)</h2>
         <div class="panel-sub" id="painelExecTbodySub">Lista completa disponivel pelo botao "Exportar Excel" acima</div>
-        <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Categoria</th><th>Resolvido em</th></tr></thead>
+        <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Cliente</th><th>Tecnico</th><th>Categoria</th><th>Resolvido em</th></tr></thead>
           <tbody id="painelExecTbody"></tbody></table>
       </div>
     </div>
@@ -809,7 +809,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
     </div>
     <div class="modal-body">
       <table>
-        <thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th id="modalTimeHeader">Tempo</th></tr></thead>
+        <thead><tr><th>Chamado</th><th>Assunto</th><th>Cliente</th><th>Tecnico</th><th>Status</th><th id="modalTimeHeader">Tempo</th></tr></thead>
         <tbody id="modalTbody"></tbody>
       </table>
     </div>
@@ -1030,6 +1030,7 @@ function rowHtml(t, timeField) {{
   return `<tr>
     <td class="col-id">${{ticketLink(t.id, t.protocol)}}</td>
     <td class="col-subject">${{esc((t.subject||'').slice(0,60))}}</td>
+    <td class="col-team">${{esc(t.clientOrg || '-')}}</td>
     <td class="col-team">${{esc(t.ownerName)}}</td>
     <td class="col-status">${{esc(t.status)}}</td>
     <td class="col-time ${{cls}}">${{fmtH(timeVal)}}</td>
@@ -1038,7 +1039,7 @@ function rowHtml(t, timeField) {{
 
 function tableHtml(items, timeField, maxRows) {{
   maxRows = maxRows || 12;
-  if (!items.length) return '<tr><td colspan="5" class="empty-msg">Nenhum chamado</td></tr>';
+  if (!items.length) return '<tr><td colspan="6" class="empty-msg">Nenhum chamado</td></tr>';
   return items.slice(0, maxRows).map(t => rowHtml(t, timeField)).join('');
 }}
 
@@ -1159,6 +1160,7 @@ function rowHtmlHist(r) {{
   return `<tr class="hist-row">
     <td class="col-id">${{ticketLink(r.id, r.protocol)}}</td>
     <td class="col-subject">${{esc((r.subject||'').slice(0,60))}}</td>
+    <td class="col-team">${{esc(r.clientOrg || '-')}}</td>
     <td class="col-team">${{esc(r.ownerName)}}</td>
     <td class="col-status">${{esc(r.category)}}</td>
     <td class="col-time">${{fmtDate(r.resolvedIn)}}</td>
@@ -1166,7 +1168,7 @@ function rowHtmlHist(r) {{
 }}
 function tableHtmlHist(items, maxRows) {{
   maxRows = maxRows || 300;
-  if (!items.length) return '<tr><td colspan="5" class="empty-msg">Nenhum chamado</td></tr>';
+  if (!items.length) return '<tr><td colspan="6" class="empty-msg">Nenhum chamado</td></tr>';
   return items.slice(0, maxRows).map(rowHtmlHist).join('');
 }}
 function renderModalHist(title, items) {{
@@ -2604,7 +2606,7 @@ function renderClienteReport() {{
     <div class="panel">
       <h2>📋 Chamados resolvidos no mes${{exportButtonHtml("exportHistListToExcel(RESOLVED_MONTHS[" + jsStr(mesKey) + "].filter(r=>r.clientOrg===" + jsStr(cliente) + "), 'cliente.txt')")}}</h2>
       <div class="panel-sub">${{ind.total}} chamados resolvidos — ${{esc(cliente)}} — ${{MONTH_LABELS[mesKey]}}</div>
-      <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Categoria</th><th>Resolvido em</th></tr></thead>
+      <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Cliente</th><th>Tecnico</th><th>Categoria</th><th>Resolvido em</th></tr></thead>
         <tbody>${{tableHtmlHist(monthItems.slice().sort((a,b)=>new Date(b.resolvedIn)-new Date(a.resolvedIn)), 100)}}</tbody></table>
     </div>
     <div class="panel">
