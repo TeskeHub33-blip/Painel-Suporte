@@ -1171,6 +1171,33 @@ function tableHtmlHist(items, maxRows) {{
   if (!items.length) return '<tr><td colspan="6" class="empty-msg">Nenhum chamado</td></tr>';
   return items.slice(0, maxRows).map(rowHtmlHist).join('');
 }}
+// Status de SLA de UM chamado — mesmo criterio usado nos KPIs agregados de SLA no resto do painel
+// (desconsidera reabertura indevida do Azure e espera por orgao governamental).
+function slaStatusHtml(r) {{
+  if (!r.slaSolutionDate) return `<span style="color:var(--text3)">– Sem SLA</span>`;
+  if (reaberturaIndevidaAzure(r) || aguardouOrgaoGovernamental(r)) return `<span style="color:var(--text3)">– Desconsiderado</span>`;
+  const noPrazo = parseDt(r.resolvedIn) <= parseDt(r.slaSolutionDate);
+  return noPrazo ? `<span style="color:var(--ok); font-weight:700;">✓ No prazo</span>` : `<span style="color:var(--danger); font-weight:700;">✗ Fora do prazo</span>`;
+}}
+// Tabela de chamados resolvidos da aba Clientes — mesma base do tableHtmlHist, mas com Data de
+// abertura e status de SLA por chamado (pedido do usuario 2026-08-25).
+function rowHtmlHistCliente(r) {{
+  return `<tr class="hist-row">
+    <td class="col-id">${{ticketLink(r.id, r.protocol)}}</td>
+    <td class="col-subject">${{esc((r.subject||'').slice(0,60))}}</td>
+    <td class="col-team">${{esc(r.clientOrg || '-')}}</td>
+    <td class="col-team">${{esc(r.ownerName)}}</td>
+    <td class="col-status">${{esc(r.category)}}</td>
+    <td class="col-time">${{fmtDate(r.createdDate)}}</td>
+    <td class="col-time">${{slaStatusHtml(r)}}</td>
+    <td class="col-time">${{fmtDate(r.resolvedIn)}}</td>
+  </tr>`;
+}}
+function tableHtmlHistCliente(items, maxRows) {{
+  maxRows = maxRows || 300;
+  if (!items.length) return '<tr><td colspan="8" class="empty-msg">Nenhum chamado</td></tr>';
+  return items.slice(0, maxRows).map(rowHtmlHistCliente).join('');
+}}
 function renderModalHist(title, items) {{
   document.getElementById('modalTitle').textContent = title;
   document.getElementById('modalCount').textContent = items.length + ' chamado(s)';
@@ -2606,8 +2633,8 @@ function renderClienteReport() {{
     <div class="panel">
       <h2>📋 Chamados resolvidos no mes${{exportButtonHtml("exportHistListToExcel(RESOLVED_MONTHS[" + jsStr(mesKey) + "].filter(r=>r.clientOrg===" + jsStr(cliente) + "), 'cliente.txt')")}}</h2>
       <div class="panel-sub">${{ind.total}} chamados resolvidos — ${{esc(cliente)}} — ${{MONTH_LABELS[mesKey]}}</div>
-      <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Cliente</th><th>Tecnico</th><th>Categoria</th><th>Resolvido em</th></tr></thead>
-        <tbody>${{tableHtmlHist(monthItems.slice().sort((a,b)=>new Date(b.resolvedIn)-new Date(a.resolvedIn)), 100)}}</tbody></table>
+      <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Cliente</th><th>Tecnico</th><th>Categoria</th><th>Aberto em</th><th>SLA</th><th>Resolvido em</th></tr></thead>
+        <tbody>${{tableHtmlHistCliente(monthItems.slice().sort((a,b)=>new Date(b.resolvedIn)-new Date(a.resolvedIn)), 100)}}</tbody></table>
     </div>
     <div class="panel">
       <h2>📌 Gestao de Chamados — backlog em aberto agora${{exportButtonHtml("exportLiveList(TICKETS.filter(t=>t.clientOrg===" + jsStr(cliente) + "), 'backlog_cliente.txt')")}}</h2>
