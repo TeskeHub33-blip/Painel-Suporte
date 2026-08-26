@@ -176,6 +176,7 @@ for t in raw_tickets:
         'ownerName': owner.get('businessName') or 'Sem tecnico',
         'createdDate': t.get('createdDate'),
         'lastUpdate': t.get('lastUpdate'),
+        'lastActionDate': t.get('lastActionDate'),
         'origin': t.get('origin'),
         'chatGroup': t.get('chatGroup'),
         'tags': t.get('tags') or [],
@@ -859,7 +860,13 @@ const TODAY_STR = brasiliaDateStr(NOW);
 function parseDt(s) {{ return s ? new Date(s.split('.')[0] + 'Z') : null; }}
 TICKETS.forEach(t => {{
   t._created = parseDt(t.createdDate);
-  t._lastUpdate = parseDt(t.lastUpdate);
+  // "Ultima atualizacao" usa lastActionDate (ultima ACAO/mensagem real no chamado) em vez do
+  // lastUpdate bruto do Movidesk — confirmado (2026-08-25, protocolo 202605001799) que lastUpdate
+  // tambem e' atualizado por eventos puramente administrativos sem nenhuma acao real (ex.: troca
+  // de responsavel/reatribuicao em massa), fazendo um chamado dormente desde maio "parecer" mexido
+  // hoje e escapar do Aging (48h+ sem atualizacao) mesmo sem ninguem ter tocado nele de verdade.
+  // Cai pro lastUpdate so' se lastActionDate nao vier preenchido (chamado sem nenhuma acao ainda).
+  t._lastUpdate = parseDt(t.lastActionDate) || parseDt(t.lastUpdate);
   t._sla = parseDt(t.slaSolutionDate);
   t._hoursOpen = t._created ? (NOW - t._created) / 3600000 : null;
   t._hoursSinceUpdate = t._lastUpdate ? (NOW - t._lastUpdate) / 3600000 : null;

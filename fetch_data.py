@@ -248,7 +248,10 @@ def main():
     # (mesmo padrao usado em fetch_actions_for_ids/gov_check_ids, que nunca apresentou esse
     # problema) — ver bloco apos o fetch principal de chamados abertos.
     open_tickets_base_params = {
-        "$select": "id,protocol,subject,category,urgency,status,ownerTeam,createdDate,lastUpdate,tags,slaSolutionDate,reopenedIn,origin",
+        # lastActionDate: ultima ACAO/mensagem real no chamado (diferente de lastUpdate, que tambem
+        # muda por eventos administrativos como troca de responsavel — ver comentario no dashboard,
+        # em TICKETS.forEach, sobre o caso real que motivou isso: protocolo 202605001799).
+        "$select": "id,protocol,subject,category,urgency,status,ownerTeam,createdDate,lastUpdate,lastActionDate,tags,slaSolutionDate,reopenedIn,origin",
         # clients($expand=organization) — ver comentario em MONTH_EXPAND: sem o expand aninhado, a
         # empresa vinculada a um contato pessoa fisica (personType 1) vem ausente, e o dashboard cai
         # no fallback (dominio do email) que gera um nome diferente do nome oficial da organizacao,
