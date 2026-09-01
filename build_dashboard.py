@@ -619,7 +619,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
       <select id="selClienteHistorico" class="itil-select" title="Filtrar todos os cards do mes por um cliente especifico" style="max-width:220px; font-size:12px; padding:4px 8px;"></select>
     </div>
     <div class="kpi-row" id="kpiRowHist" style="grid-template-columns: repeat(4, 1fr);"></div>
-    <div class="kpi-row" id="kpiRowHistMttr" style="grid-template-columns: repeat(1, 1fr); margin-top:-4px;"></div>
+    <div class="kpi-row" id="kpiRowHistMttr" style="grid-template-columns: repeat(2, 1fr); margin-top:-4px;"></div>
     <div class="panel-sub" style="margin: 12px 0 4px 2px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-dim); font-weight: 700;">Ciclo de vida do Bug — urgencia Media</div>
     <div class="kpi-row" id="kpiRowHistBugMedia" style="grid-template-columns: repeat(3, 1fr);"></div>
     <div class="panel-sub" style="margin: 12px 0 4px 2px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-dim); font-weight: 700;">Ciclo de vida do Bug — urgencia Alta</div>
@@ -2125,14 +2125,29 @@ function mttrSemMelhoria(items) {{
   const comTempo = items.filter(r => r.category !== 'Melhoria' && r.createdDate && r.resolvedIn).map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000);
   return avg(comTempo);
 }}
+// Tempo REAL de atendimento — desconta o tempo em status 'Aguardando Cliente' (esperando resposta
+// do cliente, fora do controle do time), usando o tempo corrido (permanencyTimeFullTime) de cada
+// trecho do statusHistories. So' calculavel pro MES CORRENTE (statusHistories nao e' mantido nos
+// meses anteriores, mesma limitacao dos indicadores de tempo do N2) — pedido do usuario 2026-08-26.
+function tempoRealAtendimentoH(r) {{
+  if (!(r.statusHistories || []).length) return null;
+  const segundos = r.statusHistories.filter(h => h.status !== 'Aguardando Cliente').reduce((s,h) => s + (h.permanencyTimeFullTime || 0), 0);
+  return segundos / 3600;
+}}
+function tempoRealAtendimentoMedioH(items) {{
+  const valores = items.filter(r => r.category !== 'Melhoria').map(tempoRealAtendimentoH).filter(v => v !== null);
+  return avg(valores);
+}}
 const mttrMesAtual = mttrSemMelhoria(RESOLVED_MONTH);
 const mttrPorMes3 = ULTIMOS_3_KEYS.map(k => ({{ key: k, label: MONTH_LABELS[k], mttrH: mttrSemMelhoria(RESOLVED_MONTHS[k]) }}));
 const mttrMedia3Meses = avg(mttrPorMes3.filter(s => s.mttrH !== null).map(s => s.mttrH));
 const comparativoMttrSemMelhoria = mttrPorMes3.map(s => `${{s.label.split('/')[0].slice(0,3)}}: ${{s.mttrH !== null ? fmtH(s.mttrH) : '-'}}`).join(' · ');
 const metaMttr = metaMelhoria10(mttrMedia3Meses, true);
 const mttrBateMeta = bateMeta(mttrMesAtual, metaMttr, true);
+const tempoRealAtendimentoMesAtual = tempoRealAtendimentoMedioH(RESOLVED_MONTH);
 document.getElementById('kpiRowHistMttr').innerHTML =
-  kpiTileStatic(mttrBateMeta === null ? 'warn' : (mttrBateMeta ? 'ok' : 'danger'), mttrMesAtual !== null ? fmtH(mttrMesAtual) : '-', 'Tempo medio de atendimento (MTTR)', `mes corrente: ${{MONTH_LABELS['0']}} · exclui Melhoria · media 3m: ${{mttrMedia3Meses !== null ? fmtH(mttrMedia3Meses) : '-'}} · meta (10% menor que a media 3m): ${{metaMttr !== null ? fmtH(metaMttr) : '-'}} · ultimos 3 meses: ${{comparativoMttrSemMelhoria}}`);
+  kpiTileStatic(mttrBateMeta === null ? 'warn' : (mttrBateMeta ? 'ok' : 'danger'), mttrMesAtual !== null ? fmtH(mttrMesAtual) : '-', 'Tempo medio de atendimento (MTTR)', `mes corrente: ${{MONTH_LABELS['0']}} · exclui Melhoria · media 3m: ${{mttrMedia3Meses !== null ? fmtH(mttrMedia3Meses) : '-'}} · meta (10% menor que a media 3m): ${{metaMttr !== null ? fmtH(metaMttr) : '-'}} · ultimos 3 meses: ${{comparativoMttrSemMelhoria}}`) +
+  kpiTileStatic('neutral', tempoRealAtendimentoMesAtual !== null ? fmtH(tempoRealAtendimentoMesAtual) : '-', 'Tempo real de atendimento', `mes corrente: ${{MONTH_LABELS['0']}} · exclui Melhoria e o tempo em 'Aguardando Cliente' · so' calculavel pro mes corrente (historico de status nao mantido nos demais meses)`);
 
 // Abre a lista de chamados (bugs) por tras de um dos 3 cards de ciclo de atendimento tecnico.
 function abrirModalBugMetrica(urgency, metrica) {{
@@ -2480,8 +2495,10 @@ function renderHistoricoMes(clienteFiltro) {{
   const comparativoMttrSemMelhoriaF = mttrPorMes3F.map(s => `${{s.label.split('/')[0].slice(0,3)}}: ${{s.mttrH !== null ? fmtH(s.mttrH) : '-'}}`).join(' · ');
   const metaMttrF = metaMelhoria10(mttrMedia3MesesF, true);
   const mttrBateMetaF = bateMeta(mttrMesAtualF, metaMttrF, true);
+  const tempoRealAtendimentoMesAtualF = tempoRealAtendimentoMedioH(clienteFiltro ? RESOLVED_MONTH.filter(r => r.clientOrg === clienteFiltro) : RESOLVED_MONTH);
   document.getElementById('kpiRowHistMttr').innerHTML =
-    kpiTileStatic(mttrBateMetaF === null ? 'warn' : (mttrBateMetaF ? 'ok' : 'danger'), mttrMesAtualF !== null ? fmtH(mttrMesAtualF) : '-', 'Tempo medio de atendimento (MTTR)', `mes corrente: ${{MONTH_LABELS['0']}} · exclui Melhoria · media 3m: ${{mttrMedia3MesesF !== null ? fmtH(mttrMedia3MesesF) : '-'}} · meta (10% menor que a media 3m): ${{metaMttrF !== null ? fmtH(metaMttrF) : '-'}} · ultimos 3 meses: ${{comparativoMttrSemMelhoriaF}}${{filtroSufixo}}`);
+    kpiTileStatic(mttrBateMetaF === null ? 'warn' : (mttrBateMetaF ? 'ok' : 'danger'), mttrMesAtualF !== null ? fmtH(mttrMesAtualF) : '-', 'Tempo medio de atendimento (MTTR)', `mes corrente: ${{MONTH_LABELS['0']}} · exclui Melhoria · media 3m: ${{mttrMedia3MesesF !== null ? fmtH(mttrMedia3MesesF) : '-'}} · meta (10% menor que a media 3m): ${{metaMttrF !== null ? fmtH(metaMttrF) : '-'}} · ultimos 3 meses: ${{comparativoMttrSemMelhoriaF}}${{filtroSufixo}}`) +
+    kpiTileStatic('neutral', tempoRealAtendimentoMesAtualF !== null ? fmtH(tempoRealAtendimentoMesAtualF) : '-', 'Tempo real de atendimento', `mes corrente: ${{MONTH_LABELS['0']}} · exclui Melhoria e o tempo em 'Aguardando Cliente' · so' calculavel pro mes corrente${{filtroSufixo}}`);
 
   renderBugMetricsRow('kpiRowHistBugMedia', bugMetricsMediaF, 'Média');
   renderBugMetricsRow('kpiRowHistBugAlta', bugMetricsAltaF, 'Alta');
