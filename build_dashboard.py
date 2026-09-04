@@ -931,12 +931,12 @@ const FILTERS = {{
   // mas faltam <=60min) e vence hoje (data-limite do SLA cai no dia de hoje, vencido ou nao).
   venceEm1Hora: t => t._slaHoursLeft !== null && t._slaHoursLeft > 0 && t._slaHoursLeft <= 1,
   venceHoje: t => t._sla !== null && brasiliaDateStr(t._sla) === TODAY_STR,
-  bouncing: t => t.ownerTeam === 'Suporte' && t.status === 'Em atendimento' && t._hoursSinceUpdate !== null && t._hoursSinceUpdate >= 48,
+  bouncing: t => t.ownerTeam === 'Suporte' && (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && t._hoursSinceUpdate !== null && t._hoursSinceUpdate >= 48,
   priorizados: t => t.ownerTeam === 'Suporte' && t._isPriorizado
     && !isDevQueueStatus(t.status) && t.status !== 'Aguardando Cliente' && t.status !== 'Em atendimento - CS',
   contraturno: t => t.status === 'Em atendimento' && CONTRATURNO_TECNICOS.indexOf(t.ownerName) !== -1,
   naoAtualizadosHoje: t => (t.status === 'Em atendimento' || t.status === 'Aguardando Cliente' || t.status === N2_HANDOFF_STATUS) && !t._updatedToday,
-  cargaParada: t => t.status === 'Em atendimento' && !!t.motivoPriorizacao && t.motivoPriorizacao.split('; ').some(m => m !== 'Whatsapp'),
+  cargaParada: t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && !!t.motivoPriorizacao && t.motivoPriorizacao.split('; ').some(m => m !== 'Whatsapp'),
   classificacaoIncorreta: t => t._classificacaoIncorreta,
   chatsEmAtendimento: t => t.status === 'Em atendimento' && (t.origin === 24 || !!t.chatGroup),
   chatsAguardando: t => t.status === 'Novo' && (t.origin === 24 || !!t.chatGroup),
@@ -2728,8 +2728,8 @@ function initOneOnOne() {{
     const equipe = mediaEquipe(periodoKey, tier);
 
     const liveDoTecnico = TICKETS.filter(t => t.ownerName === tecnico);
-    const bouncingTecnico = liveDoTecnico.filter(t => t.status === 'Em atendimento' && t._hoursSinceUpdate !== null && t._hoursSinceUpdate >= 48).length;
-    const naoAtualizadosTecnico = liveDoTecnico.filter(t => (t.status === 'Em atendimento' || t.status === 'Aguardando Cliente') && !t._updatedToday).length;
+    const bouncingTecnico = liveDoTecnico.filter(t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && t._hoursSinceUpdate !== null && t._hoursSinceUpdate >= 48).length;
+    const naoAtualizadosTecnico = liveDoTecnico.filter(t => (t.status === 'Em atendimento' || t.status === 'Aguardando Cliente' || t.status === N2_HANDOFF_STATUS) && !t._updatedToday).length;
 
     const badge = document.getElementById('tierBadgeOneOnOne');
     badge.textContent = tier;
