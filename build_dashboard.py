@@ -1554,6 +1554,20 @@ function calcularCicloAtendimentoTecnico(r) {{
   const resolvidoDate = parseDt(r.resolvedIn);
   const tempoAtendimentoAposAssumirH = (assumirN2Date && resolvidoDate) ? (resolvidoDate - assumirN2Date) / 3600000 : null;
 
+  // Assertividade de analise (N1): o chamado foi mandado pro N2 como Bug mas devolvido sem chegar
+  // a virar task de dev (ou seja, o N2 olhou e decidiu que nao era bug de verdade) — sinal usado no
+  // indicador "Assertividade de analise (nao devolvido pelo N2)". null = nunca foi pro N2 (nao se
+  // aplica); true = foi devolvido (voltou pro 'Em atendimento' sem passar pela fila de dev antes);
+  // false = seguiu o fluxo normal (virou task, ou ficou/terminou em N2).
+  let foiDevolvidoPeloN2 = null;
+  if (idxN2 !== -1) {{
+    foiDevolvidoPeloN2 = false;
+    for (let i = idxN2 + 1; i < hist.length; i++) {{
+      if (isDevQueueStatus(hist[i].status)) break; // avancou pra fila de dev -> nao foi devolvido
+      if (hist[i].status === 'Em atendimento') {{ foiDevolvidoPeloN2 = true; break; }}
+    }}
+  }}
+
   return {{
     protocol: r.protocol,
     urgency: r.urgency,
@@ -1565,6 +1579,7 @@ function calcularCicloAtendimentoTecnico(r) {{
     devopsH: devopsSeconds !== null ? devopsSeconds / 3600 : null,
     passouPorN2: idxN2 !== -1,
     passouPorTask: idxDevQueueAny !== -1,
+    foiDevolvidoPeloN2,
   }};
 }}
 // bugsMes/bugMetrics ficam mutaveis (let) porque a aba Historico pode filtrar por cliente e reatribui-los
@@ -1775,6 +1790,13 @@ const META_AUTO_INDICADORES = {{
   'Tempo para assumir chamado (fila N2, em nome de um N1)': {{ tipo: 'tempo', campo: 'tempoAssumirN2H' }},
   'Tempo de atendimento depois que assumiu': {{ tipo: 'tempo', campo: 'tempoAtendimentoAposAssumirH' }},
   'Tempo de abertura de task': {{ tipo: 'tempo', campo: 'tempoAberturaTaskH' }},
+  // Assertividade de analise (N1): % de chamados de Bug mandados pro N2 que NAO voltaram pro N1 sem
+  // virar task de dev (ver foiDevolvidoPeloN2 em calcularCicloAtendimentoTecnico). So' calculavel no
+  // MES CORRENTE (statusHistories). Sem meta fixa combinada com o usuario pra esse indicador — usa a
+  // mesma convencao dos indicadores de tempo do N2 (10% melhor que a media do time), so' que aqui
+  // "melhor" e' MAIOR (mais analises corretas), nao menor. Ajustar facilmente se o usuario der um
+  // numero fixo depois.
+  'Assertividade de análise (não devolvido pelo N2)': {{ tipo: 'assertividade' }},
 }};
 // Converte a chave "AAAA-MM" da grade de Apuracao de Metas (calendario fixo, definida em
 // ultimosMesesMetas) pro offset "0".."N" usado em RESOLVED_MONTHS (0 = mes corrente) — sao dois
@@ -1795,11 +1817,35 @@ function mediaTimeN2ParaCampo(campo) {{
   }}).filter(v => v !== null);
   return avg(medias);
 }}
+// % medio (time N1+N3, quem manda Bug pro N2) de analises NAO devolvidas pelo N2, no mes corrente —
+// baseline dos indicadores de assertividade (ver comentario em META_AUTO_INDICADORES).
+function mediaAssertividadeAnaliseN1() {{
+  const nomes = ROSTER_METAS.filter(c => c.nivel === 'N1' || c.nivel === 'N3').map(c => c.nome);
+  const pcts = nomes.map(nome => {{
+    const items = (RESOLVED_MONTHS['0'] || []).filter(r => r.ownerName === nome && r.category === 'Bug');
+    const ciclos = items.map(calcularCicloAtendimentoTecnico).filter(c => c && c.foiDevolvidoPeloN2 !== null);
+    if (!ciclos.length) return null;
+    return ciclos.filter(c => !c.foiDevolvidoPeloN2).length / ciclos.length;
+  }}).filter(v => v !== null);
+  return avg(pcts);
+}}
 function calcularMetaAutomatica(colaborador, indicador, mesKey) {{
   const cfg = META_AUTO_INDICADORES[indicador];
   if (!cfg) return undefined; // undefined = "nao e' automatico", diferente de null ("automatico mas sem dado")
   const offset = offsetResolvedMonthsDeMesKey(mesKey);
   if (!(offset in MONTH_LABELS)) return null; // mes futuro ou fora da janela de dados disponivel
+  if (cfg.tipo === 'assertividade') {{
+    if (offset !== '0') return null; // so' mes corrente — depende de statusHistories
+    const items = (RESOLVED_MONTHS['0'] || []).filter(r => r.ownerName === colaborador && r.category === 'Bug');
+    const ciclos = items.map(calcularCicloAtendimentoTecnico).filter(c => c && c.foiDevolvidoPeloN2 !== null);
+    if (!ciclos.length) return null;
+    const naoDevolvidos = ciclos.filter(c => !c.foiDevolvidoPeloN2).length;
+    const pct = naoDevolvidos / ciclos.length;
+    const mediaTime = mediaAssertividadeAnaliseN1();
+    const meta = mediaTime !== null ? Math.min(1, mediaTime * 1.1) : 1;
+    const v = meta > 0 ? pct / meta : 1;
+    return {{ v, j: `Automatico: ${{naoDevolvidos}}/${{ciclos.length}} analises de Bug nao devolvidas pelo N2 neste mes (${{Math.round(pct*100)}}%) — meta: 10% melhor que a media do time = ${{Math.round(meta*100)}}%`, automatico: true }};
+  }}
   if (cfg.tipo === 'tempo') {{
     if (offset !== '0') return null; // so' mes corrente — statusHistories/ownerHistories nao existe pros demais
     const items = (RESOLVED_MONTHS['0'] || []).filter(r => r.ownerName === colaborador && CATEGORIAS_TECNICAS_N2.indexOf(r.category) !== -1);
@@ -1813,6 +1859,7 @@ function calcularMetaAutomatica(colaborador, indicador, mesKey) {{
     const v = valorMedio > 0 ? meta / valorMedio : 1;
     return {{ v, j: `Automatico: media de ${{fmtH(valorMedio)}} neste mes (meta: 10% melhor que a media do time N2 = ${{fmtH(meta)}})`, automatico: true }};
   }}
+  if (cfg.apenasMesAtual && offset !== '0') return null; // depende de statusHistories, so' existe no mes corrente
   const todos = (RESOLVED_MONTHS[offset] || []).filter(r => r.ownerName === colaborador);
   const items = cfg.filtroDenominador ? todos.filter(cfg.filtroDenominador) : todos;
   if (!items.length) return null;
