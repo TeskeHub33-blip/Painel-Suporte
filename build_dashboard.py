@@ -278,6 +278,20 @@ gov_actions_by_id = {str(t.get('id')): clean_actions(t.get('actions')) for t in 
 tickets_json = json.dumps(clean, ensure_ascii=False)
 resolved_json = json.dumps(clean_resolved, ensure_ascii=False)
 resolved_month_json = json.dumps(clean_resolved_month, ensure_ascii=False)
+
+
+def _json_opcional(nome):
+    # Arquivos de apoio da secao "Emissoes x Chamados" (Reuniao Mensal): se faltarem, a secao
+    # simplesmente mostra aviso em vez de derrubar o build.
+    try:
+        with open(os.path.join(BASE_DIR, nome), encoding='utf-8-sig') as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+emissoes_json = json.dumps(_json_opcional("emissoes_mensal.json"), ensure_ascii=False, separators=(',', ':'))
+chamados_abertos_json = json.dumps(_json_opcional("chamados_abertos_mensal.json"), ensure_ascii=False, separators=(',', ':'))
 resolved_months_json = json.dumps(resolved_months_clean, ensure_ascii=False)
 month_labels_json = json.dumps(month_labels, ensure_ascii=False)
 actions_by_id_json = json.dumps(actions_by_id, ensure_ascii=False)
@@ -721,6 +735,17 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
         <div class="panel-sub" id="reuniaoMensalSub">Todos os meses desde jan/2026 — time Suporte</div>
         <div id="tabelaReuniaoMensal"></div>
       </div>
+      <div class="panel" style="margin-top: 18px;">
+        <h2>📈 Emissoes x Chamados — comparativo com o ano anterior
+          <span class="seg-toggle" id="emissoesModoToggle" role="group" aria-label="Periodo">
+            <button type="button" class="active" data-modo="mes" onclick="setEmissoesModo('mes')">Mensal</button>
+            <button type="button" data-modo="tri" onclick="setEmissoesModo('tri')">Trimestre</button>
+            <button type="button" data-modo="ytd" onclick="setEmissoesModo('ytd')">YTD</button>
+          </span>
+        </h2>
+        <div class="panel-sub" id="emissoesSub"></div>
+        <div id="tabelaEmissoes"></div>
+      </div>
     </div>
   </div>
 
@@ -831,6 +856,10 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 <script>
 const MOVIDESK_BASE = 'https://emiteai.movidesk.com/Ticket/Edit/';
 const TICKETS = {tickets_json};
+// Emissoes mensais (planilha de faturamento -> emissoes_mensal.json, via build_emissoes.py) e chamados
+// ABERTOS por mes (Suporte, sem Cancelados — chamados_abertos_mensal.json, mantido pelo fetch_data.py).
+const EMISSOES = {emissoes_json};
+const CHAMADOS_ABERTOS = {chamados_abertos_json};
 // Historico (resolvidos por tecnico, SLA, indicadores) considera somente o time de Suporte
 const RESOLVED_TODAY = ({resolved_json}).filter(r => r.ownerTeam === 'Suporte');
 const RESOLVED_MONTH_ALL = ({resolved_month_json}).filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r));
@@ -3066,6 +3095,97 @@ function slaDoRecorte(items) {{
   return {{ pct: comSla.length ? Math.round(noPrazo / comSla.length * 100) : null, noPrazo, comSla: comSla.length }};
 }}
 let reuniaoMensalInited = false;
+// ============================================================
+// Emissoes x Chamados: volume de documentos emitidos (CT-e + NFS-e + Sistemico + GNRE; MDF-e fica de
+// fora) contra chamados ABERTOS (Suporte, sem Cancelados), sempre o periodo de 2026 vs o MESMO periodo
+// de 2025. Clientes = CNPJ matriz distintos com alguma emissao no periodo. Visoes: mes, trimestre
+// (so' trimestres completos) e YTD (jan ate o ultimo mes com emissao).
+// ============================================================
+let emissoesModo = 'mes';
+function setEmissoesModo(modo) {{
+  emissoesModo = modo;
+  document.querySelectorAll('#emissoesModoToggle button').forEach(b => b.classList.toggle('active', b.dataset.modo === modo));
+  renderEmissoes();
+}}
+function agregaEmissoes(keys) {{
+  const meses = (EMISSOES && EMISSOES.meses) || {{}};
+  const o = {{ cte: 0, nfse: 0, sistemico: 0, gnre: 0, chamados: 0, chamadosCompleto: true }};
+  const clientes = new Set();
+  keys.forEach(k => {{
+    const e = meses[k];
+    if (e) {{
+      o.cte += e.cte; o.nfse += e.nfse; o.sistemico += e.sistemico; o.gnre += e.gnre;
+      (e.clientes || []).forEach(c => clientes.add(c));
+    }}
+    if (CHAMADOS_ABERTOS[k] === undefined) o.chamadosCompleto = false; else o.chamados += CHAMADOS_ABERTOS[k];
+  }});
+  o.total = o.cte + o.nfse + o.sistemico + o.gnre;
+  o.clientes = clientes.size;
+  o.chamadosOk = o.chamadosCompleto && o.chamados > 0;
+  o.docsPorChamado = o.chamadosOk ? o.total / o.chamados : null;
+  o.chamadosPorCliente = o.chamadosOk && o.clientes ? o.chamados / o.clientes : null;
+  return o;
+}}
+function renderEmissoes() {{
+  const box = document.getElementById('tabelaEmissoes');
+  const sub = document.getElementById('emissoesSub');
+  const meses = (EMISSOES && EMISSOES.meses) || {{}};
+  const keys26 = Object.keys(meses).filter(k => k.startsWith('2026-')).sort();
+  if (!keys26.length) {{
+    sub.textContent = '';
+    box.innerHTML = '<div style="color:var(--text3); padding:14px;">Sem dados de emissao carregados (emissoes_mensal.json).</div>';
+    return;
+  }}
+  const ultimoMes = Number(keys26[keys26.length - 1].slice(5));
+  const NOMES = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const mk = (ano, m) => `${{ano}}-${{String(m).padStart(2, '0')}}`;
+  const periodo = (label, mesesNum) => ({{ label, a26: agregaEmissoes(mesesNum.map(m => mk(2026, m))), a25: agregaEmissoes(mesesNum.map(m => mk(2025, m))) }});
+  const periodos = [];
+  if (emissoesModo === 'mes') {{
+    for (let m = 1; m <= ultimoMes; m++) periodos.push(periodo(NOMES[m-1], [m]));
+  }} else if (emissoesModo === 'tri') {{
+    for (let q = 1; q <= 4 && q * 3 <= ultimoMes; q++) periodos.push(periodo(`Q${{q}} (${{NOMES[q*3-3].slice(0,3)}}–${{NOMES[q*3-1].slice(0,3)}})`, [q*3-2, q*3-1, q*3]));
+  }} else {{
+    const todos = Array.from({{length: ultimoMes}}, (_, i) => i + 1);
+    periodos.push(periodo(`YTD (${{NOMES[0].slice(0,3)}}–${{NOMES[ultimoMes-1].slice(0,3)}})`, todos));
+  }}
+  const fmt = n => (n === null || n === undefined) ? '–' : Math.round(n).toLocaleString('pt-BR');
+  const fmt1 = n => (n === null || n === undefined) ? '–' : n.toLocaleString('pt-BR', {{ minimumFractionDigits: 1, maximumFractionDigits: 1 }});
+  // Variacao % de 2026 sobre 2025. bomSobe: true = subir e' bom (verde), false = subir e' ruim (vermelho).
+  const varCell = (a, b, bomSobe) => {{
+    if (a === null || b === null || !b) return '<td style="text-align:center; color:var(--text3);">–</td>';
+    const v = (a / b - 1) * 100;
+    const cor = Math.abs(v) < 0.5 ? 'var(--text3)' : ((v > 0) === bomSobe ? 'var(--ok)' : 'var(--danger)');
+    return `<td style="text-align:center; font-weight:700; color:${{cor}};">${{v > 0 ? '+' : ''}}${{Math.round(v).toLocaleString('pt-BR')}}%</td>`;
+  }};
+  const COLS = [
+    ['cte', fmt, true], ['nfse', fmt, true], ['sistemico', fmt, true], ['gnre', fmt, true], ['total', fmt, true],
+    ['chamados', fmt, false], ['docsPorChamado', fmt, true], ['chamadosPorCliente', fmt1, false], ['clientes', fmt, true],
+  ];
+  // Colunas que dependem dos chamados abertos: '–' quando algum mes do periodo ainda nao foi carregado.
+  const DEPENDE_CHAMADOS = ['chamados', 'docsPorChamado', 'chamadosPorCliente'];
+  const valor = (a, key) => (DEPENDE_CHAMADOS.indexOf(key) !== -1 && !a.chamadosCompleto) ? null : a[key];
+  const valCell = (a, c) => {{
+    const v = valor(a, c[0]);
+    if (v === null && DEPENDE_CHAMADOS.indexOf(c[0]) !== -1 && !a.chamadosCompleto) {{
+      return '<td style="text-align:right; color:var(--text3);" title="Chamados abertos deste periodo ainda nao carregados do Movidesk">–</td>';
+    }}
+    return `<td style="text-align:right;${{c[0] === 'total' ? ' font-weight:700;' : ''}}">${{c[1](v)}}</td>`;
+  }};
+  const sep = 'border-top:2px solid var(--panel-border);';
+  const rows = periodos.map(p => {{
+    const r26 = `<tr style="${{sep}}"><td rowspan="3" style="font-weight:600; vertical-align:middle;">${{esc(p.label)}}</td><td style="font-weight:700;">2026</td>${{COLS.map(c => valCell(p.a26, c)).join('')}}</tr>`;
+    const r25 = `<tr><td style="color:var(--text-dim);">2025</td>${{COLS.map(c => valCell(p.a25, c)).join('')}}</tr>`;
+    const rv = `<tr style="background:rgba(255,255,255,0.03);"><td style="color:var(--text3); font-size:11px;">Variacao</td>${{COLS.map(c => varCell(valor(p.a26, c[0]), valor(p.a25, c[0]), c[2])).join('')}}</tr>`;
+    return r26 + r25 + rv;
+  }}).join('');
+  const head = ['Total CT-e', 'Total NFS-e', 'Sistemico', 'Total GNRE', 'Total', 'Chamados abertos', 'Documentos por chamado', 'Chamados por cliente', 'Clientes'];
+  box.innerHTML = `<div style="overflow-x:auto;"><table><thead><tr><th>Periodo</th><th>Ano</th>${{head.map(h => `<th style="text-align:center;">${{h}}</th>`).join('')}}</tr></thead><tbody>${{rows}}</tbody></table></div>`;
+  const faltando = periodos.some(p => !p.a25.chamadosCompleto || !p.a26.chamadosCompleto);
+  const fonte = EMISSOES.fonte ? ` · fonte: ${{EMISSOES.fonte}}` : '';
+  sub.textContent = `Total = CT-e + NFS-e + Sistemico + GNRE (sem MDF-e) · Chamados = abertos no periodo pelo Suporte, sem cancelados · Clientes = CNPJs com emissao no periodo · emissoes ate ${{NOMES[ultimoMes-1].toLowerCase()}}/2026${{fonte}}` +
+    (faltando ? ' · chamados de alguns meses ainda sendo carregados do Movidesk (aparecem como "–" ate concluir)' : '');
+}}
 function initReuniaoMensal() {{
   if (reuniaoMensalInited) return;
   reuniaoMensalInited = true;
@@ -3203,6 +3323,7 @@ function initReuniaoMensal() {{
   }}
   window._renderTabelaReuniaoMensal = renderTabela;
   renderTabela();
+  renderEmissoes();
 }}
 // Todos os "numeros" da tabela de Reuniao Mensal abrem um painel de detalhamento (lista dos
 // chamados por tras daquele valor) — mesKey 'total' agrega todos os meses da tabela (YTD).

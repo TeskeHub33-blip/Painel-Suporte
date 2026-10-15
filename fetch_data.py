@@ -167,6 +167,63 @@ def fetch_created_month(year, month, historico=False):
     return result
 
 
+ABERTOS_MENSAL_FILE = "chamados_abertos_mensal.json"
+# Meses de 2025 sem cache de created_raw (o buffer so' vai ate jul/2025) — contados direto da
+# rota /tickets/past, uma unica vez, pra comparacao ano contra ano na Reuniao Mensal.
+MESES_ABERTOS_2025 = [f"2025-{m:02d}" for m in range(1, 13)]
+
+
+def contar_abertos_suporte(chamados):
+    """Chamados ABERTOS (= criados) no mes pelo time Suporte, sem os Cancelados — mesmo recorte
+    usado nos chamados fechados da Reuniao Mensal."""
+    return sum(1 for t in chamados if t.get("ownerTeam") == "Suporte" and t.get("status") != "Cancelado")
+
+
+def contar_abertos_mes_historico(year, month):
+    start, mid, end = month_window(year, month)
+    total = []
+    for a, b in ((start, mid), (mid, end)):
+        total += fetch_paginated({
+            "$select": "id,status,ownerTeam",
+            "$filter": f"createdDate ge {a.strftime('%Y-%m-%d')}T00:00:00Z and createdDate lt {b.strftime('%Y-%m-%d')}T00:00:00Z",
+            "$orderby": "id asc",
+        }, base_url=PAST_URL)
+    return contar_abertos_suporte(total)
+
+
+def atualizar_chamados_abertos_mensal(contagem_atual, max_backfill):
+    """Mantem chamados_abertos_mensal.json ({'AAAA-MM': n}): os meses ja buscados neste ciclo
+    sobrescrevem o valor anterior, e os meses de 2025 ainda ausentes sao contados (max_backfill por
+    ciclo; cada contagem so' vale se repetir numa 2a tentativa independente, como no backfill dos
+    created_raw). Falha aqui nunca derruba o job — a secao so' mostra '-' pro mes que faltar."""
+    path = os.path.join(BASE_DIR, ABERTOS_MENSAL_FILE)
+    try:
+        with open(path, encoding="utf-8") as f:
+            dados = json.load(f)
+    except (FileNotFoundError, ValueError):
+        dados = {}
+    dados.update(contagem_atual)
+    feitos = 0
+    for key in MESES_ABERTOS_2025:
+        if key in dados or feitos >= max_backfill:
+            continue
+        feitos += 1
+        ano, mes = int(key[:4]), int(key[5:])
+        try:
+            n1 = contar_abertos_mes_historico(ano, mes)
+            time.sleep(3)
+            n2 = contar_abertos_mes_historico(ano, mes)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[aviso] contagem de chamados abertos {key} falhou ({exc}) — tenta no proximo ciclo", flush=True)
+            continue
+        if n1 == n2 and n1 > 0:
+            dados[key] = n1
+            print(f"[info] chamados abertos {key}: {n1} (confirmado em 2 tentativas)", flush=True)
+        else:
+            print(f"[aviso] chamados abertos {key} inconsistente ({n1} vs {n2}) — tenta no proximo ciclo", flush=True)
+    save(ABERTOS_MENSAL_FILE, dict(sorted(dados.items())))
+
+
 def first_resolution_month(ticket):
     """Mes (ano, mes) em que o chamado foi resolvido/fechado PELA PRIMEIRA VEZ, usando o
     historico de status — nao o campo resolvedIn atual do chamado.
@@ -379,6 +436,7 @@ def main():
     # mes leva uns 20-60s + 3s de folego) sem sobrecarregar a API com uma rajada gigante.
     MESES_BACKFILL_POR_CICLO = 3
     todos_criados = []
+    contagem_abertos = {}
     backfill_feitos = 0
     for offset in range(total_meses_busca):
         target = add_months(now_utc, -offset)
@@ -423,6 +481,10 @@ def main():
         else:
             data = []  # ainda sem cache e o backfill deste ciclo ja foi usado noutro mes
         todos_criados.extend(data)
+        if data:
+            contagem_abertos[key] = contar_abertos_suporte(data)
+
+    atualizar_chamados_abertos_mensal(contagem_abertos, 2)
 
     # Passo B: agrupa por mes da 1a resolucao (offset relativo ao mes CORRENTE, mesma numeracao
     # 0=corrente/1=anterior/etc. usada pelo resto do painel).

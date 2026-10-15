@@ -16,3 +16,9 @@
 # tambem (harmless — so mantem esses dois arquivos atualizados a cada ciclo).
 !created_raw_*.json
 dashboard_suporte.html
+
+# Dados da secao "Emissoes x Chamados" (Reuniao Mensal): emissoes_mensal.json vem de build_emissoes.py
+# (planilha de faturamento); chamados_abertos_mensal.json e mantido pelo fetch_data.py. Os dois sao
+# lidos pelo build_dashboard.py no CI, entao precisam estar no repo.
+!emissoes_mensal.json
+!chamados_abertos_mensal.json
