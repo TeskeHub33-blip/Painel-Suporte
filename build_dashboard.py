@@ -3334,6 +3334,8 @@ function initReuniaoMensal() {{
   renderTabela();
   renderEmissoes();
 }}
+// Sessao ja desbloqueada (ex.: recarga automatica da pagina): o gate some, mas a tabela precisa ser montada.
+if (sessionStorage.getItem('reuniaoMensalUnlocked') === '1') initReuniaoMensal();
 // Todos os "numeros" da tabela de Reuniao Mensal abrem um painel de detalhamento (lista dos
 // chamados por tras daquele valor) — mesKey 'total' agrega todos os meses da tabela (YTD).
 function itensReuniaoMensalPorMes(mesKey) {{
