@@ -419,6 +419,15 @@ body, .dashboard-root {{
 }}
 .export-btn:hover {{ background: rgba(255,255,255,0.06); border-color: var(--navy); }}
 .panel h2 .export-btn {{ margin-left: 6px; }}
+/* Emissoes x Chamados (Reuniao Mensal): um cartao por periodo, metrica nas linhas e 2025 | 2026 | Variacao nas colunas */
+.emis-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }}
+.emis-card {{ border: 1px solid var(--panel-border); border-radius: 10px; padding: 12px 14px; background: rgba(255,255,255,0.02); }}
+.emis-card-title {{ font-weight: 700; font-size: 14px; margin-bottom: 8px; }}
+.emis-card table {{ width: 100%; border-collapse: collapse; font-size: 12px; table-layout: auto; }}
+.emis-card th {{ background: transparent; text-transform: none; letter-spacing: 0; font-size: 11px; color: var(--text3); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--panel-border); }}
+.emis-card td {{ padding: 5px 6px; }}
+.emis-card th.num, .emis-card td.num {{ text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }}
+.emis-card tr.mes-detalhe td {{ color: var(--text-dim); font-size: 11px; padding-top: 2px; padding-bottom: 2px; }}
 .seg-toggle {{ display: inline-flex; border: 1.25px solid #878799; border-radius: 6px; overflow: hidden; margin-left: auto; flex-shrink: 0; }}
 .seg-toggle button {{ background: transparent; border: none; color: var(--text-dim); font-size: 11px; font-weight: 600; padding: 4px 11px; cursor: pointer; font-family: inherit; transition: background .15s ease; }}
 .seg-toggle button + button {{ border-left: 1.25px solid #878799; }}
@@ -3143,57 +3152,69 @@ function renderEmissoes() {{
   const ultimoMesChamados = Math.max(ultimoMes, keysCham26.length ? Number(keysCham26[keysCham26.length - 1].slice(5)) : 0);
   const NOMES = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const mk = (ano, m) => `${{ano}}-${{String(m).padStart(2, '0')}}`;
-  const periodo = (label, mesesNum) => ({{ label, a26: agregaEmissoes(mesesNum.map(m => mk(2026, m))), a25: agregaEmissoes(mesesNum.map(m => mk(2025, m))) }});
+  const periodo = (titulo, mesesNum, detalhaMeses) => ({{
+    titulo, a26: agregaEmissoes(mesesNum.map(m => mk(2026, m))), a25: agregaEmissoes(mesesNum.map(m => mk(2025, m))),
+    meses: detalhaMeses ? mesesNum.map(m => ({{ nome: NOMES[m-1], a26: agregaEmissoes([mk(2026, m)]), a25: agregaEmissoes([mk(2025, m)]) }})) : [],
+    semEmissao: mesesNum.some(m => m > ultimoMes),
+  }});
   const periodos = [];
   if (emissoesModo === 'mes') {{
-    for (let m = 1; m <= ultimoMesChamados; m++) periodos.push(periodo(m > ultimoMes ? `${{NOMES[m-1]}} (sem emissoes)` : NOMES[m-1], [m]));
+    for (let m = 1; m <= ultimoMesChamados; m++) periodos.push(periodo(NOMES[m-1], [m], false));
   }} else if (emissoesModo === 'tri') {{
-    for (let q = 1; q <= 4 && q * 3 <= ultimoMes; q++) periodos.push(periodo(`Q${{q}} (${{NOMES[q*3-3].slice(0,3)}}–${{NOMES[q*3-1].slice(0,3)}})`, [q*3-2, q*3-1, q*3]));
+    for (let q = 1; q <= 4 && q * 3 <= ultimoMes; q++) periodos.push(periodo(`Q${{q}} · ${{NOMES[q*3-3].slice(0,3)}} a ${{NOMES[q*3-1].slice(0,3)}}`, [q*3-2, q*3-1, q*3], true));
   }} else {{
-    const todos = Array.from({{length: ultimoMes}}, (_, i) => i + 1);
-    periodos.push(periodo(`YTD (${{NOMES[0].slice(0,3)}}–${{NOMES[ultimoMes-1].slice(0,3)}})`, todos));
+    periodos.push(periodo(`YTD · ${{NOMES[0].slice(0,3)}} a ${{NOMES[ultimoMes-1].slice(0,3)}}`, Array.from({{length: ultimoMes}}, (_, i) => i + 1), false));
   }}
   const fmt = n => (n === null || n === undefined) ? '–' : Math.round(n).toLocaleString('pt-BR');
   const fmt1 = n => (n === null || n === undefined) ? '–' : n.toLocaleString('pt-BR', {{ minimumFractionDigits: 1, maximumFractionDigits: 1 }});
-  // Variacao % de 2026 sobre 2025. bomSobe: true = subir e' bom (verde), false = subir e' ruim (vermelho).
-  const varCell = (a, b, bomSobe) => {{
-    if (a === null || b === null || !b) return '<td style="text-align:center; color:var(--text3);">–</td>';
-    const v = (a / b - 1) * 100;
-    const cor = Math.abs(v) < 0.5 ? 'var(--text3)' : ((v > 0) === bomSobe ? 'var(--ok)' : 'var(--danger)');
-    return `<td style="text-align:center; font-weight:700; color:${{cor}};">${{v > 0 ? '+' : ''}}${{Math.round(v).toLocaleString('pt-BR')}}%</td>`;
-  }};
-  const COLS = [
-    ['cte', fmt, true], ['nfse', fmt, true], ['sistemico', fmt, true], ['gnre', fmt, true], ['total', fmt, true],
-    ['chamados', fmt, false], ['docsPorChamado', fmt, true], ['chamadosPorCliente', fmt1, false], ['clientes', fmt, true],
-  ];
-  // Colunas que dependem dos chamados abertos: '–' quando algum mes do periodo ainda nao foi carregado.
+  // Colunas que dependem dos chamados / das emissoes: '–' quando algum mes do periodo ainda nao foi carregado.
   const DEPENDE_CHAMADOS = ['chamados', 'docsPorChamado', 'chamadosPorCliente'];
-  // Colunas que dependem das emissoes: '–' (em branco) quando algum mes do periodo ainda nao tem emissao
-  // carregada (ex.: outubro, enquanto nao ha planilha de faturamento do mes).
   const DEPENDE_EMISSAO = ['cte', 'nfse', 'sistemico', 'gnre', 'total', 'docsPorChamado', 'chamadosPorCliente', 'clientes'];
   const valor = (a, key) => ((DEPENDE_CHAMADOS.indexOf(key) !== -1 && !a.chamadosCompleto) || (DEPENDE_EMISSAO.indexOf(key) !== -1 && !a.emissaoCompleta)) ? null : a[key];
-  const valCell = (a, c) => {{
-    const v = valor(a, c[0]);
-    if (v === null) {{
-      const semEmissao = DEPENDE_EMISSAO.indexOf(c[0]) !== -1 && !a.emissaoCompleta;
-      return `<td style="text-align:right; color:var(--text3);" title="${{semEmissao ? 'Emissoes deste periodo ainda nao carregadas (sem planilha de faturamento)' : 'Chamados abertos deste periodo ainda nao carregados do Movidesk'}}">–</td>`;
-    }}
-    return `<td style="text-align:right;${{c[0] === 'total' ? ' font-weight:700;' : ''}}">${{c[1](v)}}</td>`;
+  // Variacao % de 2026 sobre 2025. bomSobe: true = subir e' bom (verde), false = subir e' ruim (vermelho).
+  const varTxt = (a, b, bomSobe) => {{
+    if (a === null || b === null || !b) return '<span style="color:var(--text3);">–</span>';
+    const v = (a / b - 1) * 100;
+    const cor = Math.abs(v) < 0.5 ? 'var(--text3)' : ((v > 0) === bomSobe ? 'var(--ok)' : 'var(--danger)');
+    return `<span style="color:${{cor}}; font-weight:700;">${{v > 0 ? '+' : ''}}${{Math.round(v).toLocaleString('pt-BR')}}%</span>`;
   }};
-  const sep = 'border-top:2px solid var(--panel-border);';
-  const rows = periodos.map(p => {{
-    const r26 = `<tr style="${{sep}}"><td rowspan="3" style="font-weight:600; vertical-align:middle;">${{esc(p.label)}}</td><td style="font-weight:700;">2026</td>${{COLS.map(c => valCell(p.a26, c)).join('')}}</tr>`;
-    const r25 = `<tr><td style="color:var(--text-dim);">2025</td>${{COLS.map(c => valCell(p.a25, c)).join('')}}</tr>`;
-    const rv = `<tr style="background:rgba(255,255,255,0.03);"><td style="color:var(--text3); font-size:11px;">Variacao</td>${{COLS.map(c => varCell((c[0] === 'chamados' && !p.a26.emissaoCompleta) ? null : valor(p.a26, c[0]), valor(p.a25, c[0]), c[2])).join('')}}</tr>`;
-    return r26 + r25 + rv;
+  // Linhas de cada periodo: [rotulo, chave, formatador, subir e' bom?, estilo]
+  const LINHAS = [
+    ['Total CT-e', 'cte', fmt, true, ''],
+    ['Total NFS-e', 'nfse', fmt, true, ''],
+    ['Sistêmico', 'sistemico', fmt, true, ''],
+    ['Total GNRE', 'gnre', fmt, true, ''],
+    ['Total de documentos', 'total', fmt, true, 'font-weight:700; border-top:1px solid var(--panel-border);'],
+    ['Chamados abertos', 'chamados', fmt, false, 'border-top:1px solid var(--panel-border);'],
+    ['Documentos por chamado', 'docsPorChamado', fmt, true, ''],
+    ['Chamados por cliente', 'chamadosPorCliente', fmt1, false, ''],
+    ['Número de clientes', 'clientes', fmt, true, ''],
+  ];
+  const cel = (a, key, f) => {{
+    const v = valor(a, key);
+    const tip = v === null ? ` title="${{DEPENDE_EMISSAO.indexOf(key) !== -1 && !a.emissaoCompleta ? 'Emissoes deste periodo ainda nao carregadas' : 'Chamados abertos deste periodo ainda nao carregados do Movidesk'}}"` : '';
+    return `<td class="num"${{tip}}>${{f(v)}}</td>`;
+  }};
+  const linha = (rotulo, key, f, bomSobe, estilo, p) => {{
+    // mes sem emissao (parcial): nao compara chamados contra o mes cheio do ano anterior
+    const a26v = (key === 'chamados' && !p.a26.emissaoCompleta) ? null : valor(p.a26, key);
+    return `<tr style="${{estilo}}"><td>${{rotulo}}</td>${{cel(p.a25, key, f)}}${{cel(p.a26, key, f)}}<td class="num">${{varTxt(a26v, valor(p.a25, key), bomSobe)}}</td></tr>`;
+  }};
+  const linhaMes = (m) => `<tr class="mes-detalhe"><td>↳ ${{m.nome}}</td>${{cel(m.a25, 'total', fmt)}}${{cel(m.a26, 'total', fmt)}}<td class="num">${{varTxt(valor(m.a26, 'total'), valor(m.a25, 'total'), true)}}</td></tr>`;
+  const cards = periodos.map(p => {{
+    const corpo = LINHAS.map(l => {{
+      const base = linha(l[0], l[1], l[2], l[3], l[4], p);
+      return (l[1] === 'total' && p.meses.length) ? base + p.meses.map(linhaMes).join('') : base;
+    }}).join('');
+    const sufixo = p.semEmissao ? ' <span style="font-weight:400; color:var(--text3); font-size:11px;">(sem emissões; chamados parciais)</span>' : '';
+    return `<div class="emis-card"><div class="emis-card-title">${{esc(p.titulo)}}${{sufixo}}</div>
+      <table><thead><tr><th></th><th class="num">2025</th><th class="num">2026</th><th class="num">Variação</th></tr></thead><tbody>${{corpo}}</tbody></table></div>`;
   }}).join('');
-  const head = ['Total CT-e', 'Total NFS-e', 'Sistemico', 'Total GNRE', 'Total', 'Chamados abertos', 'Documentos por chamado', 'Chamados por cliente', 'Clientes'];
-  box.innerHTML = `<div style="overflow-x:auto;"><table><thead><tr><th>Periodo</th><th>Ano</th>${{head.map(h => `<th style="text-align:center;">${{h}}</th>`).join('')}}</tr></thead><tbody>${{rows}}</tbody></table></div>`;
+  box.innerHTML = `<div class="emis-grid">${{cards}}</div>`;
   const faltando = periodos.some(p => !p.a25.chamadosCompleto || !p.a26.chamadosCompleto);
-  const fonte = EMISSOES.fonte ? ` · fonte: ${{EMISSOES.fonte}}` : '';
-  sub.textContent = `Total = CT-e + NFS-e + Sistemico + GNRE (sem MDF-e) · Chamados = abertos no periodo pelo Suporte, sem cancelados · Clientes = CNPJs com emissao no periodo · emissoes ate ${{NOMES[ultimoMes-1].toLowerCase()}}/2026${{fonte}}` +
-    (ultimoMesChamados > ultimoMes ? ' · meses sem emissao (ex.: outubro) mostram so os chamados, e o mes corrente e parcial' : '') +
-    (faltando ? ' · chamados de alguns meses ainda sendo carregados do Movidesk (aparecem como "–" ate concluir)' : '');
+  const fonte = EMISSOES.fonte ? ` Fonte das emissões: ${{EMISSOES.fonte}}.` : '';
+  sub.innerHTML = `Total de documentos = CT-e + NFS-e + Sistêmico + GNRE (sem MDF-e). Chamados = abertos no período pelo Suporte, sem cancelados. Clientes = CNPJs com emissão no período. Emissões até ${{NOMES[ultimoMes-1].toLowerCase()}}/2026.${{esc(fonte)}}` +
+    (faltando ? ' Chamados de alguns meses ainda estão sendo carregados do Movidesk ("–" até concluir).' : '');
 }}
 function initReuniaoMensal() {{
   if (reuniaoMensalInited) return;
