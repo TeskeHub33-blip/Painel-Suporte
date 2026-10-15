@@ -715,6 +715,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
           <span class="seg-toggle" id="reuniaoMensalModoToggle" role="group" aria-label="Exibir categorias como">
             <button type="button" class="active" data-modo="qtd" onclick="setReuniaoMensalModo('qtd')">Quantidade</button>
             <button type="button" data-modo="sla" onclick="setReuniaoMensalModo('sla')">% SLA</button>
+            <button type="button" data-modo="tempo" onclick="setReuniaoMensalModo('tempo')">Tempo</button>
           </span>
         </h2>
         <div class="panel-sub" id="reuniaoMensalSub">Todos os meses desde jan/2026 — time Suporte</div>
@@ -3053,6 +3054,12 @@ function setReuniaoMensalModo(modo) {{
   document.querySelectorAll('#reuniaoMensalModoToggle button').forEach(b => b.classList.toggle('active', b.dataset.modo === modo));
   if (window._renderTabelaReuniaoMensal) window._renderTabelaReuniaoMensal();
 }}
+// Tempo medio de atendimento de um recorte (criacao -> resolucao, em horas) — mesmo criterio da
+// coluna "Tempo medio de atendimento" da tabela: ignora so' a reabertura indevida do Azure.
+function mttrDoRecorte(items) {{
+  const validos = items.filter(r => !reaberturaIndevidaAzure(r) && r.createdDate && r.resolvedIn);
+  return {{ mttrH: avg(validos.map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000)), n: validos.length }};
+}}
 function slaDoRecorte(items) {{
   const comSla = items.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r));
   const noPrazo = comSla.filter(r => parseDt(r.resolvedIn) <= parseDt(r.slaSolutionDate)).length;
@@ -3085,7 +3092,10 @@ function initReuniaoMensal() {{
     const slaPorCategoria = {{}};
     REUNIAO_MENSAL_CATEGORIAS.forEach(c => {{ slaPorCategoria[c] = slaDoRecorte(items.filter(r => (r.category || 'Sem categoria') === c)); }});
     const slaOutros = slaDoRecorte(items.filter(r => REUNIAO_MENSAL_CATEGORIAS.indexOf(r.category || 'Sem categoria') === -1));
-    return {{ mesKey: k, label: MONTH_LABELS[k], slaPorCategoria, slaOutros, porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla, pctSlaSuporte: statsSuporte.pctSla, mttrH: stats.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
+    const tempoPorCategoria = {{}};
+    REUNIAO_MENSAL_CATEGORIAS.forEach(c => {{ tempoPorCategoria[c] = mttrDoRecorte(items.filter(r => (r.category || 'Sem categoria') === c)); }});
+    const tempoOutros = mttrDoRecorte(items.filter(r => REUNIAO_MENSAL_CATEGORIAS.indexOf(r.category || 'Sem categoria') === -1));
+    return {{ mesKey: k, label: MONTH_LABELS[k], slaPorCategoria, slaOutros, tempoPorCategoria, tempoOutros, porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla, pctSlaSuporte: statsSuporte.pctSla, mttrH: stats.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
   }});
 
   // KPIs de SLA mensal (um por mes, mais recente primeiro)
@@ -3111,6 +3121,10 @@ function initReuniaoMensal() {{
   REUNIAO_MENSAL_CATEGORIAS.forEach(c => {{ slaGeralPorCategoria[c] = slaDoRecorte(todosItensPeriodo.filter(r => (r.category || 'Sem categoria') === c)); }});
   const slaGeralOutros = slaDoRecorte(todosItensPeriodo.filter(r => REUNIAO_MENSAL_CATEGORIAS.indexOf(r.category || 'Sem categoria') === -1));
 
+  const tempoGeralPorCategoria = {{}};
+  REUNIAO_MENSAL_CATEGORIAS.forEach(c => {{ tempoGeralPorCategoria[c] = mttrDoRecorte(todosItensPeriodo.filter(r => (r.category || 'Sem categoria') === c)); }});
+  const tempoGeralOutros = mttrDoRecorte(todosItensPeriodo.filter(r => REUNIAO_MENSAL_CATEGORIAS.indexOf(r.category || 'Sem categoria') === -1));
+
   // Meta de duvidas: os 20pp de reducao sao CUMULATIVOS ao longo do ano (YTD) — o progresso e' a
   // SOMA da reducao (pp) de cada mes fechado ate agora (nao a media, nem o mes isolado). Ex.:
   // janeiro 5pp + fevereiro 6pp = YTD de 11pp. A comparacao com a meta de 20pp so' faz sentido
@@ -3129,7 +3143,13 @@ function initReuniaoMensal() {{
   const tdClick = (onclickExpr, content, extraStyle, title) => `<td style="text-align:center; cursor:pointer;${{extraStyle||''}}" title="${{title || 'Ver detalhamento'}}" onclick="${{onclickExpr}}">${{content}}</td>`;
   // Celula de categoria (e 'Outros'): quantidade de chamados fechados ou, no modo '% SLA', o % no prazo
   // daquela categoria no mes (vermelho abaixo de 70%, mesmo limite do KPI de SLA do painel).
-  const celulaCategoria = (qtd, sla, onclickExpr) => {{
+  const celulaCategoria = (qtd, sla, tempo, onclickExpr) => {{
+    if (reuniaoMensalModo === 'tempo') {{
+      const tip = tempo.n
+        ? `Tempo medio de atendimento (criacao ate resolucao) de ${{tempo.n}} chamado(s) — clique para ver os chamados`
+        : `Sem chamados fechados (${{qtd}}) — clique para ver os chamados`;
+      return tdClick(onclickExpr, tempo.mttrH !== null ? fmtH(tempo.mttrH) : '–', '', tip);
+    }}
     if (reuniaoMensalModo !== 'sla') return tdClick(onclickExpr, qtd);
     const txt = sla.pct !== null ? sla.pct + '%' : '–';
     const cor = sla.pct !== null && sla.pct < 70 ? ' color:var(--danger); font-weight:700;' : '';
@@ -3140,13 +3160,13 @@ function initReuniaoMensal() {{
   }};
   function renderTabela() {{
   const bodyRows = linhas.map(l => {{
-    const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(l.porCategoria[c] || 0, l.slaPorCategoria[c], `openModalReuniaoMensalCategoria(${{jsStr(l.mesKey)}}, ${{jsStr(c)}})`)).join('');
+    const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(l.porCategoria[c] || 0, l.slaPorCategoria[c], l.tempoPorCategoria[c], `openModalReuniaoMensalCategoria(${{jsStr(l.mesKey)}}, ${{jsStr(c)}})`)).join('');
     const corReducao = l.reducaoDuvidas > 0 ? 'var(--ok)' : (l.reducaoDuvidas === 0 ? 'var(--warn)' : 'var(--danger)');
     const reducaoTexto = l.reducaoDuvidas > 0 ? `✓ ${{l.reducaoDuvidas}}pp de reducao` : (l.reducaoDuvidas === 0 ? '– sem variacao' : `✗ ${{Math.abs(l.reducaoDuvidas)}}pp de aumento`);
     return `<tr>
       <td style="font-weight:600; cursor:pointer;" title="Ver detalhamento" onclick="openModalReuniaoMensalTotal(${{jsStr(l.mesKey)}})">${{esc(l.label)}}</td>
       ${{cols}}
-      ${{celulaCategoria(l.outros, l.slaOutros, `openModalReuniaoMensalOutros(${{jsStr(l.mesKey)}})`)}}
+      ${{celulaCategoria(l.outros, l.slaOutros, l.tempoOutros, `openModalReuniaoMensalOutros(${{jsStr(l.mesKey)}})`)}}
       ${{tdClick(`openModalReuniaoMensalTotal(${{jsStr(l.mesKey)}})`, l.atendidosSuporte, ' font-weight:700;')}}
       ${{tdClick(`openModalReuniaoMensalTotal(${{jsStr(l.mesKey)}})`, l.mttrH !== null ? fmtH(l.mttrH) : '-')}}
       ${{tdClick(`openModalReuniaoMensalPrimeiraResposta(${{jsStr(l.mesKey)}})`, l.pctPrimeira+'%')}}
@@ -3160,8 +3180,8 @@ function initReuniaoMensal() {{
   const corReducaoTotal = metaBatida ? 'var(--ok)' : (ytdReducaoDuvidas >= 0 ? 'var(--warn)' : 'var(--danger)');
   const totalRow = `<tr style="border-top:2px solid var(--panel-border); font-weight:700;">
     <td style="cursor:pointer;" title="Ver detalhamento" onclick="openModalReuniaoMensalTotal('total')">YTD (acumulado do ano)</td>
-    ${{REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(totalGeral[c], slaGeralPorCategoria[c], `openModalReuniaoMensalCategoria('total', ${{jsStr(c)}})`)).join('')}}
-    ${{celulaCategoria(totalGeralOutros, slaGeralOutros, `openModalReuniaoMensalOutros('total')`)}}
+    ${{REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(totalGeral[c], slaGeralPorCategoria[c], tempoGeralPorCategoria[c], `openModalReuniaoMensalCategoria('total', ${{jsStr(c)}})`)).join('')}}
+    ${{celulaCategoria(totalGeralOutros, slaGeralOutros, tempoGeralOutros, `openModalReuniaoMensalOutros('total')`)}}
     ${{tdClick(`openModalReuniaoMensalTotal('total')`, totalGeralFechados)}}
     ${{tdClick(`openModalReuniaoMensalTotal('total')`, statsGeral.mttrH !== null ? fmtH(statsGeral.mttrH) : '-')}}
     ${{tdClick(`openModalReuniaoMensalPrimeiraResposta('total')`, statsGeral.pctPrimeira+'%')}}
@@ -3177,6 +3197,8 @@ function initReuniaoMensal() {{
   `;
   document.getElementById('reuniaoMensalSub').textContent = reuniaoMensalModo === 'sla'
     ? "Todos os meses desde jan/2026 — time Suporte · colunas de categoria em % de chamados dentro do SLA ('–' = nenhum chamado com SLA definido)"
+    : reuniaoMensalModo === 'tempo'
+    ? "Todos os meses desde jan/2026 — time Suporte · colunas de categoria em tempo medio de atendimento (criacao ate resolucao; '–' = nenhum chamado fechado)"
     : 'Todos os meses desde jan/2026 — time Suporte · colunas de categoria em quantidade de chamados fechados';
   }}
   window._renderTabelaReuniaoMensal = renderTabela;
