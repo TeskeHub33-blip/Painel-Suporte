@@ -22,3 +22,4 @@ dashboard_suporte.html
 # lidos pelo build_dashboard.py no CI, entao precisam estar no repo.
 !emissoes_mensal.json
 !chamados_abertos_mensal.json
+!pesquisa_satisfacao.json
