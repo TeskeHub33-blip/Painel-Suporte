@@ -3245,7 +3245,8 @@ function initReuniaoMensal() {{
     const tempoPorCategoria = {{}};
     REUNIAO_MENSAL_CATEGORIAS.forEach(c => {{ tempoPorCategoria[c] = mttrDoRecorte(items.filter(r => (r.category || 'Sem categoria') === c)); }});
     const tempoOutros = mttrDoRecorte(items.filter(r => REUNIAO_MENSAL_CATEGORIAS.indexOf(r.category || 'Sem categoria') === -1));
-    return {{ mesKey: k, label: MONTH_LABELS[k], slaPorCategoria, slaOutros, tempoPorCategoria, tempoOutros, porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla, pctSlaSuporte: statsSuporte.pctSla, mttrH: stats.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
+    const reabertos = items.filter(r => r.reopenedIn).length;
+    return {{ mesKey: k, label: MONTH_LABELS[k], reabertos, pctReaberturas: total ? reabertos / total * 100 : null, slaPorCategoria, slaOutros, tempoPorCategoria, tempoOutros, porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla, pctSlaSuporte: statsSuporte.pctSla, mttrH: stats.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
   }});
 
   // KPIs de SLA mensal (um por mes, mais recente primeiro)
@@ -3266,6 +3267,8 @@ function initReuniaoMensal() {{
     todosItensPeriodo.push(...(RESOLVED_MONTHS[l.mesKey] || []));
   }});
   const statsGeral = statsForMonth(todosItensPeriodo);
+  const reabertosGeral = todosItensPeriodo.filter(r => r.reopenedIn).length;
+  const pctReaberturasGeral = todosItensPeriodo.length ? reabertosGeral / todosItensPeriodo.length * 100 : null;
   const statsGeralSuporte = statsForMonth(todosItensPeriodo.filter(r => CATEGORIAS_EXCLUIDAS_SLA_SUPORTE.indexOf(r.category || 'Sem categoria') === -1));
   const slaGeralPorCategoria = {{}};
   REUNIAO_MENSAL_CATEGORIAS.forEach(c => {{ slaGeralPorCategoria[c] = slaDoRecorte(todosItensPeriodo.filter(r => (r.category || 'Sem categoria') === c)); }});
@@ -3289,8 +3292,13 @@ function initReuniaoMensal() {{
       `Meta de duvidas: reduzir 20pp (baseline ${{META_DUVIDAS_BASELINE_PCT}}%) — YTD acumulado`,
       `soma da reducao (pp) de ${{linhas.length}} mes(es) fechado(s) · ${{metaBatida ? 'meta batida' : `faltam ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp no acumulado`}}`);
 
-  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs baseline (${{META_DUVIDAS_BASELINE_PCT}}%)</th><th>% SLA EmiteAi</th><th>% SLA Suporte</th>`;
+  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs baseline (${{META_DUVIDAS_BASELINE_PCT}}%)</th><th>% SLA EmiteAi</th><th>% SLA Suporte</th><th>% Reaberturas</th>`;
   const tdClick = (onclickExpr, content, extraStyle, title) => `<td style="text-align:center; cursor:pointer;${{extraStyle||''}}" title="${{title || 'Ver detalhamento'}}" onclick="${{onclickExpr}}">${{content}}</td>`;
+  // % de chamados fechados que foram reabertos. A base (RESOLVED_MONTHS) ja desconsidera os reabertos
+  // INDEVIDAMENTE pelo Azure (mesma regra dos demais indicadores) — so' conta reabertura de cliente/agente.
+  const celulaReaberturas = (pct, reabertos, total, mesKey) => tdClick(`openModalReuniaoMensalReaberturas(${{jsStr(mesKey)}})`,
+    pct !== null ? pct.toLocaleString('pt-BR', {{ minimumFractionDigits: 1, maximumFractionDigits: 1 }}) + '%' : '-', '',
+    `${{reabertos}} de ${{total}} chamados fechados foram reabertos (desconsidera reaberturas indevidas do Azure) — clique para ver os chamados`);
   // Celula de categoria (e 'Outros'): quantidade de chamados fechados ou, no modo '% SLA', o % no prazo
   // daquela categoria no mes (vermelho abaixo de 70%, mesmo limite do KPI de SLA do painel).
   const celulaCategoria = (qtd, sla, tempo, onclickExpr) => {{
@@ -3324,6 +3332,7 @@ function initReuniaoMensal() {{
       ${{tdClick(`openModalReuniaoMensalCategoria(${{jsStr(l.mesKey)}}, 'Dúvida')`, reducaoTexto, ` font-weight:700; color:${{corReducao}};`)}}
       ${{tdClick(`openModalReuniaoMensalSla(${{jsStr(l.mesKey)}}, 'geral')`, l.pctSla !== null ? l.pctSla+'%' : '-')}}
       ${{tdClick(`openModalReuniaoMensalSla(${{jsStr(l.mesKey)}}, 'suporte')`, l.pctSlaSuporte !== null ? l.pctSlaSuporte+'%' : '-')}}
+      ${{celulaReaberturas(l.pctReaberturas, l.reabertos, l.total, l.mesKey)}}
     </tr>`;
   }}).join('');
   const pctDuvidasTotal = pctDuvidasTotalKpi;
@@ -3339,6 +3348,7 @@ function initReuniaoMensal() {{
     ${{tdClick(`openModalReuniaoMensalCategoria('total', 'Dúvida')`, `${{ytdReducaoDuvidas}}pp (YTD) — ${{metaBatida ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp faltando`}}`, ` color:${{corReducaoTotal}};`)}}
     ${{tdClick(`openModalReuniaoMensalSla('total', 'geral')`, statsGeral.pctSla !== null ? statsGeral.pctSla+'%' : '-')}}
     ${{tdClick(`openModalReuniaoMensalSla('total', 'suporte')`, statsGeralSuporte.pctSla !== null ? statsGeralSuporte.pctSla+'%' : '-')}}
+    ${{celulaReaberturas(pctReaberturasGeral, reabertosGeral, todosItensPeriodo.length, 'total')}}
   </tr>`;
 
   document.getElementById('tabelaReuniaoMensal').innerHTML = `
@@ -3382,6 +3392,10 @@ function openModalReuniaoMensalTotal(mesKey) {{
 function openModalReuniaoMensalPrimeiraResposta(mesKey) {{
   const items = itensReuniaoMensalPorMes(mesKey).filter(isPrimeiraResposta);
   renderPainelExecutivo(`Resolvidos c/ 1a resposta — ${{labelReuniaoMensalMes(mesKey)}}`, items);
+}}
+function openModalReuniaoMensalReaberturas(mesKey) {{
+  const items = itensReuniaoMensalPorMes(mesKey).filter(r => r.reopenedIn);
+  renderPainelExecutivo(`Chamados reabertos — ${{labelReuniaoMensalMes(mesKey)}}`, items);
 }}
 function openModalReuniaoMensalSla(mesKey, escopo) {{
   let items = itensReuniaoMensalPorMes(mesKey);
