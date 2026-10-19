@@ -225,54 +225,64 @@ def atualizar_chamados_abertos_mensal(contagem_atual, max_backfill):
 
 
 SATISFACAO_FILE = "pesquisa_satisfacao.json"
+SURVEY_URL = "https://api.movidesk.com/public/v1/survey/responses"
 
 
-def atualizar_pesquisa_satisfacao(now_utc, total_meses, max_backfill):
-    """Respostas da pesquisa de satisfacao NATIVA do Movidesk (colecao satisfactionSurveyResponses do
-    chamado), guardadas cruas em pesquisa_satisfacao.json como {"meses": {"AAAA-MM": {id: [respostas]}}}
-    (mes = mes de CRIACAO do chamado, so' chamados com resposta). A colecao precisa de $expand na
-    listagem e so' vem preenchida depois que o cliente responde, entao os 3 meses mais recentes sao
-    sempre buscados de novo; os mais antigos uma unica vez (max_backfill por ciclo). Qualquer falha
-    aqui so' e' logada — nunca derruba o job."""
+def atualizar_pesquisa_satisfacao(max_paginas=40):
+    """Respostas da pesquisa de satisfacao NATIVA do Movidesk (/survey/responses — ver artigo 75374 da
+    base de conhecimento). Guarda so' o essencial por resposta, sem comentario:
+    {"respostas": {id_resposta: {"i": id_do_chamado, "t": tipo, "v": valor, "d": AAAA-MM-DD}}, "cursor": ...,
+    "completo": bool}. tipo: 1 satisfeito/insatisfeito, 2 faces, 3 NPS, 4 sim/nao. ticketId da API e'
+    o id numerico do chamado (nao o protocolo, que estoura int32). A 1a carga pagina tudo (limit 100,
+    startingAfter) e retoma do cursor nos ciclos seguintes se nao couber; depois so' busca as respostas
+    dos ultimos 45 dias (responseDateGreaterThan). Respeita o limite de 10 req/min. Falha so' loga."""
     path = os.path.join(BASE_DIR, SATISFACAO_FILE)
     try:
         with open(path, encoding="utf-8") as f:
             dados = json.load(f)
     except (FileNotFoundError, ValueError):
         dados = {}
-    dados.setdefault("meses", {})
+    if not isinstance(dados.get("respostas"), dict):
+        dados = {"respostas": {}, "cursor": None, "completo": False}
+    params_base = {"limit": 100}
+    if dados.get("completo"):
+        params_base["responseDateGreaterThan"] = (datetime.utcnow() - timedelta(days=45)).strftime("%Y-%m-%d")
+        cursor = None
+    else:
+        cursor = dados.get("cursor")
+    novas = 0
     try:
-        fetch({"$select": "id", "$expand": "satisfactionSurveyResponses", "$top": 1})
-    except requests.exceptions.RequestException as exc:
-        corpo = getattr(getattr(exc, "response", None), "text", "")[:300]
-        print(f"[aviso] pesquisa de satisfacao: a API rejeitou o $expand ({exc}) {corpo} — pulando", flush=True)
-        return
-    feitos = 0
-    for offset in range(total_meses):
-        alvo = add_months(now_utc, -offset)
-        key = f"{alvo.year}-{alvo.month:02d}"
-        recente = offset < 3
-        if not recente and (key in dados["meses"] or feitos >= max_backfill):
-            continue
-        if not recente:
-            feitos += 1
-        start, mid, end = month_window(alvo.year, alvo.month)
-        itens = []
-        try:
-            for a, b in ((start, mid), (mid, end)):
-                itens += fetch_paginated({
-                    "$select": "id",
-                    "$expand": "satisfactionSurveyResponses",
-                    "$filter": f"createdDate ge {a.strftime('%Y-%m-%d')}T00:00:00Z and createdDate lt {b.strftime('%Y-%m-%d')}T00:00:00Z",
-                    "$orderby": "id asc",
-                }, base_url=(BASE_URL if offset < 2 else PAST_URL))
-        except Exception as exc:  # noqa: BLE001
-            print(f"[aviso] pesquisa de satisfacao {key} falhou ({exc}) — tenta no proximo ciclo", flush=True)
-            continue
-        com_resposta = {str(t["id"]): t["satisfactionSurveyResponses"] for t in itens if t.get("satisfactionSurveyResponses")}
-        dados["meses"][key] = com_resposta
-        print(f"[info] pesquisa de satisfacao {key}: {len(com_resposta)} chamados com resposta de {len(itens)}", flush=True)
+        for _ in range(max_paginas):
+            params = dict(params_base)
+            if cursor:
+                params["startingAfter"] = cursor
+            pagina = fetch(params, base_url=SURVEY_URL)
+            itens = pagina.get("items") or []
+            for r in itens:
+                if r.get("id") is None or r.get("ticketId") is None or r.get("value") is None:
+                    continue
+                chave = str(r["id"])
+                if chave not in dados["respostas"]:
+                    novas += 1
+                dados["respostas"][chave] = {"i": int(r["ticketId"]), "t": r.get("type"), "v": r.get("value"),
+                                             "d": str(r.get("responseDate") or "")[:10]}
+            if itens:
+                cursor = str(itens[-1]["id"])
+            if not pagina.get("hasMore") or not itens:
+                if not dados.get("completo"):
+                    dados["completo"] = True
+                    cursor = None
+                break
+            time.sleep(6.5)  # 10 req/min
+        if not dados.get("completo"):
+            dados["cursor"] = cursor
+    except Exception as exc:  # noqa: BLE001
+        print(f"[aviso] pesquisa de satisfacao do Movidesk falhou ({exc}) — mantendo o que ja foi coletado", flush=True)
+        if not dados.get("completo"):
+            dados["cursor"] = cursor
     save(SATISFACAO_FILE, dados)
+    print(f"[info] pesquisa de satisfacao Movidesk: {len(dados['respostas'])} respostas ({novas} novas), "
+          f"completo={dados.get('completo')}", flush=True)
 
 
 SENSEDATA_URL = "https://api.sensedata.io/v2/nps"
@@ -573,7 +583,7 @@ def main():
 
     atualizar_sensedata_nps()
     atualizar_chamados_abertos_mensal(contagem_abertos, 2)
-    atualizar_pesquisa_satisfacao(now_utc, (now_utc.year - 2025) * 12 + now_utc.month - 6, 2)
+    atualizar_pesquisa_satisfacao()
 
     # Passo B: agrupa por mes da 1a resolucao (offset relativo ao mes CORRENTE, mesma numeracao
     # 0=corrente/1=anterior/etc. usada pelo resto do painel).

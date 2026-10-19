@@ -291,6 +291,9 @@ def _json_opcional(nome):
 
 
 emissoes_json = json.dumps(_json_opcional("emissoes_mensal.json"), ensure_ascii=False, separators=(',', ':'))
+_pesq = _json_opcional("pesquisa_satisfacao.json").get("respostas") or {}
+# [id do chamado, tipo, valor] — so' o necessario pra juntar com os chamados fechados no JS
+pesquisa_movidesk_json = json.dumps([[v["i"], v.get("t"), v.get("v")] for v in _pesq.values()], separators=(',', ':'))
 sensedata_nps_json = json.dumps(_json_opcional("sensedata_nps.json"), ensure_ascii=False, separators=(',', ':'))
 month_ym_json = json.dumps({str(o): f"{month_offset_date(now, o).year}-{month_offset_date(now, o).month:02d}" for o in range(qtd_meses)})
 chamados_abertos_json = json.dumps(_json_opcional("chamados_abertos_mensal.json"), ensure_ascii=False, separators=(',', ':'))
@@ -873,6 +876,8 @@ const EMISSOES = {emissoes_json};
 const CHAMADOS_ABERTOS = {chamados_abertos_json};
 // NPS do Sensedata (sensedata_nps.json: so' mes da pesquisa + nota 0-10) e AAAA-MM de cada offset de mes.
 const SENSEDATA_NPS = {sensedata_nps_json};
+// Respostas da pesquisa de satisfacao nativa do Movidesk: [id do chamado, tipo (1 satisfeito/insatisfeito, 2 faces, 3 NPS, 4 sim/nao), valor].
+const PESQUISA_MOVIDESK = {pesquisa_movidesk_json};
 const MONTH_YM = {month_ym_json};
 // Historico (resolvidos por tecnico, SLA, indicadores) considera somente o time de Suporte
 const RESOLVED_TODAY = ({resolved_json}).filter(r => r.ownerTeam === 'Suporte');
@@ -3103,6 +3108,23 @@ function mttrDoRecorte(items) {{
   const validos = items.filter(r => !reaberturaIndevidaAzure(r) && r.createdDate && r.resolvedIn);
   return {{ mttrH: avg(validos.map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000)), n: validos.length }};
 }}
+// Pesquisa de satisfacao do CHAMADO (Movidesk): resposta 'positiva' conforme o tipo — satisfeito (1),
+// faces 4-5, NPS 9-10 (promotor), sim (1). Junta pelo id do chamado (1 resposta por chamado; a ultima vale).
+const PESQUISA_POR_CHAMADO = {{}};
+PESQUISA_MOVIDESK.forEach(r => {{ PESQUISA_POR_CHAMADO[r[0]] = r; }});
+function respostaPositiva(tipo, valor) {{
+  if (tipo === 1 || tipo === 4) return valor === 1;
+  if (tipo === 2) return valor >= 4;
+  if (tipo === 3) return valor >= 9;
+  return null;
+}}
+function pesquisaDoRecorte(items) {{
+  const comResposta = items.filter(r => PESQUISA_POR_CHAMADO[r.id]);
+  const avaliadas = comResposta.filter(r => respostaPositiva(PESQUISA_POR_CHAMADO[r.id][1], PESQUISA_POR_CHAMADO[r.id][2]) !== null);
+  const positivas = avaliadas.filter(r => respostaPositiva(PESQUISA_POR_CHAMADO[r.id][1], PESQUISA_POR_CHAMADO[r.id][2])).length;
+  return {{ n: avaliadas.length, positivas, total: items.length, pct: avaliadas.length ? positivas / avaliadas.length * 100 : null,
+           taxa: items.length ? avaliadas.length / items.length * 100 : null, itens: comResposta }};
+}}
 // NPS (Sensedata) dos meses AAAA-MM informados: promotores (9-10) - detratores (0-6), em pontos (-100 a +100).
 function npsDosMeses(yms) {{
   const sel = ((SENSEDATA_NPS && SENSEDATA_NPS.respostas) || []).filter(r => yms.indexOf(r.m) !== -1);
@@ -3260,7 +3282,8 @@ function initReuniaoMensal() {{
     const tempoOutros = mttrDoRecorte(items.filter(r => REUNIAO_MENSAL_CATEGORIAS.indexOf(r.category || 'Sem categoria') === -1));
     const reabertos = items.filter(r => r.reopenedIn).length;
     const nps = npsDosMeses([MONTH_YM[k]]);
-    return {{ mesKey: k, label: MONTH_LABELS[k], reabertos, pctReaberturas: total ? reabertos / total * 100 : null, nps, slaPorCategoria, slaOutros, tempoPorCategoria, tempoOutros, porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla, pctSlaSuporte: statsSuporte.pctSla, mttrH: stats.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
+    const pesquisa = pesquisaDoRecorte(items);
+    return {{ mesKey: k, label: MONTH_LABELS[k], reabertos, pctReaberturas: total ? reabertos / total * 100 : null, nps, pesquisa, slaPorCategoria, slaOutros, tempoPorCategoria, tempoOutros, porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla, pctSlaSuporte: statsSuporte.pctSla, mttrH: stats.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
   }});
 
   // KPIs de SLA mensal (um por mes, mais recente primeiro)
@@ -3282,6 +3305,7 @@ function initReuniaoMensal() {{
   }});
   const statsGeral = statsForMonth(todosItensPeriodo);
   const reabertosGeral = todosItensPeriodo.filter(r => r.reopenedIn).length;
+  const pesquisaGeral = pesquisaDoRecorte(todosItensPeriodo);
   const npsGeral = npsDosMeses(linhas.map(l => MONTH_YM[l.mesKey]));
   const pctReaberturasGeral = todosItensPeriodo.length ? reabertosGeral / todosItensPeriodo.length * 100 : null;
   const statsGeralSuporte = statsForMonth(todosItensPeriodo.filter(r => CATEGORIAS_EXCLUIDAS_SLA_SUPORTE.indexOf(r.category || 'Sem categoria') === -1));
@@ -3307,7 +3331,7 @@ function initReuniaoMensal() {{
       `Meta de duvidas: reduzir 20pp (baseline ${{META_DUVIDAS_BASELINE_PCT}}%) — YTD acumulado`,
       `soma da reducao (pp) de ${{linhas.length}} mes(es) fechado(s) · ${{metaBatida ? 'meta batida' : `faltam ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp no acumulado`}}`);
 
-  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs baseline (${{META_DUVIDAS_BASELINE_PCT}}%)</th><th>% SLA EmiteAi</th><th>% SLA Suporte</th><th>% Reaberturas</th><th>Pesquisa de satisfação (NPS)</th>`;
+  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs baseline (${{META_DUVIDAS_BASELINE_PCT}}%)</th><th>% SLA EmiteAi</th><th>% SLA Suporte</th><th>% Reaberturas</th><th>Satisfação dos chamados (Movidesk)</th><th>NPS Sensedata (por cliente)</th>`;
   const tdClick = (onclickExpr, content, extraStyle, title) => `<td style="text-align:center; cursor:pointer;${{extraStyle||''}}" title="${{title || 'Ver detalhamento'}}" onclick="${{onclickExpr}}">${{content}}</td>`;
   // % de chamados fechados que foram reabertos. A base (RESOLVED_MONTHS) ja desconsidera os reabertos
   // INDEVIDAMENTE pelo Azure (mesma regra dos demais indicadores) — so' conta reabertura de cliente/agente.
@@ -3316,6 +3340,14 @@ function initReuniaoMensal() {{
     `${{reabertos}} de ${{total}} chamados fechados foram reabertos (desconsidera reaberturas indevidas do Azure) — clique para ver os chamados`);
   // Satisfacao = NPS do Sensedata pelo mes da pesquisa (promotores 9-10 menos detratores 0-6). Faixas
   // classicas do NPS: >= 50 verde, 0 a 49 amarelo, negativo vermelho. Mes sem pesquisa mostra '–'.
+  // Satisfacao do chamado (pesquisa nativa do Movidesk): % de respostas positivas (satisfeito / faces 4-5 /
+  // NPS 9-10 / sim) entre os chamados fechados do periodo que foram avaliados. Verde >= 85, amarelo >= 70.
+  const celulaPesquisa = (pq, mesKey) => {{
+    if (!pq || !pq.n) return tdClick('void(0)', '–', ' cursor:default; color:var(--text3);', `Nenhum dos ${{pq ? pq.total : 0}} chamados fechados teve resposta na pesquisa de satisfacao`);
+    const cor = pq.pct >= 85 ? 'var(--ok)' : (pq.pct >= 70 ? 'var(--warn)' : 'var(--danger)');
+    const tip = `${{pq.positivas}} respostas positivas de ${{pq.n}} (${{pq.n}} de ${{pq.total}} chamados fechados avaliados = ${{pq.taxa.toFixed(1).replace('.', ',')}}% de taxa de resposta) — clique para ver os chamados`;
+    return tdClick(`openModalReuniaoMensalPesquisa(${{jsStr(mesKey)}})`, `${{Math.round(pq.pct)}}% <span style="font-weight:400; color:var(--text3); font-size:11px;">(${{pq.n}})</span>`, ` font-weight:700; color:${{cor}};`, tip);
+  }};
   const celulaNps = (nps) => {{
     if (!nps) return tdClick('void(0)', '–', ' cursor:default; color:var(--text3);', 'Sem respostas de pesquisa de satisfacao (Sensedata) neste periodo');
     const cor = nps.nps >= 50 ? 'var(--ok)' : (nps.nps >= 0 ? 'var(--warn)' : 'var(--danger)');
@@ -3356,6 +3388,7 @@ function initReuniaoMensal() {{
       ${{tdClick(`openModalReuniaoMensalSla(${{jsStr(l.mesKey)}}, 'geral')`, l.pctSla !== null ? l.pctSla+'%' : '-')}}
       ${{tdClick(`openModalReuniaoMensalSla(${{jsStr(l.mesKey)}}, 'suporte')`, l.pctSlaSuporte !== null ? l.pctSlaSuporte+'%' : '-')}}
       ${{celulaReaberturas(l.pctReaberturas, l.reabertos, l.total, l.mesKey)}}
+      ${{celulaPesquisa(l.pesquisa, l.mesKey)}}
       ${{celulaNps(l.nps)}}
     </tr>`;
   }}).join('');
@@ -3373,6 +3406,7 @@ function initReuniaoMensal() {{
     ${{tdClick(`openModalReuniaoMensalSla('total', 'geral')`, statsGeral.pctSla !== null ? statsGeral.pctSla+'%' : '-')}}
     ${{tdClick(`openModalReuniaoMensalSla('total', 'suporte')`, statsGeralSuporte.pctSla !== null ? statsGeralSuporte.pctSla+'%' : '-')}}
     ${{celulaReaberturas(pctReaberturasGeral, reabertosGeral, todosItensPeriodo.length, 'total')}}
+    ${{celulaPesquisa(pesquisaGeral, 'total')}}
     ${{celulaNps(npsGeral)}}
   </tr>`;
 
@@ -3421,6 +3455,9 @@ function openModalReuniaoMensalPrimeiraResposta(mesKey) {{
 function openModalReuniaoMensalReaberturas(mesKey) {{
   const items = itensReuniaoMensalPorMes(mesKey).filter(r => r.reopenedIn);
   renderPainelExecutivo(`Chamados reabertos — ${{labelReuniaoMensalMes(mesKey)}}`, items);
+}}
+function openModalReuniaoMensalPesquisa(mesKey) {{
+  renderPainelExecutivo(`Chamados com pesquisa de satisfacao respondida — ${{labelReuniaoMensalMes(mesKey)}}`, pesquisaDoRecorte(itensReuniaoMensalPorMes(mesKey)).itens);
 }}
 function openModalReuniaoMensalSla(mesKey, escopo) {{
   let items = itensReuniaoMensalPorMes(mesKey);
