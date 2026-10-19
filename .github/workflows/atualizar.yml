@@ -28,6 +28,7 @@ jobs:
       - name: Buscar dados do Movidesk
         env:
           MOVIDESK_TOKEN: ${{ secrets.MOVIDESK_TOKEN }}
+          SENSEDATA_TOKEN: ${{ secrets.SENSEDATA_TOKEN }}
         run: python fetch_data.py
 
       - name: Gerar dashboard
@@ -59,6 +60,7 @@ jobs:
             git add created_raw_*.json 2>/dev/null || true
             git add chamados_abertos_mensal.json 2>/dev/null || true
             git add pesquisa_satisfacao.json 2>/dev/null || true
+            git add sensedata_nps.json 2>/dev/null || true
             if git diff --staged --quiet; then
               echo "Nada para publicar (sem mudancas)."
               exit 0

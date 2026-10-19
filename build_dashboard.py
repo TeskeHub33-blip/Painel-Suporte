@@ -291,6 +291,8 @@ def _json_opcional(nome):
 
 
 emissoes_json = json.dumps(_json_opcional("emissoes_mensal.json"), ensure_ascii=False, separators=(',', ':'))
+sensedata_nps_json = json.dumps(_json_opcional("sensedata_nps.json"), ensure_ascii=False, separators=(',', ':'))
+month_ym_json = json.dumps({str(o): f"{month_offset_date(now, o).year}-{month_offset_date(now, o).month:02d}" for o in range(qtd_meses)})
 chamados_abertos_json = json.dumps(_json_opcional("chamados_abertos_mensal.json"), ensure_ascii=False, separators=(',', ':'))
 resolved_months_json = json.dumps(resolved_months_clean, ensure_ascii=False)
 month_labels_json = json.dumps(month_labels, ensure_ascii=False)
@@ -869,6 +871,9 @@ const TICKETS = {tickets_json};
 // ABERTOS por mes (Suporte, sem Cancelados — chamados_abertos_mensal.json, mantido pelo fetch_data.py).
 const EMISSOES = {emissoes_json};
 const CHAMADOS_ABERTOS = {chamados_abertos_json};
+// NPS do Sensedata (sensedata_nps.json: so' mes da pesquisa + nota 0-10) e AAAA-MM de cada offset de mes.
+const SENSEDATA_NPS = {sensedata_nps_json};
+const MONTH_YM = {month_ym_json};
 // Historico (resolvidos por tecnico, SLA, indicadores) considera somente o time de Suporte
 const RESOLVED_TODAY = ({resolved_json}).filter(r => r.ownerTeam === 'Suporte');
 const RESOLVED_MONTH_ALL = ({resolved_month_json}).filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r));
@@ -3098,6 +3103,14 @@ function mttrDoRecorte(items) {{
   const validos = items.filter(r => !reaberturaIndevidaAzure(r) && r.createdDate && r.resolvedIn);
   return {{ mttrH: avg(validos.map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000)), n: validos.length }};
 }}
+// NPS (Sensedata) dos meses AAAA-MM informados: promotores (9-10) - detratores (0-6), em pontos (-100 a +100).
+function npsDosMeses(yms) {{
+  const sel = ((SENSEDATA_NPS && SENSEDATA_NPS.respostas) || []).filter(r => yms.indexOf(r.m) !== -1);
+  if (!sel.length) return null;
+  const prom = sel.filter(r => r.s >= 9).length, det = sel.filter(r => r.s <= 6).length;
+  return {{ nps: Math.round((prom - det) / sel.length * 100), n: sel.length, prom, neu: sel.length - prom - det, det,
+           media: sel.reduce((a, r) => a + r.s, 0) / sel.length }};
+}}
 function slaDoRecorte(items) {{
   const comSla = items.filter(r => r.slaSolutionDate && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r));
   const noPrazo = comSla.filter(r => parseDt(r.resolvedIn) <= parseDt(r.slaSolutionDate)).length;
@@ -3246,7 +3259,8 @@ function initReuniaoMensal() {{
     REUNIAO_MENSAL_CATEGORIAS.forEach(c => {{ tempoPorCategoria[c] = mttrDoRecorte(items.filter(r => (r.category || 'Sem categoria') === c)); }});
     const tempoOutros = mttrDoRecorte(items.filter(r => REUNIAO_MENSAL_CATEGORIAS.indexOf(r.category || 'Sem categoria') === -1));
     const reabertos = items.filter(r => r.reopenedIn).length;
-    return {{ mesKey: k, label: MONTH_LABELS[k], reabertos, pctReaberturas: total ? reabertos / total * 100 : null, slaPorCategoria, slaOutros, tempoPorCategoria, tempoOutros, porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla, pctSlaSuporte: statsSuporte.pctSla, mttrH: stats.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
+    const nps = npsDosMeses([MONTH_YM[k]]);
+    return {{ mesKey: k, label: MONTH_LABELS[k], reabertos, pctReaberturas: total ? reabertos / total * 100 : null, nps, slaPorCategoria, slaOutros, tempoPorCategoria, tempoOutros, porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: stats.pctSla, pctSlaSuporte: statsSuporte.pctSla, mttrH: stats.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
   }});
 
   // KPIs de SLA mensal (um por mes, mais recente primeiro)
@@ -3268,6 +3282,7 @@ function initReuniaoMensal() {{
   }});
   const statsGeral = statsForMonth(todosItensPeriodo);
   const reabertosGeral = todosItensPeriodo.filter(r => r.reopenedIn).length;
+  const npsGeral = npsDosMeses(linhas.map(l => MONTH_YM[l.mesKey]));
   const pctReaberturasGeral = todosItensPeriodo.length ? reabertosGeral / todosItensPeriodo.length * 100 : null;
   const statsGeralSuporte = statsForMonth(todosItensPeriodo.filter(r => CATEGORIAS_EXCLUIDAS_SLA_SUPORTE.indexOf(r.category || 'Sem categoria') === -1));
   const slaGeralPorCategoria = {{}};
@@ -3292,13 +3307,21 @@ function initReuniaoMensal() {{
       `Meta de duvidas: reduzir 20pp (baseline ${{META_DUVIDAS_BASELINE_PCT}}%) — YTD acumulado`,
       `soma da reducao (pp) de ${{linhas.length}} mes(es) fechado(s) · ${{metaBatida ? 'meta batida' : `faltam ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp no acumulado`}}`);
 
-  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs baseline (${{META_DUVIDAS_BASELINE_PCT}}%)</th><th>% SLA EmiteAi</th><th>% SLA Suporte</th><th>% Reaberturas</th>`;
+  const headerCols = REUNIAO_MENSAL_CATEGORIAS.map(c => `<th>${{esc(c)}}</th>`).join('') + `<th>Outros</th><th>Chamados atendidos (Suporte)</th><th>Tempo medio de atendimento</th><th>% 1a resposta</th><th>% Duvidas</th><th>Reducao vs baseline (${{META_DUVIDAS_BASELINE_PCT}}%)</th><th>% SLA EmiteAi</th><th>% SLA Suporte</th><th>% Reaberturas</th><th>Pesquisa de satisfação (NPS)</th>`;
   const tdClick = (onclickExpr, content, extraStyle, title) => `<td style="text-align:center; cursor:pointer;${{extraStyle||''}}" title="${{title || 'Ver detalhamento'}}" onclick="${{onclickExpr}}">${{content}}</td>`;
   // % de chamados fechados que foram reabertos. A base (RESOLVED_MONTHS) ja desconsidera os reabertos
   // INDEVIDAMENTE pelo Azure (mesma regra dos demais indicadores) — so' conta reabertura de cliente/agente.
   const celulaReaberturas = (pct, reabertos, total, mesKey) => tdClick(`openModalReuniaoMensalReaberturas(${{jsStr(mesKey)}})`,
     pct !== null ? pct.toLocaleString('pt-BR', {{ minimumFractionDigits: 1, maximumFractionDigits: 1 }}) + '%' : '-', '',
     `${{reabertos}} de ${{total}} chamados fechados foram reabertos (desconsidera reaberturas indevidas do Azure) — clique para ver os chamados`);
+  // Satisfacao = NPS do Sensedata pelo mes da pesquisa (promotores 9-10 menos detratores 0-6). Faixas
+  // classicas do NPS: >= 50 verde, 0 a 49 amarelo, negativo vermelho. Mes sem pesquisa mostra '–'.
+  const celulaNps = (nps) => {{
+    if (!nps) return tdClick('void(0)', '–', ' cursor:default; color:var(--text3);', 'Sem respostas de pesquisa de satisfacao (Sensedata) neste periodo');
+    const cor = nps.nps >= 50 ? 'var(--ok)' : (nps.nps >= 0 ? 'var(--warn)' : 'var(--danger)');
+    const tip = `${{nps.n}} respostas · ${{nps.prom}} promotores / ${{nps.neu}} neutros / ${{nps.det}} detratores · nota media ${{nps.media.toFixed(1).replace('.', ',')}} (NPS Sensedata, por mes da pesquisa)`;
+    return tdClick('void(0)', (nps.nps > 0 ? '+' : '') + nps.nps, ` cursor:default; font-weight:700; color:${{cor}};`, tip);
+  }};
   // Celula de categoria (e 'Outros'): quantidade de chamados fechados ou, no modo '% SLA', o % no prazo
   // daquela categoria no mes (vermelho abaixo de 70%, mesmo limite do KPI de SLA do painel).
   const celulaCategoria = (qtd, sla, tempo, onclickExpr) => {{
@@ -3333,6 +3356,7 @@ function initReuniaoMensal() {{
       ${{tdClick(`openModalReuniaoMensalSla(${{jsStr(l.mesKey)}}, 'geral')`, l.pctSla !== null ? l.pctSla+'%' : '-')}}
       ${{tdClick(`openModalReuniaoMensalSla(${{jsStr(l.mesKey)}}, 'suporte')`, l.pctSlaSuporte !== null ? l.pctSlaSuporte+'%' : '-')}}
       ${{celulaReaberturas(l.pctReaberturas, l.reabertos, l.total, l.mesKey)}}
+      ${{celulaNps(l.nps)}}
     </tr>`;
   }}).join('');
   const pctDuvidasTotal = pctDuvidasTotalKpi;
@@ -3349,6 +3373,7 @@ function initReuniaoMensal() {{
     ${{tdClick(`openModalReuniaoMensalSla('total', 'geral')`, statsGeral.pctSla !== null ? statsGeral.pctSla+'%' : '-')}}
     ${{tdClick(`openModalReuniaoMensalSla('total', 'suporte')`, statsGeralSuporte.pctSla !== null ? statsGeralSuporte.pctSla+'%' : '-')}}
     ${{celulaReaberturas(pctReaberturasGeral, reabertosGeral, todosItensPeriodo.length, 'total')}}
+    ${{celulaNps(npsGeral)}}
   </tr>`;
 
   document.getElementById('tabelaReuniaoMensal').innerHTML = `

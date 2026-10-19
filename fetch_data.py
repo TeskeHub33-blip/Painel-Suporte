@@ -275,6 +275,42 @@ def atualizar_pesquisa_satisfacao(now_utc, total_meses, max_backfill):
     save(SATISFACAO_FILE, dados)
 
 
+SENSEDATA_URL = "https://api.sensedata.io/v2/nps"
+SENSEDATA_NPS_FILE = "sensedata_nps.json"
+
+
+def atualizar_sensedata_nps():
+    """NPS do Sensedata (pesquisa de satisfacao por cliente, nota 0-10) -> sensedata_nps.json, so' com
+    mes da pesquisa (survey_date) e nota — sem nome/CNPJ/respondente — usado na coluna de satisfacao
+    da Reuniao Mensal. O token vem do secret SENSEDATA_TOKEN (nunca no repo). Se faltar o token ou a
+    API falhar, mantem o arquivo anterior e so' loga: nunca derruba o job."""
+    token = os.environ.get("SENSEDATA_TOKEN", "").strip()
+    if not token:
+        print("[aviso] SENSEDATA_TOKEN ausente — pulando NPS do Sensedata", flush=True)
+        return
+    if not token.lower().startswith("bearer "):
+        token = "Bearer " + token
+    respostas = []
+    page = 1
+    try:
+        while page < 50:
+            resp = requests.get(SENSEDATA_URL, params={"limit": 5000, "page": page, "order_by": "asc"},
+                                headers={"Authorization": token, "Accept": "application/json"}, timeout=90)
+            resp.raise_for_status()
+            corpo = resp.json()
+            for r in corpo.get("nps", []):
+                if r.get("score") is not None and r.get("survey_date"):
+                    respostas.append({"m": str(r["survey_date"])[:7], "s": int(r["score"])})
+            if not corpo.get("next_page"):
+                break
+            page = corpo["next_page"]
+    except (requests.exceptions.RequestException, ValueError) as exc:
+        print(f"[aviso] NPS do Sensedata falhou ({exc}) — mantendo o arquivo anterior", flush=True)
+        return
+    save(SENSEDATA_NPS_FILE, {"atualizadoEm": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), "respostas": respostas})
+    print(f"[info] NPS do Sensedata: {len(respostas)} respostas", flush=True)
+
+
 def first_resolution_month(ticket):
     """Mes (ano, mes) em que o chamado foi resolvido/fechado PELA PRIMEIRA VEZ, usando o
     historico de status — nao o campo resolvedIn atual do chamado.
@@ -535,6 +571,7 @@ def main():
         if data:
             contagem_abertos[key] = contar_abertos_suporte(data)
 
+    atualizar_sensedata_nps()
     atualizar_chamados_abertos_mensal(contagem_abertos, 2)
     atualizar_pesquisa_satisfacao(now_utc, (now_utc.year - 2025) * 12 + now_utc.month - 6, 2)
 
