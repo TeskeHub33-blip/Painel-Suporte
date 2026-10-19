@@ -224,7 +224,11 @@ def clean_month_record(t, keep_status_histories):
         'clientOrg': extract_org(t.get('clients')),
         'tags': t.get('tags') or [],
     }
-    if keep_status_histories:
+    # Chamados que passaram por 'Em atendimento - N2' mantem statusHistories/ownerHistories tambem nos meses
+    # anteriores (poucos chamados, payload pequeno): alimentam o historico mensal das metas do N1/N2
+    # (assertividade de analise e tempos do N2), que antes so' existia pro mes corrente.
+    passou_n2 = any((h or {}).get('status') == 'Em atendimento - N2' for h in (t.get('statusHistories') or []))
+    if keep_status_histories or passou_n2:
         rec['statusHistories'] = clean_status_histories(t.get('statusHistories'))
         rec['ownerHistories'] = clean_owner_histories(t.get('ownerHistories'))
         # customFieldValues (Motivo de Priorizacao) so' e' buscado pelo fetch_data.py pro mes
@@ -678,25 +682,9 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
       <div id="oneOnOneError" style="color:var(--danger); font-size:12px; margin-top:10px; display:none;">Senha incorreta.</div>
     </div>
     <div id="oneOnOneContent" style="display:none;">
-      <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-bottom: 10px;">
-        <span id="tierBadgeOneOnOne" style="font-size:12px; font-weight:700; padding:5px 12px; border-radius:20px;"></span>
-        <select id="selPeriodoOneOnOne" class="itil-select" title="Periodo" style="max-width:160px; font-size:12px; padding:4px 8px;"></select>
-        <select id="selTecnicoOneOnOne" class="itil-select" title="Responsavel" style="max-width:220px; font-size:12px; padding:4px 8px;"></select>
-      </div>
-      <div class="kpi-row" id="kpiOneOnOne" style="grid-template-columns: repeat(3, 1fr);"></div>
-      <div class="kpi-row" id="kpiOneOnOne2" style="grid-template-columns: repeat(3, 1fr); margin-top:-4px;"></div>
-      <div class="kpi-row" id="kpiOneOnOneMetas" style="grid-template-columns: repeat(3, 1fr); margin-top:-4px;"></div>
-      <div class="kpi-row" id="kpiOneOnOneN2" style="grid-template-columns: repeat(3, 1fr); margin-top:-4px;"></div>
-
-      <div class="panel" style="margin-top:18px;">
-        <h2>📈 Evolucao mensal — <span id="oneOnOneEvolNome"></span></h2>
-        <div class="panel-sub">Chamados resolvidos pelo tecnico em cada mes desde jan/2026 (contagem pela 1a resolucao, independente do mes de abertura do chamado) — mesma logica usada na Reuniao Mensal.</div>
-        <div id="oneOnOneEvolWrap" style="overflow-x:auto; margin-top:10px;"></div>
-      </div>
-
-      <div class="panel" style="margin-top:18px;">
-        <h2>🎯 Apuracao de Metas — <span id="metasNivelBadge"></span></h2>
-        <div class="panel-sub">Modelo oficial de metas por nivel (Tecnica 70% + Comportamental 20% + Visao do Gestor 10%). Clique numa celula do mes pra lancar o % de atingimento (0–120%) e justificar — fica salvo neste navegador. Nao inclui a parte salarial/reajuste, so a apuracao e a nota.</div>
+      <div class="panel">
+        <h2>🎯 Atingimento das metas — <span id="metasNivelBadge"></span></h2>
+        <div class="panel-sub">Historico mensal de cada indicador contra a meta do nivel. Cada celula mostra o atingimento (resultado do mes ÷ meta; 100% = meta batida, maximo 120%) e, em numero pequeno, o resultado real do mes. Verde = meta batida, amarelo = ao menos 50%, vermelho = abaixo de 50%. Indicadores com 🤖 sao calculados sozinhos a partir do Movidesk; os demais (FAQs, comportamentais, visao do gestor) sao lancados clicando na celula e ficam salvos neste navegador.</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin: 10px 0 14px;">
           <select id="selColaboradorMetas" class="itil-select" style="max-width:260px; font-size:12px; padding:4px 8px;"></select>
           <select id="selHorizonteMetas" class="itil-select" style="max-width:150px; font-size:12px; padding:4px 8px;">
@@ -1767,23 +1755,19 @@ function nivelDoColaboradorMetas(nome) {{
 }}
 
 const METAS_TECNICAS_N1 = [
-  // "SLA de resposta (Em atendimento)" nao existe como indicador separado (confirmado com o usuario
-  // 2026-08-24) — a meta real e' "Resolvidos na primeira resposta", abaixo.
+  // Definicao de metas atualizada em 2026-10-19 (lista do usuario). "SLA de resposta (Em atendimento)" NAO
+  // entra: ja foi confirmado em 2026-08-24 que nao existe como indicador separado (a meta real e' a de
+  // resolvidos na primeira resposta). "Atendimento de X% das telas" saiu da definicao atual.
   'SLA de chamados por urgência',
   'Resolvidos na primeira resposta',
-  // "Assertividade na passagem de bugs com urgencia correta" foi REMOVIDO (2026-08-24, a pedido do
-  // usuario) — o Movidesk nao guarda historico de mudancas de urgencia, so' o valor atual/final, entao
-  // nao ha como saber se a urgencia foi alterada apos o repasse pro N2. Nao automatizavel nem manual.
   'Assertividade de análise (não devolvido pelo N2)',
-  'Atendimento de X% das telas do EmiteAI',
+  'Pesquisa de satisfação',
+  'Reabertura de chamados',
 ];
 const METAS_TECNICAS_N2 = [
   'Tempo para assumir chamado (fila N2, em nome de um N1)',
   'Tempo de atendimento depois que assumiu',
   'Tempo de abertura de task',
-  'Tempo de validação de task',
-  'Tempo de impedimento de task',
-  'Atendimento de X% das telas do EmiteAI',
 ];
 const METAS_TECNICAS_N3 = METAS_TECNICAS_N1.concat(['Meta de cadastro de FAQs', 'Metas de proatividade de chamados']);
 const METAS_TECNICAS_POR_NIVEL = {{ N1: METAS_TECNICAS_N1, N2: METAS_TECNICAS_N2, N3: METAS_TECNICAS_N3 }};
@@ -1801,6 +1785,18 @@ function indicadoresDoNivel(nivel) {{
 }}
 
 // Ultimos N meses corridos (calendario real, nao "Mes 1..12" fixo da planilha) — {{key:'2026-08', label:'ago/26'}}.
+// Texto da meta de cada indicador (coluna "Meta" da grade do One-on-One).
+const META_TEXTOS = {{
+  'SLA de chamados por urgência': '≥ 95% no prazo (todas as urgências)',
+  'Resolvidos na primeira resposta': '≥ 50% (sem Melhoria, Bug e Serviços)',
+  'Assertividade de análise (não devolvido pelo N2)': '10% melhor que a média do time',
+  'Pesquisa de satisfação': '≥ 95% de respostas positivas',
+  'Reabertura de chamados': '≤ 5% de chamados reabertos',
+  'Metas de proatividade de chamados': '≥ 10% de chamados de monitoramento',
+  'Tempo para assumir chamado (fila N2, em nome de um N1)': '10% melhor que a média do time N2',
+  'Tempo de atendimento depois que assumiu': '10% melhor que a média do time N2',
+  'Tempo de abertura de task': '10% melhor que a média do time N2',
+}};
 const METAS_MES_NOMES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 function ultimosMesesMetas(n) {{
   const hoje = new Date();
@@ -1830,7 +1826,14 @@ function metaChave(colaborador, indicador) {{ return colaborador + '|' + indicad
 const META_AUTO_INDICADORES = {{
   // Meta revisada de 95% pra 50% a pedido do usuario (2026-08-24) — nao existe indicador separado de
   // "SLA de resposta", essa e' a meta real de primeira resposta.
-  'Resolvidos na primeira resposta': {{ tipo: 'pct', alvoPct: 50, filtro: isPrimeiraResposta, rotulo: 'de primeira resposta' }},
+  // Meta 50%, desconsiderando Melhoria, Bug e Serviços (definicao 2026-10-19).
+  'Resolvidos na primeira resposta': {{ tipo: 'pct', alvoPct: 50, filtroDenominador: r => ['Melhoria', 'Bug', 'Serviços'].indexOf(r.category) === -1, filtro: isPrimeiraResposta, rotulo: 'de primeira resposta (sem Melhoria/Bug/Servicos)' }},
+  // Pesquisa de satisfacao (Movidesk): % de respostas positivas entre os chamados do colaborador no mes. Meta 95%.
+  'Pesquisa de satisfação': {{ tipo: 'pesquisa', alvoPct: 95 }},
+  // Reabertura: % de chamados fechados no mes que foram reabertos (sem as reaberturas indevidas do Azure,
+  // que ja saem de RESOLVED_MONTHS). Meta: no maximo 5% — quanto MENOR, melhor.
+  'Reabertura de chamados': {{ tipo: 'reabertura', alvoPct: 5 }},
+
   // Proatividade (N3): chamados nas categorias "Monitoramento Proatívo"/"Monitoramento Shopee" (ambas
   // comecam com "Monitoramento") sobre o total resolvido no mes pelo colaborador. Meta 10% confirmada
   // com o usuario 2026-08-24.
@@ -1868,64 +1871,82 @@ function offsetResolvedMonthsDeMesKey(mesKeyAnoMes) {{
 }}
 // Media do TIME N2 inteiro (todo mundo com nivel N2 no ROSTER_METAS) pra um campo de tempo, no mes
 // corrente — usada como baseline dos indicadores de tempo do N2 (ver comentario em META_AUTO_INDICADORES).
-function mediaTimeN2ParaCampo(campo) {{
+function mediaTimeN2ParaCampo(campo, offset) {{
+  offset = offset || '0';
   const nomesN2 = ROSTER_METAS.filter(c => c.nivel === 'N2').map(c => c.nome);
   const medias = nomesN2.map(nome => {{
-    const items = (RESOLVED_MONTHS['0'] || []).filter(r => r.ownerName === nome && CATEGORIAS_TECNICAS_N2.indexOf(r.category) !== -1);
+    const items = (RESOLVED_MONTHS[offset] || []).filter(r => r.ownerName === nome && CATEGORIAS_TECNICAS_N2.indexOf(r.category) !== -1);
     const ciclos = items.map(calcularCicloAtendimentoTecnico).filter(Boolean);
     return avg(ciclos.map(c => c[campo]).filter(v => v !== null && v !== undefined));
   }}).filter(v => v !== null);
   return avg(medias);
 }}
-// % medio (time N1+N3, quem manda Bug pro N2) de analises NAO devolvidas pelo N2, no mes corrente —
-// baseline dos indicadores de assertividade (ver comentario em META_AUTO_INDICADORES).
-function mediaAssertividadeAnaliseN1() {{
+// % medio (time N1+N3, quem manda Bug pro N2) de analises NAO devolvidas pelo N2 no mes — baseline dos
+// indicadores de assertividade (ver comentario em META_AUTO_INDICADORES).
+function mediaAssertividadeAnaliseN1(offset) {{
+  offset = offset || '0';
   const nomes = ROSTER_METAS.filter(c => c.nivel === 'N1' || c.nivel === 'N3').map(c => c.nome);
   const pcts = nomes.map(nome => {{
-    const items = (RESOLVED_MONTHS['0'] || []).filter(r => r.ownerName === nome && r.category === 'Bug');
+    const items = (RESOLVED_MONTHS[offset] || []).filter(r => r.ownerName === nome && r.category === 'Bug');
     const ciclos = items.map(calcularCicloAtendimentoTecnico).filter(c => c && c.foiDevolvidoPeloN2 !== null);
     if (!ciclos.length) return null;
     return ciclos.filter(c => !c.foiDevolvidoPeloN2).length / ciclos.length;
   }}).filter(v => v !== null);
   return avg(pcts);
 }}
+// Atingimento maximo de um indicador no mes (modelo de metas: 0 a 120%).
+const META_V_MAX = 1.2;
 function calcularMetaAutomatica(colaborador, indicador, mesKey) {{
   const cfg = META_AUTO_INDICADORES[indicador];
   if (!cfg) return undefined; // undefined = "nao e' automatico", diferente de null ("automatico mas sem dado")
   const offset = offsetResolvedMonthsDeMesKey(mesKey);
   if (!(offset in MONTH_LABELS)) return null; // mes futuro ou fora da janela de dados disponivel
+  const doColab = () => (RESOLVED_MONTHS[offset] || []).filter(r => r.ownerName === colaborador);
   if (cfg.tipo === 'assertividade') {{
-    if (offset !== '0') return null; // so' mes corrente — depende de statusHistories
-    const items = (RESOLVED_MONTHS['0'] || []).filter(r => r.ownerName === colaborador && r.category === 'Bug');
+    // statusHistories dos chamados que passaram pelo N2 agora tambem existe nos meses anteriores.
+    const items = doColab().filter(r => r.category === 'Bug');
     const ciclos = items.map(calcularCicloAtendimentoTecnico).filter(c => c && c.foiDevolvidoPeloN2 !== null);
     if (!ciclos.length) return null;
     const naoDevolvidos = ciclos.filter(c => !c.foiDevolvidoPeloN2).length;
     const pct = naoDevolvidos / ciclos.length;
-    const mediaTime = mediaAssertividadeAnaliseN1();
+    const mediaTime = mediaAssertividadeAnaliseN1(offset);
     const meta = mediaTime !== null ? Math.min(1, mediaTime * 1.1) : 1;
-    const v = meta > 0 ? pct / meta : 1;
-    return {{ v, j: `Automatico: ${{naoDevolvidos}}/${{ciclos.length}} analises de Bug nao devolvidas pelo N2 neste mes (${{Math.round(pct*100)}}%) — meta: 10% melhor que a media do time = ${{Math.round(meta*100)}}%`, automatico: true }};
+    const v = Math.min(META_V_MAX, meta > 0 ? pct / meta : 1);
+    return {{ v, txt: Math.round(pct*100) + '%', j: `Automatico: ${{naoDevolvidos}}/${{ciclos.length}} analises de Bug nao devolvidas pelo N2 neste mes (${{Math.round(pct*100)}}%) — meta: 10% melhor que a media do time = ${{Math.round(meta*100)}}%`, automatico: true }};
   }}
   if (cfg.tipo === 'tempo') {{
-    if (offset !== '0') return null; // so' mes corrente — statusHistories/ownerHistories nao existe pros demais
-    const items = (RESOLVED_MONTHS['0'] || []).filter(r => r.ownerName === colaborador && CATEGORIAS_TECNICAS_N2.indexOf(r.category) !== -1);
+    const items = doColab().filter(r => CATEGORIAS_TECNICAS_N2.indexOf(r.category) !== -1);
     const ciclos = items.map(calcularCicloAtendimentoTecnico).filter(Boolean);
     const valores = ciclos.map(c => c[cfg.campo]).filter(v => v !== null && v !== undefined);
     if (!valores.length) return null;
     const valorMedio = avg(valores);
-    const mediaTime = mediaTimeN2ParaCampo(cfg.campo);
+    const mediaTime = mediaTimeN2ParaCampo(cfg.campo, offset);
     if (mediaTime === null || mediaTime <= 0) return null;
     const meta = mediaTime * 0.9;
-    const v = valorMedio > 0 ? meta / valorMedio : 1;
-    return {{ v, j: `Automatico: media de ${{fmtH(valorMedio)}} neste mes (meta: 10% melhor que a media do time N2 = ${{fmtH(meta)}})`, automatico: true }};
+    const v = Math.min(META_V_MAX, valorMedio > 0 ? meta / valorMedio : 1);
+    return {{ v, txt: fmtH(valorMedio), j: `Automatico: media de ${{fmtH(valorMedio)}} neste mes (meta: 10% melhor que a media do time N2 = ${{fmtH(meta)}})`, automatico: true }};
+  }}
+  if (cfg.tipo === 'pesquisa') {{
+    const pq = pesquisaDoRecorte(doColab());
+    if (!pq.n) return null;
+    const v = Math.min(META_V_MAX, (pq.pct / 100) / (cfg.alvoPct / 100));
+    return {{ v, txt: Math.round(pq.pct) + '%', j: `Automatico: ${{pq.positivas}} de ${{pq.n}} respostas positivas na pesquisa de satisfacao (${{Math.round(pq.pct)}}%) — meta ${{cfg.alvoPct}}%`, automatico: true }};
+  }}
+  if (cfg.tipo === 'reabertura') {{
+    const todos = doColab();
+    if (!todos.length) return null;
+    const reabertos = todos.filter(r => r.reopenedIn).length;
+    const pct = reabertos / todos.length * 100;
+    const v = pct <= cfg.alvoPct ? 1 : cfg.alvoPct / pct;
+    return {{ v, txt: pct.toFixed(1).replace('.', ',') + '%', j: `Automatico: ${{reabertos}} de ${{todos.length}} chamados fechados foram reabertos (${{pct.toFixed(1).replace('.', ',')}}%) — meta: no maximo ${{cfg.alvoPct}}%`, automatico: true }};
   }}
   if (cfg.apenasMesAtual && offset !== '0') return null; // depende de statusHistories, so' existe no mes corrente
-  const todos = (RESOLVED_MONTHS[offset] || []).filter(r => r.ownerName === colaborador);
+  const todos = doColab();
   const items = cfg.filtroDenominador ? todos.filter(cfg.filtroDenominador) : todos;
   if (!items.length) return null;
   const pct = items.filter(cfg.filtro).length / items.length;
-  const v = pct / (cfg.alvoPct / 100);
-  return {{ v, j: `Automatico: ${{Math.round(pct*100)}}% ${{cfg.rotulo}} neste mes (meta ${{cfg.alvoPct}}%)`, automatico: true }};
+  const v = Math.min(META_V_MAX, pct / (cfg.alvoPct / 100));
+  return {{ v, txt: Math.round(pct*100) + '%', j: `Automatico: ${{Math.round(pct*100)}}% ${{cfg.rotulo}} neste mes (meta ${{cfg.alvoPct}}%)`, automatico: true }};
 }}
 function getMetaEntry(colaborador, indicador, mesKey) {{
   const auto = calcularMetaAutomatica(colaborador, indicador, mesKey);
@@ -2024,7 +2045,7 @@ function abrirEditorMeta(colaborador, indicador, mesKey, mesLabel) {{
 function metasGridHtml(colaborador) {{
   const nivel = nivelDoColaboradorMetas(colaborador);
   const linhas = indicadoresDoNivel(nivel);
-  const header = `<tr><th>Indicador</th><th>Tipo</th>${{METAS_MESES_12.map(m => `<th>${{esc(m.label)}}</th>`).join('')}}<th>Preench.</th><th>Media 3M</th><th>Media 6M</th></tr>`;
+  const header = `<tr><th>Indicador</th><th>Meta</th><th>Tipo</th>${{METAS_MESES_12.map(m => `<th>${{esc(m.label)}}</th>`).join('')}}<th>Preench.</th><th>Media 3M</th><th>Media 6M</th></tr>`;
   const rows = linhas.map(({{nome, tipo}}) => {{
     const serie = metaSerie(colaborador, nome);
     const preenchidos = serie.filter(s => s.entry !== null).length;
@@ -2035,13 +2056,14 @@ function metasGridHtml(colaborador) {{
       const v = s.entry ? s.entry.v : null;
       const temJust = s.entry && s.entry.j;
       if (automatico) {{
-        return `<td><span class="meta-cell meta-auto ${{metaCellCls(v)}}" title="${{temJust ? esc(s.entry.j) : 'Calculado automaticamente — sem chamados suficientes neste mes'}}">${{v === null ? '–' : Math.round(v*100)+'%'}}</span></td>`;
+        return `<td><span class="meta-cell meta-auto ${{metaCellCls(v)}}" title="${{temJust ? esc(s.entry.j) : 'Calculado automaticamente — sem chamados suficientes neste mes'}}">${{v === null ? '–' : Math.round(v*100)+'%'}}${{(s.entry && s.entry.txt) ? `<span style="display:block; font-size:10px; font-weight:400; opacity:.85;">${{esc(s.entry.txt)}}</span>` : ''}}</span></td>`;
       }}
       return `<td><span class="meta-cell ${{metaCellCls(v)}} ${{temJust ? 'meta-just' : ''}}" title="${{temJust ? esc(s.entry.j) : 'Clique para lancar'}}" onclick="abrirEditorMeta(${{jsStr(colaborador)}}, ${{jsStr(nome)}}, ${{jsStr(s.key)}}, ${{jsStr(s.label)}})">${{v === null ? '–' : Math.round(v*100)+'%'}}</span></td>`;
     }}).join('');
     const rowCls = tipo === 'Gestor' ? 'metas-row-gestor' : '';
     return `<tr class="${{rowCls}}">
       <td class="metas-indicador">${{esc(nome)}}${{automatico ? ' <span title="Calculado automaticamente a partir dos chamados do Movidesk, nao e lancado manualmente" style="font-size:10px;">🤖</span>' : ''}}</td>
+      <td class="metas-tipo" style="font-size:11px; color:var(--text-dim);">${{esc(META_TEXTOS[nome] || (automatico ? '' : 'Lançamento manual'))}}</td>
       <td class="metas-tipo">${{tipo}}</td>
       ${{cells}}
       <td class="metas-resumo-cell">${{preenchidos}}/12</td>
@@ -2809,103 +2831,6 @@ let oneOnOneInited = false;
 function initOneOnOne() {{
   if (oneOnOneInited) return;
   oneOnOneInited = true;
-  const selPeriodo = document.getElementById('selPeriodoOneOnOne');
-  const selTecnico = document.getElementById('selTecnicoOneOnOne');
-  populateSelect(selPeriodo, Object.keys(MONTH_LABELS).map(k => [k, MONTH_LABELS[k]]));
-
-  function tecnicosDoPeriodo(periodoKey) {{
-    const set = new Set((RESOLVED_MONTHS[periodoKey] || []).map(r => r.ownerName).filter(Boolean));
-    return Array.from(set).sort((a,b) => a.localeCompare(b));
-  }}
-  function refreshTecnicoOptions() {{
-    const periodoKey = selPeriodo.value;
-    const list = tecnicosDoPeriodo(periodoKey);
-    const prev = selTecnico.value;
-    populateSelect(selTecnico, list.map(t => [t, t]));
-    if (list.indexOf(prev) !== -1) selTecnico.value = prev;
-  }}
-  function renderOneOnOne() {{
-    const periodoKey = selPeriodo.value;
-    const tecnico = selTecnico.value;
-    const tier = tierDoTecnico(tecnico);
-    const periodItems = (RESOLVED_MONTHS[periodoKey] || []).filter(r => r.ownerName === tecnico);
-    const ind = computeIndicadores(periodItems);
-    const pctPrimeira = periodItems.length ? Math.round(periodItems.filter(isPrimeiraResposta).length / periodItems.length * 100) : 0;
-    const m3 = indicadoresTecnico3Meses(tecnico);
-    const equipe = mediaEquipe(periodoKey, tier);
-
-    const liveDoTecnico = TICKETS.filter(t => t.ownerName === tecnico);
-    const bouncingTecnico = liveDoTecnico.filter(t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && t._hoursSinceUpdate !== null && t._hoursSinceUpdate >= 48).length;
-    const naoAtualizadosTecnico = liveDoTecnico.filter(t => (t.status === 'Em atendimento' || t.status === 'Aguardando Cliente' || t.status === N2_HANDOFF_STATUS) && !t._updatedToday).length;
-
-    const badge = document.getElementById('tierBadgeOneOnOne');
-    badge.textContent = tier;
-    badge.style.background = tier === 'N2' ? 'var(--pink)' : 'var(--ok)';
-    badge.style.color = '#fff';
-
-    document.getElementById('oneOnOneEvolNome').textContent = tecnico || '-';
-    document.getElementById('oneOnOneEvolWrap').innerHTML = tecnico ? oneOnOneEvolucaoHtml(tecnico) : '';
-
-    document.getElementById('kpiOneOnOne').innerHTML =
-      kpiTileStatic('neutral', ind.total, 'Chamados resolvidos', `${{MONTH_LABELS[periodoKey]}} · media time ${{tier}}: ${{equipe.total !== null ? Math.round(equipe.total) : '-'}} (${{equipe.qtdTecnicos}} tec.) · ultimos 3m: ${{m3.comparativoTotal}}`) +
-      kpiTileStatic('ok', `${{pctPrimeira}}%`, 'Resolvidos na 1a resposta', `de ${{ind.total}} chamados no periodo · media time ${{tier}}: ${{equipe.pctPrimeira !== null ? Math.round(equipe.pctPrimeira)+'%' : '-'}} · media 3m: ${{m3.pctPrimeira !== null ? Math.round(m3.pctPrimeira)+'%' : '-'}}`) +
-      kpiTileStatic('warn', ind.mttrH !== null ? fmtH(ind.mttrH) : '-', 'Tempo medio de resolucao', `${{ind.comSlaLength}} chamados com SLA definido · media time ${{tier}}: ${{equipe.mttrH !== null ? fmtH(equipe.mttrH) : '-'}}`);
-
-    document.getElementById('kpiOneOnOne2').innerHTML =
-      kpiTileStatic(ind.pctSla !== null && ind.pctSla < 70 ? 'danger' : 'ok', ind.pctSla !== null ? `${{ind.pctSla}}%` : '-', 'SLA no prazo', `media time ${{tier}}: ${{equipe.pctSla !== null ? Math.round(equipe.pctSla)+'%' : '-'}} · media 3m: ${{m3.pctSla !== null ? Math.round(m3.pctSla)+'%' : '-'}}`) +
-      kpiTileStatic(corPorFaixa(bouncingTecnico, 0, 5), bouncingTecnico, 'Aging atual (>2 dias)', 'situacao ao vivo, nao e do periodo') +
-      kpiTileStatic(corPorFaixa(naoAtualizadosTecnico, 0, 5), naoAtualizadosTecnico, 'Nao atualizados hoje', 'situacao ao vivo, nao e do periodo');
-
-    // Metas — melhoria de 10% ao mes sobre a media dos ultimos 3 meses do proprio tecnico.
-    // Aging/nao-atualizados sao indicadores ao vivo (sem serie mensal), entao continuam com meta fixa de zero.
-    const metaMttrTec = metaMelhoria10(m3.mttrH, true);
-    const metaSlaTec = metaMelhoria10(m3.pctSla, false);
-    const metaPrimeiraTec = metaMelhoria10(m3.pctPrimeira, false);
-    const mttrBateMetaTec = bateMeta(ind.mttrH, metaMttrTec, true);
-    const slaBateMetaTec = bateMeta(ind.pctSla, metaSlaTec, false);
-    const primeiraBateMetaTec = bateMeta(pctPrimeira, metaPrimeiraTec, false);
-    document.getElementById('kpiOneOnOneMetas').innerHTML =
-      kpiTileStatic(bouncingTecnico === 0 ? 'ok' : 'danger', bouncingTecnico === 0 ? 'Meta batida' : 'Meta nao batida', 'Meta: 0 aging', `atual: ${{bouncingTecnico}} chamado(s) em aging`) +
-      kpiTileStatic(naoAtualizadosTecnico === 0 ? 'ok' : 'warn', naoAtualizadosTecnico === 0 ? 'Meta batida' : 'Meta nao batida', 'Meta: 0 nao atualizados', `atual: ${{naoAtualizadosTecnico}} chamado(s) sem atualizar hoje`) +
-      kpiTileStatic(mttrBateMetaTec === null ? 'warn' : (mttrBateMetaTec ? 'ok' : 'danger'), mttrBateMetaTec === null ? '-' : (mttrBateMetaTec ? 'Meta batida' : 'Meta nao batida'), 'Meta MTTR (10% melhor que media 3m)', `atual: ${{ind.mttrH !== null ? fmtH(ind.mttrH) : '-'}} · meta: ${{metaMttrTec !== null ? fmtH(metaMttrTec) : '-'}}`) +
-      kpiTileStatic(slaBateMetaTec === null ? 'warn' : (slaBateMetaTec ? 'ok' : 'danger'), slaBateMetaTec === null ? '-' : (slaBateMetaTec ? 'Meta batida' : 'Meta nao batida'), 'Meta SLA (+10%/mes s/ media 3m)', `atual: ${{ind.pctSla !== null ? ind.pctSla+'%' : '-'}} · meta: ${{metaSlaTec !== null ? Math.round(metaSlaTec)+'%' : '-'}}`) +
-      kpiTileStatic(primeiraBateMetaTec === null ? 'warn' : (primeiraBateMetaTec ? 'ok' : 'danger'), primeiraBateMetaTec === null ? '-' : (primeiraBateMetaTec ? 'Meta batida' : 'Meta nao batida'), 'Meta 1a resposta (+10%/mes s/ media 3m)', `atual: ${{pctPrimeira}}% · meta: ${{metaPrimeiraTec !== null ? Math.round(metaPrimeiraTec)+'%' : '-'}}`);
-
-    // Indicadores tecnicos N2 — cobranca sobre tasks (Bug/Melhoria/Servicos), diferente do foco em
-    // volume + qualidade na 1a resposta dos N1. So' calculavel para o mes corrente.
-    if (tier === 'N2') {{
-      const n2 = computeN2Metrics(tecnico, periodoKey);
-      document.getElementById('kpiOneOnOneN2').style.display = '';
-      if (n2) {{
-        document.getElementById('kpiOneOnOneN2').innerHTML =
-          kpiTileStatic('neutral', n2.total, 'Chamados tecnicos (Bug/Melhoria/Servicos)', 'resolvidos no mes corrente') +
-          kpiTileStatic('neutral', n2.pctTask !== null ? `${{n2.pctTask}}%` : '-', '% com task associada (fila de dev)', 'de chamados tecnicos que geraram task de dev') +
-          kpiTileStatic('warn', n2.devopsMedio !== null ? fmtH(n2.devopsMedio) : '-', 'Tempo medio devops / abertura task', `devops: ${{n2.devopsMedio !== null ? fmtH(n2.devopsMedio) : '-'}} · abertura task: ${{n2.validacaoMedio !== null ? fmtH(n2.validacaoMedio) : '-'}}`);
-      }} else {{
-        document.getElementById('kpiOneOnOneN2').innerHTML =
-          kpiTileStatic('neutral', '-', 'Indicadores tecnicos (N2)', 'so disponivel para o mes corrente (o historico de status nao e mantido para meses anteriores)');
-      }}
-    }} else {{
-      // Indicador N1 — tempo desde a abertura ate o repasse pro status 'Em atendimento - N2', nos
-      // mesmos chamados tecnicos (Bug/Melhoria/Servicos). So' calculavel no mes corrente.
-      const n1 = computeN1Metrics(tecnico, periodoKey);
-      document.getElementById('kpiOneOnOneN2').style.display = '';
-      if (n1) {{
-        document.getElementById('kpiOneOnOneN2').innerHTML =
-          kpiTileStatic('neutral', n1.total, 'Chamados tecnicos (Bug/Melhoria/Servicos)', 'atribuidos ao tecnico no mes corrente') +
-          kpiTileStatic('neutral', n1.qtdAcionouN2, "Repassados p/ 'Em atendimento - N2'", `de ${{n1.total}} chamados tecnicos`) +
-          kpiTileStatic('warn', n1.tempoAteAcionarN2Medio !== null ? fmtH(n1.tempoAteAcionarN2Medio) : '-', 'Tempo de repasse - N1', "tempo util (exclui Aguardando Cliente) da abertura ate 'Em atendimento - N2'");
-      }} else {{
-        document.getElementById('kpiOneOnOneN2').innerHTML =
-          kpiTileStatic('neutral', '-', 'Indicadores tecnicos (N1)', 'so disponivel para o mes corrente (o historico de status nao e mantido para meses anteriores)');
-      }}
-    }}
-  }}
-  selPeriodo.addEventListener('change', () => {{ refreshTecnicoOptions(); renderOneOnOne(); }});
-  selTecnico.addEventListener('change', renderOneOnOne);
-  refreshTecnicoOptions();
-  renderOneOnOne();
-
   // --- Apuracao de Metas (manual, por nivel) ---
   const selColabMetas = document.getElementById('selColaboradorMetas');
   const selHorizonte = document.getElementById('selHorizonteMetas');
@@ -3111,8 +3036,14 @@ function mttrDoRecorte(items) {{
 }}
 // Pesquisa de satisfacao do CHAMADO (Movidesk): resposta 'positiva' conforme o tipo — satisfeito (1),
 // faces 4-5, NPS 9-10 (promotor), sim (1). Junta pelo id do chamado (1 resposta por chamado; a ultima vale).
-const PESQUISA_POR_CHAMADO = {{}};
-PESQUISA_MOVIDESK.forEach(r => {{ PESQUISA_POR_CHAMADO[r[0]] = r; }});
+// Mapa montado sob demanda (pode ser chamado por abas que iniciam antes desta linha executar).
+function pesquisaPorChamado(id) {{
+  if (!window._pesquisaMapa) {{
+    window._pesquisaMapa = {{}};
+    PESQUISA_MOVIDESK.forEach(r => {{ window._pesquisaMapa[r[0]] = r; }});
+  }}
+  return window._pesquisaMapa[id];
+}}
 function respostaPositiva(tipo, valor) {{
   if (tipo === 1 || tipo === 4) return valor === 1;
   if (tipo === 2) return valor >= 4;
@@ -3120,9 +3051,9 @@ function respostaPositiva(tipo, valor) {{
   return null;
 }}
 function pesquisaDoRecorte(items) {{
-  const comResposta = items.filter(r => PESQUISA_POR_CHAMADO[r.id]);
-  const avaliadas = comResposta.filter(r => respostaPositiva(PESQUISA_POR_CHAMADO[r.id][1], PESQUISA_POR_CHAMADO[r.id][2]) !== null);
-  const positivas = avaliadas.filter(r => respostaPositiva(PESQUISA_POR_CHAMADO[r.id][1], PESQUISA_POR_CHAMADO[r.id][2])).length;
+  const comResposta = items.filter(r => pesquisaPorChamado(r.id));
+  const avaliadas = comResposta.filter(r => respostaPositiva(pesquisaPorChamado(r.id)[1], pesquisaPorChamado(r.id)[2]) !== null);
+  const positivas = avaliadas.filter(r => respostaPositiva(pesquisaPorChamado(r.id)[1], pesquisaPorChamado(r.id)[2])).length;
   return {{ n: avaliadas.length, positivas, total: items.length, pct: avaliadas.length ? positivas / avaliadas.length * 100 : null,
            taxa: items.length ? avaliadas.length / items.length * 100 : null, itens: comResposta }};
 }}
