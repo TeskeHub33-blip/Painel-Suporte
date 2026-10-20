@@ -173,10 +173,14 @@ ABERTOS_MENSAL_FILE = "chamados_abertos_mensal.json"
 MESES_ABERTOS_2025 = [f"2025-{m:02d}" for m in range(1, 13)]
 
 
+CRITERIO_ABERTOS = "suporte_sem_cancelado_sem_melhoria"
+
+
 def contar_abertos_suporte(chamados):
-    """Chamados ABERTOS (= criados) no mes pelo time Suporte, sem os Cancelados — mesmo recorte
-    usado nos chamados fechados da Reuniao Mensal."""
-    return sum(1 for t in chamados if t.get("ownerTeam") == "Suporte" and t.get("status") != "Cancelado")
+    """Chamados ABERTOS (= criados) no mes pelo time Suporte, sem os Cancelados e SEM a categoria
+    Melhoria (a pedido da gestao, 2026-10-20) — base do comparativo Emissoes x Chamados."""
+    return sum(1 for t in chamados if t.get("ownerTeam") == "Suporte" and t.get("status") != "Cancelado"
+               and t.get("category") != "Melhoria")
 
 
 def contar_abertos_mes_historico(year, month):
@@ -184,7 +188,7 @@ def contar_abertos_mes_historico(year, month):
     total = []
     for a, b in ((start, mid), (mid, end)):
         total += fetch_paginated({
-            "$select": "id,status,ownerTeam",
+            "$select": "id,status,ownerTeam,category",
             "$filter": f"createdDate ge {a.strftime('%Y-%m-%d')}T00:00:00Z and createdDate lt {b.strftime('%Y-%m-%d')}T00:00:00Z",
             "$orderby": "id asc",
         }, base_url=PAST_URL)
@@ -202,6 +206,14 @@ def atualizar_chamados_abertos_mensal(contagem_atual, max_backfill):
             dados = json.load(f)
     except (FileNotFoundError, ValueError):
         dados = {}
+    # Mudou o criterio (agora sem Melhoria): as contagens de jan-jun/2025 gravadas no criterio antigo (nao
+    # vem do cache de created_raw) sao descartadas e refeitas aos poucos; os meses com cache sao
+    # recalculados em todo ciclo por contagem_atual.
+    if dados.get("_criterio") != CRITERIO_ABERTOS:
+        for key in MESES_ABERTOS_2025:
+            if key not in contagem_atual:
+                dados.pop(key, None)
+        dados["_criterio"] = CRITERIO_ABERTOS
     dados.update(contagem_atual)
     feitos = 0
     for key in MESES_ABERTOS_2025:
