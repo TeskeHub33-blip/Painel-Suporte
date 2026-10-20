@@ -1,0 +1,35 @@
+name: Buscar tabela de preco (pontual)
+
+# Execucao manual, uma vez: varre todos os chamados do Movidesk que citam "tabela de preco" e sobe o
+# resultado como ARTEFATO privado de 1 dia (nao grava no repositorio — o texto dos chamados tem dado de cliente).
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  buscar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: pip install requests
+
+      - name: Buscar chamados
+        env:
+          MOVIDESK_TOKEN: ${{ secrets.MOVIDESK_TOKEN }}
+        run: python -u buscar_tabela_preco.py
+
+      - name: Guardar resultado (artefato de 1 dia)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabela-preco
+          path: out/tabela_preco_raw.json
+          retention-days: 1
