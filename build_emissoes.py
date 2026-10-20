@@ -35,10 +35,16 @@ def main(xlsx):
         m = meses[mes]
         m["cte"] += cte; m["nfse"] += nfse; m["sistemico"] += sist; m["gnre"] += gnre
         por_cliente[mes][str(r[ix["CNPJ Matriz"]])] += cte + nfse + sist + gnre
+    # CIOT emitidos por mes: numero informado a mao (nao vem da planilha; nao existia em 2025) — ciot_mensal.json
+    try:
+        with open(os.path.join(BASE_DIR, "ciot_mensal.json"), encoding="utf-8") as f:
+            ciot = json.load(f)
+    except (FileNotFoundError, ValueError):
+        ciot = {}
     out = {"fonte": os.path.basename(xlsx), "geradoEm": datetime.now().strftime("%Y-%m-%d"), "meses": {}}
     for mes in sorted(meses):
         clientes = sorted(hashlib.sha1(c.encode()).hexdigest()[:8] for c, t in por_cliente[mes].items() if t > 0)
-        out["meses"][mes] = {**meses[mes], "clientes": clientes}
+        out["meses"][mes] = {**meses[mes], "ciot": ciot.get(mes, 0), "clientes": clientes}
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
     print(f"salvo {OUT}: {len(out['meses'])} meses ({min(out['meses'])} a {max(out['meses'])})")

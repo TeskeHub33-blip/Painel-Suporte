@@ -3085,18 +3085,18 @@ function setEmissoesModo(modo) {{
 }}
 function agregaEmissoes(keys) {{
   const meses = (EMISSOES && EMISSOES.meses) || {{}};
-  const o = {{ cte: 0, nfse: 0, sistemico: 0, gnre: 0, chamados: 0, chamadosCompleto: true, emissaoCompleta: true }};
+  const o = {{ cte: 0, nfse: 0, sistemico: 0, gnre: 0, ciot: 0, chamados: 0, chamadosCompleto: true, emissaoCompleta: true }};
   const clientes = new Set();
   keys.forEach(k => {{
     const e = meses[k];
     if (!e) o.emissaoCompleta = false;
     if (e) {{
-      o.cte += e.cte; o.nfse += e.nfse; o.sistemico += e.sistemico; o.gnre += e.gnre;
+      o.cte += e.cte; o.nfse += e.nfse; o.sistemico += e.sistemico; o.gnre += e.gnre; o.ciot += (e.ciot || 0);
       (e.clientes || []).forEach(c => clientes.add(c));
     }}
     if (CHAMADOS_ABERTOS[k] === undefined) o.chamadosCompleto = false; else o.chamados += CHAMADOS_ABERTOS[k];
   }});
-  o.total = o.cte + o.nfse + o.sistemico + o.gnre;
+  o.total = o.cte + o.nfse + o.sistemico + o.gnre + o.ciot; // CIOT so' existe a partir de 2026 (2025 = 0)
   o.clientes = clientes.size;
   o.chamadosOk = o.chamadosCompleto && o.chamados > 0;
   o.docsPorChamado = o.chamadosOk ? o.total / o.chamados : null;
@@ -3136,7 +3136,7 @@ function renderEmissoes() {{
   const fmt1 = n => (n === null || n === undefined) ? '–' : n.toLocaleString('pt-BR', {{ minimumFractionDigits: 1, maximumFractionDigits: 1 }});
   // Colunas que dependem dos chamados / das emissoes: '–' quando algum mes do periodo ainda nao foi carregado.
   const DEPENDE_CHAMADOS = ['chamados', 'docsPorChamado', 'chamadosPorCliente'];
-  const DEPENDE_EMISSAO = ['cte', 'nfse', 'sistemico', 'gnre', 'total', 'docsPorChamado', 'chamadosPorCliente', 'clientes'];
+  const DEPENDE_EMISSAO = ['cte', 'nfse', 'sistemico', 'gnre', 'ciot', 'total', 'docsPorChamado', 'chamadosPorCliente', 'clientes'];
   const valor = (a, key) => ((DEPENDE_CHAMADOS.indexOf(key) !== -1 && !a.chamadosCompleto) || (DEPENDE_EMISSAO.indexOf(key) !== -1 && !a.emissaoCompleta)) ? null : a[key];
   // Variacao % de 2026 sobre 2025. bomSobe: true = subir e' bom (verde), false = subir e' ruim (vermelho).
   const varTxt = (a, b, bomSobe) => {{
@@ -3151,6 +3151,7 @@ function renderEmissoes() {{
     ['Total NFS-e', 'nfse', fmt, true, ''],
     ['Sistêmico', 'sistemico', fmt, true, ''],
     ['Total GNRE', 'gnre', fmt, true, ''],
+    ['Total CIOT', 'ciot', fmt, true, ''],
     ['Total de documentos', 'total', fmt, true, 'font-weight:700; border-top:1px solid var(--panel-border);'],
     ['Chamados abertos', 'chamados', fmt, false, 'border-top:1px solid var(--panel-border);'],
     ['Documentos por chamado', 'docsPorChamado', fmt, true, ''],
@@ -3160,6 +3161,8 @@ function renderEmissoes() {{
   const cel = (a, key, f) => {{
     const v = valor(a, key);
     const tip = v === null ? ` title="${{DEPENDE_EMISSAO.indexOf(key) !== -1 && !a.emissaoCompleta ? 'Emissoes deste periodo ainda nao carregadas' : 'Chamados abertos deste periodo ainda nao carregados do Movidesk'}}"` : '';
+    // CIOT nao existia em 2025: zero vira '–' (e a variacao tambem, pois nao ha base de comparacao)
+    if (key === 'ciot' && v === 0) return '<td class="num" style="color:var(--text3);" title="CIOT nao existia neste periodo">–</td>';
     return `<td class="num"${{tip}}>${{f(v)}}</td>`;
   }};
   const linha = (rotulo, key, f, bomSobe, estilo, p) => {{
@@ -3180,7 +3183,7 @@ function renderEmissoes() {{
   box.innerHTML = `<div class="emis-grid">${{cards}}</div>`;
   const faltando = periodos.some(p => !p.a25.chamadosCompleto || !p.a26.chamadosCompleto);
   const fonte = EMISSOES.fonte ? ` Fonte das emissões: ${{EMISSOES.fonte}}.` : '';
-  sub.innerHTML = `Total de documentos = CT-e + NFS-e + Sistêmico + GNRE (sem MDF-e). Chamados = abertos no período pelo Suporte, sem cancelados. Clientes = CNPJs com emissão no período. Emissões até ${{NOMES[ultimoMes-1].toLowerCase()}}/2026.${{esc(fonte)}}` +
+  sub.innerHTML = `Total de documentos = CT-e + NFS-e + Sistêmico + GNRE + CIOT (sem MDF-e; o CIOT só existe a partir de 2026). Chamados = abertos no período pelo Suporte, sem cancelados. Clientes = CNPJs com emissão no período. Emissões até ${{NOMES[ultimoMes-1].toLowerCase()}}/2026.${{esc(fonte)}}` +
     (faltando ? ' Chamados de alguns meses ainda estão sendo carregados do Movidesk ("–" até concluir).' : '');
 }}
 function initReuniaoMensal() {{
