@@ -806,7 +806,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
   </div>
 
   <div class="footer-note">
-    Board gerado a partir do Movidesk (chamados nao fechados/cancelados/resolvidos) · Atualizacao agendada a cada 5 minutos · "Aging" = Em atendimento sem update ha 48h+ · "Contraturno" = chamados em atendimento com Alife Caetano dos Santos ou Vinicius Campestrini
+    Board gerado a partir do Movidesk (chamados nao fechados/cancelados/resolvidos) · Atualizacao agendada a cada 5 minutos · "Aging" = Em atendimento, fila N2 ou Aguardando Terceiros sem update ha 48h+ · "Contraturno" = chamados em atendimento com Alife Caetano dos Santos ou Vinicius Campestrini
   </div>
 </div>
 
@@ -971,6 +971,8 @@ function aguardouOrgaoGovernamental(r) {{
   return acoes.some(a => GOV_LOG_RE.test(a.description || ''));
 }}
 
+const AGING_EQUIPES = ['Suporte', 'Suporte N2'];
+const AGING_STATUS = ['Em atendimento', N2_HANDOFF_STATUS, 'Aguardando Terceiros'];
 const FILTERS = {{
   novos: t => t.status === 'Novo',
   emAtendimento: t => t.status === 'Em atendimento',
@@ -979,7 +981,8 @@ const FILTERS = {{
   // mas faltam <=60min) e vence hoje (data-limite do SLA cai no dia de hoje, vencido ou nao).
   venceEm1Hora: t => t._slaHoursLeft !== null && t._slaHoursLeft > 0 && t._slaHoursLeft <= 1,
   venceHoje: t => t._sla !== null && brasiliaDateStr(t._sla) === TODAY_STR,
-  bouncing: t => t.ownerTeam === 'Suporte' && (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && t._hoursSinceUpdate !== null && t._hoursSinceUpdate >= 48,
+  // Aging (22/10/2026): alem do Suporte, inclui a fila do N2 (equipe 'Suporte N2') e os chamados 'Aguardando Terceiros'.
+  bouncing: t => AGING_EQUIPES.indexOf(t.ownerTeam) !== -1 && AGING_STATUS.indexOf(t.status) !== -1 && t._hoursSinceUpdate !== null && t._hoursSinceUpdate >= 48,
   priorizados: t => t.ownerTeam === 'Suporte' && t._isPriorizado
     && !isDevQueueStatus(t.status) && t.status !== 'Aguardando Cliente' && t.status !== 'Em atendimento - CS',
   contraturno: t => t.status === 'Em atendimento' && CONTRATURNO_TECNICOS.indexOf(t.ownerName) !== -1,
@@ -1136,7 +1139,7 @@ const LABELS = {{
   aguardandoCliente: 'Aguardando cliente',
   venceEm1Hora: 'Vencem em 1 hora',
   venceHoje: 'Vencem hoje',
-  bouncing: 'Aging — Em atendimento parado ha mais de 2 dias',
+  bouncing: 'Aging — parado ha mais de 2 dias (Em atendimento, fila N2 e terceiros)',
   priorizados: 'Priorizados (WhatsApp)',
   naoAtualizadosHoje: 'Nao atualizados hoje',
   contraturno: 'Contraturno (Alife e Vinicius) — em atendimento',
@@ -2193,7 +2196,7 @@ document.getElementById('kpiRow').innerHTML =
   kpiTile('neutral', novos.length, 'Novos (aguard. atend.)', 'novos') +
   kpiTile(corPorFaixa(venceEm1Hora.length, 0, 5), venceEm1Hora.length, 'Vencem em 1 hora', 'venceEm1Hora') +
   kpiTile(corPorFaixa(venceHoje.length, 5, 20), venceHoje.length, 'Vencem hoje', 'venceHoje') +
-  kpiTile(corPorFaixa(bouncing.length, 0, 10), bouncing.length, 'Aging (Em atend. &gt;2 dias)', 'bouncing');
+  kpiTile(corPorFaixa(bouncing.length, 0, 10), bouncing.length, 'Aging (&gt;2 dias)', 'bouncing');
 
 // Tempo medio de resolucao: priorizados vs nao-priorizados (chamados resolvidos no mes, time Suporte)
 const resolvidosComTag = RESOLVED_MONTH_ALL.map(r => ({{
@@ -2338,8 +2341,8 @@ document.getElementById('barsPriorizados').innerHTML = porMotivoPriorizacaoHtml(
 
 document.getElementById('gridBottom').innerHTML = `
   <div class="panel">
-    <h2>🔴 Aging — em atendimento parado ha mais de 2 dias${{exportButtonHtml("exportLiveList(bouncing, 'bouncing.txt')")}}</h2>
-    <div class="panel-sub">${{bouncing.length}} chamados Em atendimento sem nenhuma atualizacao ha 48h+</div>
+    <h2>🔴 Aging — parado ha mais de 2 dias${{exportButtonHtml("exportLiveList(bouncing, 'bouncing.txt')")}}</h2>
+    <div class="panel-sub">${{bouncing.length}} chamados (Em atendimento, Em atendimento - N2 e Aguardando Terceiros; equipes Suporte e Suporte N2) sem nenhuma atualizacao ha 48h+</div>
     <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Parado ha</th></tr></thead>
       <tbody>${{tableHtml(bouncing.sort((a,b)=>(b._hoursSinceUpdate||0)-(a._hoursSinceUpdate||0)), 'update', 14)}}</tbody></table>
   </div>
