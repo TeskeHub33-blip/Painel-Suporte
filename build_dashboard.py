@@ -298,6 +298,7 @@ emissoes_json = json.dumps(_json_opcional("emissoes_mensal.json"), ensure_ascii=
 _pesq = _json_opcional("pesquisa_satisfacao.json").get("respostas") or {}
 # [id do chamado, tipo, valor] — so' o necessario pra juntar com os chamados fechados no JS
 pesquisa_movidesk_json = json.dumps([[v["i"], v.get("t"), v.get("v")] for v in _pesq.values()], separators=(',', ':'))
+fechados_2025_json = json.dumps(_json_opcional("fechados_2025.json"), ensure_ascii=False, separators=(',', ':'))
 sensedata_nps_json = json.dumps(_json_opcional("sensedata_nps.json"), ensure_ascii=False, separators=(',', ':'))
 month_ym_json = json.dumps({str(o): f"{month_offset_date(now, o).year}-{month_offset_date(now, o).month:02d}" for o in range(qtd_meses)})
 chamados_abertos_json = json.dumps(_json_opcional("chamados_abertos_mensal.json"), ensure_ascii=False, separators=(',', ':'))
@@ -749,6 +750,11 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
         <div class="panel-sub" id="emissoesSub"></div>
         <div id="tabelaEmissoes"></div>
       </div>
+      <div class="panel" style="margin-top: 18px;">
+        <h2>📉 Dúvidas x Chamados x Peças — acumulado mês a mês (2026 vs 2025)</h2>
+        <div class="panel-sub" id="duvidasPecasSub"></div>
+        <div id="tabelaDuvidasPecas"></div>
+      </div>
     </div>
   </div>
 
@@ -865,6 +871,8 @@ const EMISSOES = {emissoes_json};
 const CHAMADOS_ABERTOS = {chamados_abertos_json};
 // NPS do Sensedata (sensedata_nps.json: so' mes da pesquisa + nota 0-10) e AAAA-MM de cada offset de mes.
 const SENSEDATA_NPS = {sensedata_nps_json};
+// Chamados fechados de 2025 (duvidas e total por mes), do print da planilha da reuniao — 2025 nao vem do Movidesk.
+const FECHADOS_2025 = {fechados_2025_json};
 // Respostas da pesquisa de satisfacao nativa do Movidesk: [id do chamado, tipo (1 satisfeito/insatisfeito, 2 faces, 3 NPS, 4 sim/nao), valor].
 const PESQUISA_MOVIDESK = {pesquisa_movidesk_json};
 const MONTH_YM = {month_ym_json};
@@ -3189,6 +3197,77 @@ function renderEmissoes() {{
   sub.innerHTML = `Total de documentos = CT-e + NFS-e + Sistêmico + GNRE + CIOT (sem MDF-e; o CIOT só existe a partir de 2026). Chamados = abertos no período pelo Suporte, sem cancelados. Clientes = CNPJs com emissão no período. Emissões até ${{NOMES[ultimoMes-1].toLowerCase()}}/2026.${{esc(fonte)}}` +
     (faltando ? ' Chamados de alguns meses ainda estão sendo carregados do Movidesk ("–" até concluir).' : '');
 }}
+// ============================================================
+// Duvidas x Chamados x Pecas: ACUMULADO do ano ate cada mes (jan, jan-fev, ...), 2026 contra o mesmo periodo de 2025.
+// Duvidas = chamados fechados da categoria Duvida; Chamados = TOTAL de chamados fechados; Pecas = documentos emitidos
+// (Total de documentos do painel de emissoes). 2026 vem do Movidesk (Suporte, sem cancelados); 2025 vem do print da planilha.
+// ============================================================
+function renderDuvidasPecas() {{
+  const box = document.getElementById('tabelaDuvidasPecas');
+  const sub = document.getElementById('duvidasPecasSub');
+  const f25 = (FECHADOS_2025 && FECHADOS_2025.meses) || {{}};
+  const emis = (EMISSOES && EMISSOES.meses) || {{}};
+  // 2026: fechados por mes do Movidesk (mesmas bases da tabela de categorias)
+  const f26 = {{}};
+  Object.keys(MONTH_YM).forEach(k => {{
+    const items = RESOLVED_MONTHS[k] || [];
+    f26[MONTH_YM[k]] = {{ total: items.length, duvidas: items.filter(r => (r.category || 'Sem categoria') === 'Dúvida').length }};
+  }});
+  const keys26 = Object.keys(emis).filter(k => k.startsWith('2026-')).sort();
+  if (!keys26.length || !Object.keys(f25).length) {{
+    sub.textContent = '';
+    box.innerHTML = '<div style="color:var(--text3); padding:14px;">Sem dados carregados para este comparativo.</div>';
+    return;
+  }}
+  const ultimoMes = Number(keys26[keys26.length - 1].slice(5));
+  const NOMES = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const mk = (ano, m) => `${{ano}}-${{String(m).padStart(2, '0')}}`;
+  const acum = (ano, ate) => {{
+    const meses = Array.from({{length: ate}}, (_, i) => mk(ano, i + 1));
+    const fonte = ano === 2025 ? f25 : f26;
+    const o = {{ duvidas: 0, total: 0, completo: true }};
+    meses.forEach(k => {{ const f = fonte[k]; if (!f) o.completo = false; else {{ o.duvidas += f.duvidas; o.total += f.total; }} }});
+    const e = agregaEmissoes(meses);
+    o.pecas = e.total;
+    o.completo = o.completo && e.emissaoCompleta;
+    o.pctDuvidas = o.total ? o.duvidas / o.total * 100 : null;
+    o.duvidasMi = o.pecas ? o.duvidas / o.pecas * 1e6 : null;
+    o.chamadosMi = o.pecas ? o.total / o.pecas * 1e6 : null;
+    o.pecasPorDuvida = o.duvidas ? o.pecas / o.duvidas : null;
+    return o;
+  }};
+  const fmt = n => (n === null || n === undefined) ? '–' : Math.round(n).toLocaleString('pt-BR');
+  const fmt1 = n => (n === null || n === undefined) ? '–' : n.toLocaleString('pt-BR', {{ minimumFractionDigits: 1, maximumFractionDigits: 1 }});
+  // variacao % de 2026 sobre 2025; bomSobe: true = subir e' bom (verde), false = subir e' ruim (vermelho)
+  const varTxt = (a, b, bomSobe) => {{
+    if (a === null || b === null || !b) return '<span style="color:var(--text3);">–</span>';
+    const v = (a / b - 1) * 100;
+    const cor = Math.abs(v) < 0.5 ? 'var(--text3)' : ((v > 0) === bomSobe ? 'var(--ok)' : 'var(--danger)');
+    return `<span style="color:${{cor}}; font-weight:700;">${{v > 0 ? '+' : ''}}${{Math.round(v).toLocaleString('pt-BR')}}%</span>`;
+  }};
+  const LINHAS = [
+    ['Peças emitidas (documentos)', 'pecas', fmt, true, 'font-weight:700;'],
+    ['Chamados fechados', 'total', fmt, false, 'border-top:1px solid var(--panel-border);'],
+    ['Dúvidas fechadas', 'duvidas', fmt, false, ''],
+    ['% de dúvidas sobre os chamados', 'pctDuvidas', v => v === null ? '–' : fmt1(v) + '%', false, ''],
+    ['Dúvidas por milhão de peças', 'duvidasMi', fmt1, false, 'border-top:1px solid var(--panel-border); font-weight:700;'],
+    ['Chamados por milhão de peças', 'chamadosMi', fmt1, false, ''],
+    ['Peças por dúvida', 'pecasPorDuvida', fmt, true, ''],
+  ];
+  const cards = [];
+  for (let m = 1; m <= ultimoMes; m++) {{
+    const a25 = acum(2025, m), a26 = acum(2026, m);
+    const corpo = LINHAS.map(([rot, key, f, bomSobe, estilo]) => {{
+      const v25 = a25.completo ? a25[key] : null, v26 = a26.completo ? a26[key] : null;
+      return `<tr style="${{estilo}}"><td>${{rot}}</td><td class="num">${{f(v25)}}</td><td class="num">${{f(v26)}}</td><td class="num">${{varTxt(v26, v25, bomSobe)}}</td></tr>`;
+    }}).join('');
+    const titulo = m === 1 ? 'Janeiro' : `Jan a ${{NOMES[m - 1].slice(0, 3)}}`;
+    cards.push(`<div class="emis-card"><div class="emis-card-title">${{titulo}} <span style="font-weight:400; color:var(--text3); font-size:11px;">(acumulado)</span></div>
+      <table><thead><tr><th></th><th class="num">2025</th><th class="num">2026</th><th class="num">Variação</th></tr></thead><tbody>${{corpo}}</tbody></table></div>`);
+  }}
+  box.innerHTML = `<div class="emis-grid">${{cards.join('')}}</div>`;
+  sub.innerHTML = `Valores ACUMULADOS do ano até cada mês, 2026 contra o mesmo período de 2025. Dúvidas = chamados fechados da categoria Dúvida; Chamados = total de chamados fechados; Peças = documentos emitidos (CT-e + NFS-e + Sistêmico + GNRE + CIOT, sem MDF-e). 2026 vem do Movidesk (Suporte, sem cancelados); 2025 vem do print da planilha da reunião. Dúvidas e chamados por milhão de peças medem a demanda de suporte em relação ao volume emitido (menor é melhor).`;
+}}
 function initReuniaoMensal() {{
   if (reuniaoMensalInited) return;
   reuniaoMensalInited = true;
@@ -3376,6 +3455,7 @@ function initReuniaoMensal() {{
   window._renderTabelaReuniaoMensal = renderTabela;
   renderTabela();
   renderEmissoes();
+  renderDuvidasPecas();
 }}
 // Sessao ja desbloqueada (ex.: recarga automatica da pagina): o gate some, mas a tabela precisa ser montada.
 if (sessionStorage.getItem('reuniaoMensalUnlocked') === '1') initReuniaoMensal();
