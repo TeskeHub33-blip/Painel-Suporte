@@ -3010,7 +3010,9 @@ const REUNIAO_MENSAL_CATEGORIAS = ['Bloqueio Sistema', 'Bug', 'Dúvida', 'Melhor
 // Servicos — que passam pela fila de Desenvolvimento e tem dinamica de prazo diferente (nao e'
 // atendimento puro de Suporte).
 const CATEGORIAS_EXCLUIDAS_SLA_SUPORTE = ['Bug', 'Melhoria', 'Terceiros', 'Serviços'];
-const CATEGORIAS_EXCLUIDAS_SLA_EMITEAI = ['Serviços'];
+// SLA EmiteAi: sem Servicos, Melhoria e Terceiros (26/10/2026). "Tempo medio de atendimento" total da tabela: sem Melhoria e Terceiros.
+const CATEGORIAS_EXCLUIDAS_SLA_EMITEAI = ['Serviços', 'Melhoria', 'Terceiros'];
+const CATEGORIAS_EXCLUIDAS_TEMPO_TOTAL = ['Melhoria', 'Terceiros'];
 // Meta de duvidas: baseline historico de 61% (media de ~7 meses, 3535 chamados de duvida). A
 // reducao de um mes e' a diferenca em PONTOS PERCENTUAIS absolutos contra o baseline (nao relativa
 // ao baseline) — confirmado pelo usuario: "61% e' a media, em janeiro foi 56%, entao tivemos
@@ -3213,6 +3215,7 @@ function initReuniaoMensal() {{
     const duvidas = porCategoria['Dúvida'] || 0;
     const pctDuvidas = total ? Math.round(duvidas / total * 100) : 0;
     const stats = statsForMonth(items);
+    const statsTempo = statsForMonth(items.filter(r => CATEGORIAS_EXCLUIDAS_TEMPO_TOTAL.indexOf(r.category || 'Sem categoria') === -1));
     const statsEmiteai = statsForMonth(items.filter(r => CATEGORIAS_EXCLUIDAS_SLA_EMITEAI.indexOf(r.category || 'Sem categoria') === -1));
     const statsSuporte = statsForMonth(items.filter(r => CATEGORIAS_EXCLUIDAS_SLA_SUPORTE.indexOf(r.category || 'Sem categoria') === -1));
     const slaPorCategoria = {{}};
@@ -3227,7 +3230,7 @@ function initReuniaoMensal() {{
     const reabertos = items.filter(r => r.reopenedIn).length;
     const nps = npsDosMeses([MONTH_YM[k]]);
     const pesquisa = pesquisaDoRecorte(items);
-    return {{ mesKey: k, label: MONTH_LABELS[k], reabertos, pctReaberturas: total ? reabertos / total * 100 : null, nps, pesquisa, slaPorCategoria, slaOutros, tempoPorCategoria, tempoOutros, pesqPorCategoria, pesqOutros, porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: statsEmiteai.pctSla, pctSlaSuporte: statsSuporte.pctSla, mttrH: stats.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
+    return {{ mesKey: k, label: MONTH_LABELS[k], reabertos, pctReaberturas: total ? reabertos / total * 100 : null, nps, pesquisa, slaPorCategoria, slaOutros, tempoPorCategoria, tempoOutros, pesqPorCategoria, pesqOutros, porCategoria, outros, total, pctDuvidas, reducaoDuvidas: reducaoDuvidas(pctDuvidas), pctSla: statsEmiteai.pctSla, pctSlaSuporte: statsSuporte.pctSla, mttrH: statsTempo.mttrH, pctPrimeira: stats.pctPrimeira, atendidosSuporte: stats.total }};
   }});
 
   // KPIs de SLA mensal (um por mes, mais recente primeiro)
@@ -3248,6 +3251,7 @@ function initReuniaoMensal() {{
     todosItensPeriodo.push(...(RESOLVED_MONTHS[l.mesKey] || []));
   }});
   const statsGeral = statsForMonth(todosItensPeriodo);
+  const statsGeralTempo = statsForMonth(todosItensPeriodo.filter(r => CATEGORIAS_EXCLUIDAS_TEMPO_TOTAL.indexOf(r.category || 'Sem categoria') === -1));
   const statsGeralEmiteai = statsForMonth(todosItensPeriodo.filter(r => CATEGORIAS_EXCLUIDAS_SLA_EMITEAI.indexOf(r.category || 'Sem categoria') === -1));
   const reabertosGeral = todosItensPeriodo.filter(r => r.reopenedIn).length;
   const pesquisaGeral = pesquisaDoRecorte(todosItensPeriodo);
@@ -3354,7 +3358,7 @@ function initReuniaoMensal() {{
     ${{REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(totalGeral[c], slaGeralPorCategoria[c], tempoGeralPorCategoria[c], pesqGeralPorCategoria[c], `openModalReuniaoMensalCategoria('total', ${{jsStr(c)}})`)).join('')}}
     ${{celulaCategoria(totalGeralOutros, slaGeralOutros, tempoGeralOutros, pesqGeralOutros, `openModalReuniaoMensalOutros('total')`)}}
     ${{tdClick(`openModalReuniaoMensalTotal('total')`, totalGeralFechados)}}
-    ${{tdClick(`openModalReuniaoMensalTotal('total')`, statsGeral.mttrH !== null ? fmtH(statsGeral.mttrH) : '-')}}
+    ${{tdClick(`openModalReuniaoMensalTotal('total')`, statsGeralTempo.mttrH !== null ? fmtH(statsGeralTempo.mttrH) : '-')}}
     ${{tdClick(`openModalReuniaoMensalPrimeiraResposta('total')`, statsGeral.pctPrimeira+'%')}}
     ${{tdClick(`openModalReuniaoMensalCategoria('total', 'Dúvida')`, pctDuvidasTotal+'%')}}
     ${{tdClick(`openModalReuniaoMensalCategoria('total', 'Dúvida')`, `${{ytdReducaoDuvidas}}pp (YTD) — ${{metaBatida ? '✓ meta batida' : `✗ ${{META_DUVIDAS_REDUCAO_ALVO_PCT - ytdReducaoDuvidas}}pp faltando`}}`, ` color:${{corReducaoTotal}};`)}}
