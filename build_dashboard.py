@@ -9,7 +9,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(BASE_DIR, "tickets_full.json")
 RESOLVED_PATH = os.path.join(BASE_DIR, "resolved_today.json")
 LOGO_B64_PATH = os.path.join(BASE_DIR, "ref_assets", "logo_b64.txt")
-OUT_PATH = os.path.join(BASE_DIR, "dashboard_suporte.html")
+# HOMOLOG=1 gera a versao v2 (tema claro + visao Fluxo) em dashboard_homolog.html, publicada em /homolog/;
+# sem a variavel, o comportamento e a saida sao exatamente os do painel atual.
+HOMOLOG = os.environ.get("HOMOLOG") == "1"
+OUT_PATH = os.path.join(BASE_DIR, "dashboard_homolog.html" if HOMOLOG else "dashboard_suporte.html")
 
 with open(LOGO_B64_PATH, encoding='ascii') as f:
     LOGO_B64 = f.read().strip()
@@ -4310,6 +4313,10 @@ setInterval(() => {{
 }}, 5 * 60 * 1000);
 </script>
 """
+
+if HOMOLOG:
+    from homolog_extras import aplicar_homologacao
+    html = aplicar_homologacao(html)
 
 with open(OUT_PATH, 'w', encoding='utf-8') as f:
     f.write(html)

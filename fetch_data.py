@@ -492,7 +492,7 @@ def main():
     # Busca em lotes por id (mesmo padrao do customFieldValues) so' pra categoria Melhoria, pra nao
     # pesar a sincronizacao inteira. Falha aqui nunca derruba o painel: sem o campo, a coluna fica vazia.
     try:
-        ids_melhoria = sorted({t['id'] for t in open_tickets if t.get('category') == 'Melhoria'})
+        ids_melhoria = sorted({t['id'] for t in open_tickets if t.get('category') in ('Melhoria', 'Bug')})
         ultimo_comentario = {}
         for i in range(0, len(ids_melhoria), 20):
             filt = " or ".join(f"id eq {tid}" for tid in ids_melhoria[i:i + 20])

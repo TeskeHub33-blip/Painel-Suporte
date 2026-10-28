@@ -57,6 +57,14 @@ jobs:
             python build_dashboard.py
             cp dashboard_suporte.html index.html
             git add index.html
+            # Versao de homologacao (v2) em /homolog/ — nunca bloqueia a publicacao do painel atual.
+            if HOMOLOG=1 python build_dashboard.py; then
+              mkdir -p homolog
+              cp dashboard_homolog.html homolog/index.html
+              git add homolog/index.html
+            else
+              echo "[aviso] build de homologacao falhou — painel atual publicado normalmente."
+            fi
             git add created_raw_*.json 2>/dev/null || true
             git add chamados_abertos_mensal.json 2>/dev/null || true
             git add pesquisa_satisfacao.json 2>/dev/null || true
