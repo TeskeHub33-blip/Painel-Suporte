@@ -153,12 +153,15 @@ def _sem_emoji_titulos(html):
     return '\n'.join(out)
 
 
-def aplicar_homologacao(html):
+def aplicar_homologacao(html, badge=True):
+    """badge=True: versao de homologacao (etiqueta e titulo proprios). badge=False: mesmo visual e abas, sem a etiqueta (producao)."""
     # 1) tema claro (depois de todo o CSS existente, pra sobrescrever)
     html = html.replace('</style>', TEMA_CLARO_CSS + NAV_CSS + V2_CSS + DARK_CSS + V3_CSS + '</style>', 1)
     # 2) identificacao visual da versao
-    html = html.replace('<h1>Painel Diario</h1>', '<h1>Painel Diario <span class="hml-badge">HOMOLOGAÇÃO v2</span></h1>', 1)
-    html = re.sub(r'<title>[^<]*</title>', '<title>Painel Diario — Homologação v2</title>', html, count=1)
+    if badge:
+        html = html.replace('<h1>Painel Diario</h1>', '<h1>Painel Diario <span class="hml-badge">HOMOLOGAÇÃO v2</span></h1>', 1)
+    if badge:
+        html = re.sub(r'<title>[^<]*</title>', '<title>Painel Diario — Homologação v2</title>', html, count=1)
     # 3) visao Fluxo na aba Gestao Semanal - Melhorias
     html = html.replace('<button type="button" data-sub="indic" onclick="setGmSub(\'indic\')">Indicadores</button>',
                         '<button type="button" data-sub="indic" onclick="setGmSub(\'indic\')">Indicadores</button>\n'

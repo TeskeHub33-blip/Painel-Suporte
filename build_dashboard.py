@@ -4314,9 +4314,13 @@ setInterval(() => {{
 </script>
 """
 
-if HOMOLOG:
+# Producao e homologacao usam o mesmo visual/abas (Gestao de Indicadores, Melhorias, Bugs, tema escuro/claro); so' a homologacao
+# leva a etiqueta. Se a aplicacao falhar por qualquer motivo, publica o painel sem a v2 em vez de quebrar a atualizacao.
+try:
     from homolog_extras import aplicar_homologacao
-    html = aplicar_homologacao(html)
+    html = aplicar_homologacao(html, badge=HOMOLOG)
+except Exception as e:
+    print(f"[aviso] visual v2 nao aplicado: {e}", flush=True)
 
 with open(OUT_PATH, 'w', encoding='utf-8') as f:
     f.write(html)
