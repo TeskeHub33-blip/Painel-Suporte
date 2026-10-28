@@ -12,6 +12,7 @@ O que muda na v2:
 import re
 
 from homolog_gestao import NAV_CSS, NAV_JS, BUGS_JS, reestruturar_navegacao
+from homolog_v2 import V2_CSS, V2_JS, DARK_CSS, TEMA_JS, aplicar_tema
 
 TEMA_CLARO_CSS = """
 /* ===== HOMOLOGACAO v2: tema claro EmiteAi ===== */
@@ -138,7 +139,7 @@ function renderGmFluxo() {
 }
 """
 
-_EMOJI = re.compile('[\U0001F300-\U0001FAFF☀-➿⬀-⯿][️‍]*\\s?')
+_EMOJI = re.compile('[\U0001F300-\U0001FAFF☀-➿⬀-⯿⌀-⏿][️‍]*\\s?')
 
 
 def _sem_emoji_titulos(html):
@@ -153,7 +154,7 @@ def _sem_emoji_titulos(html):
 
 def aplicar_homologacao(html):
     # 1) tema claro (depois de todo o CSS existente, pra sobrescrever)
-    html = html.replace('</style>', TEMA_CLARO_CSS + NAV_CSS + '</style>', 1)
+    html = html.replace('</style>', TEMA_CLARO_CSS + NAV_CSS + V2_CSS + DARK_CSS + '</style>', 1)
     # 2) identificacao visual da versao
     html = html.replace('<h1>Painel Diario</h1>', '<h1>Painel Diario <span class="hml-badge">HOMOLOGAÇÃO v2</span></h1>', 1)
     html = re.sub(r'<title>[^<]*</title>', '<title>Painel Diario — Homologação v2</title>', html, count=1)
@@ -163,7 +164,10 @@ def aplicar_homologacao(html):
                         '        <button type="button" data-sub="fluxo" onclick="setGmSub(\'fluxo\')">Fluxo</button>', 1)
     html = html.replace('<div id="gmIndic" style="display:none;"></div>',
                         '<div id="gmIndic" style="display:none;"></div>\n    <div id="gmFluxo" style="display:none;"></div>', 1)
-    html = html.replace('renderGestaoMelhorias();\n\nfunction tick()', FLUXO_JS + NAV_JS + BUGS_JS + '\nrenderGestaoMelhorias();\n\nfunction tick()', 1)
+    html = html.replace('renderGestaoMelhorias();\n\nfunction tick()', FLUXO_JS + NAV_JS + BUGS_JS + V2_JS + TEMA_JS + '\nrenderGestaoMelhorias();\n\nfunction tick()', 1)
     html = reestruturar_navegacao(html)
+    html = aplicar_tema(html)
     # 4) sem emojis nos titulos
-    return _sem_emoji_titulos(html)
+    html = _sem_emoji_titulos(html)
+    # titulos dentro de templates JS (linhas longas) tambem perdem o emoji logo apos <h2>
+    return re.sub(r'(<h2[^>]*>)[ ]*' + _EMOJI.pattern, r'', html)
