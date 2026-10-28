@@ -440,7 +440,7 @@ body, .dashboard-root {{
 .emis-card td {{ padding: 5px 6px; }}
 .emis-card th.num, .emis-card td.num {{ text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }}
 .emis-card tr.mes-detalhe td {{ color: var(--text-dim); font-size: 11px; padding-top: 2px; padding-bottom: 2px; }}
-.gm-board {{ display: grid; grid-template-columns: repeat(4, minmax(250px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 8px; }}
+.gm-board {{ display: grid; grid-template-columns: repeat(5, minmax(235px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 8px; }}
 .gm-col {{ background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: 12px; padding: 10px; min-height: 220px; }}
 .gm-col.gm-key {{ border-color: var(--pink); }}
 .gm-col h3 {{ margin: 0 0 2px 0; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }}
@@ -3241,7 +3241,8 @@ function renderEmissoes() {{
 // Gestao Semanal - Melhorias: acompanhamento do fluxo de melhorias (reuniao de alinhamento de quarta 14:00 com Produto).
 // Etapas: Em atendimento N1 -> Aguardando validacao do N2 (Em atendimento - N2) -> Aguardando reuniao de alinhamento
 // (TUDO que esta em 'Refinamento Suporte Melhoria'; tag 'Aprovado PO' = vai pro roadmap, aguardando data pra informar o
-// cliente) -> Aguardando estimativa tecnica (Em atendimento - CS + tag 'Estimativa Tecnica'; Dev informa horas e data).
+// cliente) -> Aguardando estimativa tecnica (Refinamento + tag 'Estimativa Tecnica' + Previsao de solucao preenchida)
+// -> Aguardando orcamento (Em atendimento - CS + tags Estimativa Tecnica e Estimativa Comercial).
 // Quando a data chega, vai no campo 'Previsao de solucao' (slaSolutionDate) e o chamado muda pra 'Aguardando Desenvolvimento'.
 // ============================================================
 const GM_ST_REFINAMENTO = 'Refinamento Suporte Melhoria';
@@ -3249,8 +3250,9 @@ const GM_ST_DEV = 'Aguardando Desenvolvimento';
 const GM_COLS = [
   {{k: 'n1', t: 'Em atendimento N1', who: "Status 'Em atendimento' + categoria Melhoria"}},
   {{k: 'n2', t: 'Aguardando validação do N2', who: "Status 'Em atendimento - N2' + categoria Melhoria"}},
-  {{k: 'refina', t: 'Aguardando reunião de alinhamento', who: "Tudo em 'Refinamento Suporte Melhoria' · quarta 14:00 com Produto · selo Aprovado PO = roadmap, aguardando data pro cliente", key: true}},
-  {{k: 'tec', t: 'Aguardando estimativa técnica', who: "'Em atendimento - CS' + tag Estimativa Técnica · Dev envia horas e data de entrega"}},
+  {{k: 'refina', t: 'Aguardando reunião de alinhamento', who: "'Refinamento Suporte Melhoria' (menos os que já têm tag Estimativa Técnica + Previsão de solução) · quarta 14:00 com Produto · selo Aprovado PO = roadmap, aguardando data pro cliente", key: true}},
+  {{k: 'tec', t: 'Aguardando estimativa técnica', who: "'Refinamento Suporte Melhoria' + tag Estimativa Técnica + Previsão de solução preenchida"}},
+  {{k: 'orc', t: 'Aguardando orçamento', who: "'Em atendimento - CS' + tags Estimativa Técnica e Estimativa Comercial"}},
 ];
 const GM_LIM = 8;
 let gmAbertos = {{}};
@@ -3258,10 +3260,10 @@ let gmSub = 'acomp';
 
 function gmTagTem(t, prefixo) {{ return (t.tags || []).some(tg => (tg || '').toLowerCase().indexOf(prefixo) !== -1); }}
 function gmEtapa(t) {{
-  if (t.status === GM_ST_REFINAMENTO) return 'refina';
+  if (t.status === GM_ST_REFINAMENTO) return (gmTagTem(t, 'estimativa t') && t._sla) ? 'tec' : 'refina';
   if (t.status === 'Em atendimento - N2') return 'n2';
   if (t.status === 'Em atendimento') return 'n1';
-  if (t.status === 'Em atendimento - CS' && gmTagTem(t, 'estimativa t')) return 'tec';
+  if (t.status === 'Em atendimento - CS' && gmTagTem(t, 'estimativa t') && gmTagTem(t, 'estimativa c')) return 'orc';
   return null;
 }}
 function gmMelhorias() {{ return TICKETS.filter(t => t.category === 'Melhoria'); }}
@@ -3329,6 +3331,7 @@ function renderGestaoMelhorias() {{
     gmKpi(por('n2').length, 'Aguardando validação do N2', '', "gmScroll('gmKanbanBox')") +
     gmKpi(refina.length, `Aguardando reunião de alinhamento<br><span style="font-size:10.5px;">${{aprovPO.length}} já com Aprovado PO</span>`, '', "gmScroll('gmReuniaoBox')") +
     gmKpi(por('tec').length, 'Aguardando estimativa técnica', '', "gmScroll('gmKanbanBox')") +
+    gmKpi(por('orc').length, 'Aguardando orçamento', '', "gmScroll('gmKanbanBox')") +
     gmKpi(prox7.length, 'Vencem em até 7 dias', prox7.length ? 'warn' : '', "gmScroll('gmVencBox')") +
     gmKpi(vencidas.length, 'Previsão vencida', vencidas.length ? 'danger' : '', "gmScroll('gmVencBox')");
 
@@ -3351,7 +3354,7 @@ function renderGestaoMelhorias() {{
       <td style="text-align:right;">${{gmDias(gmDiasAberto(t))}}</td><td style="text-align:right;" class="gm-t-${{gmCor(gmDiasNaEtapa(t))}}">${{gmDias(gmDiasNaEtapa(t))}}</td>
       <td style="min-width:260px; font-size:11.5px;">${{gmComentario(t)}}</td></tr>`).join('') || '<tr><td colspan="7" class="empty-msg">Nenhuma melhoria aguardando a reunião.</td></tr>';
   document.getElementById('gmReuniaoBox').innerHTML = `<h2>🗓️ Lista para Produto avaliar — reunião de alinhamento (quartas, 14:00)</h2>
-    <div class="panel-sub">Todos os chamados no status Refinamento Suporte Melhoria, do mais antigo para o mais novo. Produto decide se a melhoria será gratuita (roadmap) ou cobrada (Em atendimento - CS com tag Estimativa Técnica). Selo Aprovado PO = entra no roadmap e aguarda a data para informar o cliente.</div>
+    <div class="panel-sub">Todos os chamados no status Refinamento Suporte Melhoria, do mais antigo para o mais novo. Produto decide se a melhoria será gratuita (roadmap) ou cobrada (recebe a tag Estimativa Técnica e a data de solução). Selo Aprovado PO = entra no roadmap e aguarda a data para informar o cliente.</div>
     <table><thead><tr><th>Chamado</th><th>Melhoria</th><th>Cliente</th><th>Equipe</th><th>Aberto há</th><th>Na etapa há</th><th>Último comentário</th></tr></thead><tbody>${{linhasR}}</tbody></table>`;
 
   // ---------- Kanban
@@ -3379,13 +3382,13 @@ function renderGmIndicadores(todas) {{
   const etapas = GM_COLS.map(c => ({{nome: c.t, itens: todas.filter(t => t._gmE === c.k)}}));
   const dev = todas.filter(t => t.status === GM_ST_DEV);
   const devComPrev = dev.filter(t => t._sla);
-  const csSemTag = todas.filter(t => t.status === 'Em atendimento - CS' && t._gmE !== 'tec');
+  const csSemTag = todas.filter(t => t.status === 'Em atendimento - CS' && t._gmE !== 'orc');
   const outros = todas.filter(t => !t._gmE && t.status !== GM_ST_DEV && !(t.status === 'Em atendimento - CS'));
   const cont = (nome, itens) => ({{nome, itens}});
   const linhasQtd = etapas.concat([
     cont('Aguardando Desenvolvimento — com Previsão de solução', devComPrev),
     cont('Aguardando Desenvolvimento — sem Previsão de solução', dev.filter(t => !t._sla)),
-    cont('Em atendimento - CS sem tag de estimativa', csSemTag),
+    cont('Em atendimento - CS fora de Aguardando orçamento', csSemTag),
     cont('Outros status (Aguardando Cliente, Novo, etc.)', outros),
   ]);
   const idadeAb = todas.map(gmDiasAberto);
