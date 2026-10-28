@@ -69,6 +69,7 @@ jobs:
             git add chamados_abertos_mensal.json 2>/dev/null || true
             git add pesquisa_satisfacao.json 2>/dev/null || true
             git add sensedata_nps.json 2>/dev/null || true
+            git add ultimo_comentario.json 2>/dev/null || true
             if git diff --staged --quiet; then
               echo "Nada para publicar (sem mudancas)."
               exit 0

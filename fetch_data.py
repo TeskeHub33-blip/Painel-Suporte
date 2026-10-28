@@ -488,28 +488,51 @@ def main():
                       if any(cf.get('customFieldId') == 248215 and cf.get('items') for cf in v))
     print(f"[info] customFieldValues buscado em lotes por id: {com_motivo} chamados com "
           f"Motivo de Priorizacao marcado", flush=True)
-    # Ultimo comentario (acao) das Melhorias abertas — alimenta a aba "Gestao Semanal - Melhorias".
-    # Busca em lotes por id (mesmo padrao do customFieldValues) so' pra categoria Melhoria, pra nao
-    # pesar a sincronizacao inteira. Falha aqui nunca derruba o painel: sem o campo, a coluna fica vazia.
+    # Ultimo comentario (acao) das Melhorias e Bugs abertos — alimenta as abas de Gestao Semanal.
+    # CACHE por chamado (ultimo_comentario.json, commitado no repo): so' busca de novo o chamado cujo
+    # lastActionDate mudou desde a ultima vez. Sem isso, cada sincronizacao fazia dezenas de requisicoes
+    # (limite de 10/min) e o passo de busca passou de ~3 min pra ~17 min, empilhando as execucoes agendadas.
+    # Falha aqui nunca derruba o painel: sem o campo, a coluna fica vazia.
     try:
-        ids_melhoria = sorted({t['id'] for t in open_tickets if t.get('category') in ('Melhoria', 'Bug')})
-        ultimo_comentario = {}
-        for i in range(0, len(ids_melhoria), 20):
-            filt = " or ".join(f"id eq {tid}" for tid in ids_melhoria[i:i + 20])
+        cache_path = os.path.join(BASE_DIR, "ultimo_comentario.json")
+        try:
+            with open(cache_path, encoding="utf-8") as f:
+                cache_uc = json.load(f)
+        except (FileNotFoundError, ValueError):
+            cache_uc = {}
+        alvo = [t for t in open_tickets if t.get('category') in ('Melhoria', 'Bug')]
+        pendentes = [t['id'] for t in alvo
+                     if str(t['id']) not in cache_uc or cache_uc[str(t['id'])].get('lad') != t.get('lastActionDate')]
+        lad_por_id = {t['id']: t.get('lastActionDate') for t in alvo}
+        CHUNK = 25
+        for i in range(0, len(pendentes), CHUNK):
+            lote = pendentes[i:i + CHUNK]
+            filt = " or ".join(f"id eq {tid}" for tid in lote)
+            achados = set()
             for base in (BASE_URL, PAST_URL):
+                faltam = [tid for tid in lote if tid not in achados]
+                if not faltam:
+                    break
+                filt = " or ".join(f"id eq {tid}" for tid in faltam)
                 for r in fetch({"$select": "id", "$expand": "actions($select=description,createdDate,type)",
-                                "$filter": filt, "$top": 20}, base_url=base):
-                    acoes = [a for a in (r.get('actions') or []) if a.get('createdDate')]
-                    if acoes and r['id'] not in ultimo_comentario:
-                        a = max(acoes, key=lambda x: x['createdDate'])
-                        ultimo_comentario[r['id']] = {'description': (a.get('description') or '')[:600],
-                                                      'createdDate': a['createdDate'], 'type': a.get('type')}
-        for t in open_tickets:
-            if t['id'] in ultimo_comentario:
-                t['lastComment'] = ultimo_comentario[t['id']]
-        print(f"[info] ultimo comentario das Melhorias abertas: {len(ultimo_comentario)} de {len(ids_melhoria)}", flush=True)
+                                "$filter": filt, "$top": CHUNK}, base_url=base):
+                    achados.add(r['id'])
+                    acoes = [x for x in (r.get('actions') or []) if x.get('createdDate')]
+                    if acoes:
+                        ac = max(acoes, key=lambda x: x['createdDate'])
+                        cache_uc[str(r['id'])] = {'lad': lad_por_id.get(r['id']), 'description': (ac.get('description') or '')[:600],
+                                                  'createdDate': ac['createdDate'], 'type': ac.get('type')}
+        ids_abertos = {str(t['id']) for t in alvo}
+        cache_uc = {k: v for k, v in cache_uc.items() if k in ids_abertos}  # nao deixa o cache crescer com chamados ja fechados
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(cache_uc, f, ensure_ascii=False)
+        for t in alvo:
+            c = cache_uc.get(str(t['id']))
+            if c:
+                t['lastComment'] = {'description': c['description'], 'createdDate': c['createdDate'], 'type': c['type']}
+        print(f"[info] ultimo comentario: {len(pendentes)} buscados agora, {len(cache_uc)} no cache, de {len(alvo)} Melhorias/Bugs abertos", flush=True)
     except Exception as e:
-        print(f"[aviso] ultimo comentario das Melhorias nao carregado: {e}", flush=True)
+        print(f"[aviso] ultimo comentario nao carregado: {e}", flush=True)
     save("tickets_full.json", open_tickets)
 
     # 2. Resolvidos hoje
