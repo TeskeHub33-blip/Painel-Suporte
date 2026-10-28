@@ -488,6 +488,28 @@ def main():
                       if any(cf.get('customFieldId') == 248215 and cf.get('items') for cf in v))
     print(f"[info] customFieldValues buscado em lotes por id: {com_motivo} chamados com "
           f"Motivo de Priorizacao marcado", flush=True)
+    # Ultimo comentario (acao) das Melhorias abertas — alimenta a aba "Gestao Semanal - Melhorias".
+    # Busca em lotes por id (mesmo padrao do customFieldValues) so' pra categoria Melhoria, pra nao
+    # pesar a sincronizacao inteira. Falha aqui nunca derruba o painel: sem o campo, a coluna fica vazia.
+    try:
+        ids_melhoria = sorted({t['id'] for t in open_tickets if t.get('category') == 'Melhoria'})
+        ultimo_comentario = {}
+        for i in range(0, len(ids_melhoria), 20):
+            filt = " or ".join(f"id eq {tid}" for tid in ids_melhoria[i:i + 20])
+            for base in (BASE_URL, PAST_URL):
+                for r in fetch({"$select": "id", "$expand": "actions($select=description,createdDate,type)",
+                                "$filter": filt, "$top": 20}, base_url=base):
+                    acoes = [a for a in (r.get('actions') or []) if a.get('createdDate')]
+                    if acoes and r['id'] not in ultimo_comentario:
+                        a = max(acoes, key=lambda x: x['createdDate'])
+                        ultimo_comentario[r['id']] = {'description': (a.get('description') or '')[:600],
+                                                      'createdDate': a['createdDate'], 'type': a.get('type')}
+        for t in open_tickets:
+            if t['id'] in ultimo_comentario:
+                t['lastComment'] = ultimo_comentario[t['id']]
+        print(f"[info] ultimo comentario das Melhorias abertas: {len(ultimo_comentario)} de {len(ids_melhoria)}", flush=True)
+    except Exception as e:
+        print(f"[aviso] ultimo comentario das Melhorias nao carregado: {e}", flush=True)
     save("tickets_full.json", open_tickets)
 
     # 2. Resolvidos hoje

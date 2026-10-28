@@ -185,6 +185,9 @@ for t in raw_tickets:
         'clientOrg': extract_org(t.get('clients')),
         'statusHistories': clean_status_histories(t.get('statusHistories')),
         'motivoPriorizacao': extract_motivo_priorizacao(t.get('customFieldValues')),
+        'lastComment': ({'description': redact_secrets((t['lastComment'].get('description') or '')[:300]),
+                         'createdDate': t['lastComment'].get('createdDate'), 'type': t['lastComment'].get('type')}
+                        if t.get('lastComment') else None),
     })
 
 clean_resolved = []
@@ -437,6 +440,27 @@ body, .dashboard-root {{
 .emis-card td {{ padding: 5px 6px; }}
 .emis-card th.num, .emis-card td.num {{ text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }}
 .emis-card tr.mes-detalhe td {{ color: var(--text-dim); font-size: 11px; padding-top: 2px; padding-bottom: 2px; }}
+.gm-board {{ display: grid; grid-template-columns: repeat(4, minmax(250px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 8px; }}
+.gm-col {{ background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: 12px; padding: 10px; min-height: 220px; }}
+.gm-col.gm-key {{ border-color: var(--pink); }}
+.gm-col h3 {{ margin: 0 0 2px 0; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }}
+.gm-col h3 em {{ font-style: normal; background: var(--pink); color: #fff; border-radius: 99px; padding: 1px 9px; font-size: 12px; }}
+.gm-who {{ font-size: 11px; color: var(--text3); margin-bottom: 8px; min-height: 30px; }}
+.gm-card {{ background: var(--surface2); border: 1px solid var(--panel-border); border-left: 4px solid var(--ok); border-radius: 8px; padding: 7px 9px; margin-bottom: 8px; font-size: 12px; }}
+.gm-card.gm-b-warn {{ border-left-color: var(--warn-solid); }}
+.gm-card.gm-b-danger {{ border-left-color: var(--danger); }}
+.gm-t {{ margin: 3px 0 2px 0; line-height: 1.3; }}
+.gm-m {{ display: flex; justify-content: space-between; gap: 6px; color: var(--text3); font-size: 11px; margin-top: 3px; }}
+.gm-c {{ margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--panel-border); color: var(--text-dim); font-size: 11px; }}
+.gm-vazio {{ color: var(--text3); font-size: 12px; text-align: center; padding: 18px 6px; border: 1px dashed var(--panel-border); border-radius: 8px; }}
+.gm-mais {{ font-size: 12px; color: var(--pink); cursor: pointer; text-align: center; font-weight: 600; }}
+.gm-selo {{ display: inline-block; border-radius: 99px; padding: 0 8px; font-size: 10.5px; font-weight: 600; margin-left: 4px; white-space: nowrap; }}
+.gm-ok {{ background: rgba(52,211,153,0.15); color: var(--ok); }}
+.gm-info {{ background: var(--pink-dim); color: var(--pink); }}
+.gm-warn {{ background: var(--warn-dim); color: var(--warn); }}
+.gm-bad {{ background: rgba(248,113,113,0.15); color: var(--danger); }}
+.gm-t-danger {{ color: var(--danger); font-weight: 600; }}
+.gm-t-warn {{ color: var(--warn); font-weight: 600; }}
 .seg-toggle {{ display: inline-flex; border: 1.25px solid #878799; border-radius: 6px; overflow: hidden; margin-left: auto; flex-shrink: 0; }}
 .seg-toggle button {{ background: transparent; border: none; color: var(--text-dim); font-size: 11px; font-weight: 600; padding: 4px 11px; cursor: pointer; font-family: inherit; transition: background .15s ease; }}
 .seg-toggle button + button {{ border-left: 1.25px solid #878799; }}
@@ -635,6 +659,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
     <button class="tab-btn" id="tabBtnOneOnOne" onclick="showTab('oneOnOne')">One-on-One</button>
     <button class="tab-btn" id="tabBtnGamificacao" onclick="showTab('gamificacao')">Gamificacao</button>
     <button class="tab-btn" id="tabBtnReuniaoMensal" onclick="showTab('reuniaoMensal')">Reuniao Mensal</button>
+    <button class="tab-btn" id="tabBtnGestaoMelhorias" onclick="showTab('gestaoMelhorias')">Gestão Semanal - Melhorias</button>
     <button class="tab-btn" id="tabBtnFluxo" onclick="showTab('fluxo')">Fluxograma</button>
   </div>
 
@@ -750,6 +775,23 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
         <div id="tabelaEmissoes"></div>
       </div>
     </div>
+  </div>
+
+  <div class="tab-panel" id="tabGestaoMelhorias">
+    <div class="panel-sub" style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+      <span>Reunião de alinhamento de melhorias com Produto — quartas, 14:00</span>
+      <span class="seg-toggle" id="gmSubToggle" role="group" aria-label="Visão">
+        <button type="button" class="active" data-sub="acomp" onclick="setGmSub('acomp')">Acompanhamento</button>
+        <button type="button" data-sub="indic" onclick="setGmSub('indic')">Indicadores</button>
+      </span>
+    </div>
+    <div id="gmAcomp">
+      <div class="kpi-row" id="gmKpis" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));"></div>
+      <div class="panel" id="gmVencBox" style="margin-top:18px;"></div>
+      <div class="panel" id="gmReuniaoBox" style="margin-top:18px;"></div>
+      <div class="panel" id="gmKanbanBox" style="margin-top:18px;"></div>
+    </div>
+    <div id="gmIndic" style="display:none;"></div>
   </div>
 
   <div class="tab-panel" id="tabFluxo">
@@ -1471,6 +1513,7 @@ function showTab(name, skipSave) {{
   document.getElementById('tabOneOnOne').classList.toggle('active', name === 'oneOnOne');
   document.getElementById('tabGamificacao').classList.toggle('active', name === 'gamificacao');
   document.getElementById('tabReuniaoMensal').classList.toggle('active', name === 'reuniaoMensal');
+  document.getElementById('tabGestaoMelhorias').classList.toggle('active', name === 'gestaoMelhorias');
   document.getElementById('tabFluxo').classList.toggle('active', name === 'fluxo');
   document.getElementById('tabBtnLive').classList.toggle('active', name === 'live');
   document.getElementById('tabBtnHist').classList.toggle('active', name === 'hist');
@@ -1478,6 +1521,7 @@ function showTab(name, skipSave) {{
   document.getElementById('tabBtnOneOnOne').classList.toggle('active', name === 'oneOnOne');
   document.getElementById('tabBtnGamificacao').classList.toggle('active', name === 'gamificacao');
   document.getElementById('tabBtnReuniaoMensal').classList.toggle('active', name === 'reuniaoMensal');
+  document.getElementById('tabBtnGestaoMelhorias').classList.toggle('active', name === 'gestaoMelhorias');
   document.getElementById('tabBtnFluxo').classList.toggle('active', name === 'fluxo');
   if (!skipSave) localStorage.setItem('activeTab', name);
 }}
@@ -3193,6 +3237,210 @@ function renderEmissoes() {{
   sub.innerHTML = `Total de documentos = CT-e + NFS-e + Sistêmico + GNRE + CIOT (sem MDF-e; o CIOT só existe a partir de 2026). Chamados = abertos no período pelo Suporte, sem cancelados. Clientes = CNPJs com emissão no período. Emissões até ${{NOMES[ultimoMes-1].toLowerCase()}}/2026.${{esc(fonte)}}` +
     (faltando ? ' Chamados de alguns meses ainda estão sendo carregados do Movidesk ("–" até concluir).' : '');
 }}
+// ============================================================
+// Gestao Semanal - Melhorias: acompanhamento do fluxo de melhorias (reuniao de alinhamento de quarta 14:00 com Produto).
+// Etapas: Em atendimento N1 -> Aguardando validacao do N2 (Em atendimento - N2) -> Aguardando reuniao de alinhamento
+// (TUDO que esta em 'Refinamento Suporte Melhoria'; tag 'Aprovado PO' = vai pro roadmap, aguardando data pra informar o
+// cliente) -> Aguardando estimativa tecnica (Em atendimento - CS + tag 'Estimativa Tecnica'; Dev informa horas e data).
+// Quando a data chega, vai no campo 'Previsao de solucao' (slaSolutionDate) e o chamado muda pra 'Aguardando Desenvolvimento'.
+// ============================================================
+const GM_ST_REFINAMENTO = 'Refinamento Suporte Melhoria';
+const GM_ST_DEV = 'Aguardando Desenvolvimento';
+const GM_COLS = [
+  {{k: 'n1', t: 'Em atendimento N1', who: "Status 'Em atendimento' + categoria Melhoria"}},
+  {{k: 'n2', t: 'Aguardando validação do N2', who: "Status 'Em atendimento - N2' + categoria Melhoria"}},
+  {{k: 'refina', t: 'Aguardando reunião de alinhamento', who: "Tudo em 'Refinamento Suporte Melhoria' · quarta 14:00 com Produto · selo Aprovado PO = roadmap, aguardando data pro cliente", key: true}},
+  {{k: 'tec', t: 'Aguardando estimativa técnica', who: "'Em atendimento - CS' + tag Estimativa Técnica · Dev envia horas e data de entrega"}},
+];
+const GM_LIM = 8;
+let gmAbertos = {{}};
+let gmSub = 'acomp';
+
+function gmTagTem(t, prefixo) {{ return (t.tags || []).some(tg => (tg || '').toLowerCase().indexOf(prefixo) !== -1); }}
+function gmEtapa(t) {{
+  if (t.status === GM_ST_REFINAMENTO) return 'refina';
+  if (t.status === 'Em atendimento - N2') return 'n2';
+  if (t.status === 'Em atendimento') return 'n1';
+  if (t.status === 'Em atendimento - CS' && gmTagTem(t, 'estimativa t')) return 'tec';
+  return null;
+}}
+function gmMelhorias() {{ return TICKETS.filter(t => t.category === 'Melhoria'); }}
+function gmDiasParado(t) {{ return t._hoursSinceUpdate === null ? 0 : t._hoursSinceUpdate / 24; }}
+function gmDiasAberto(t) {{ return t._hoursOpen === null ? 0 : t._hoursOpen / 24; }}
+// dias na etapa (status) atual: a ultima mudanca pro status atual no historico; cai pra ultima atualizacao.
+function gmDiasNaEtapa(t) {{
+  const hs = (t.statusHistories || []).filter(h => h.status === t.status && h.changedDate);
+  if (hs.length) {{
+    const d = parseDt(hs[hs.length - 1].changedDate);
+    if (d) return Math.max(0, (NOW - d) / 864e5);
+  }}
+  return gmDiasParado(t);
+}}
+function gmCor(d) {{ return d > 15 ? 'danger' : d > 7 ? 'warn' : 'ok'; }}
+function gmFmtData(d) {{ const s = brasiliaDateStr(d); return s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4); }}
+function gmFmtDataHora(iso) {{
+  const d = parseDt(iso); if (!d) return '';
+  const b = new Date(d.getTime() - 3 * 3600000).toISOString();
+  return b.slice(8, 10) + '/' + b.slice(5, 7) + ' ' + b.slice(11, 16);
+}}
+function gmSelos(t) {{
+  let h = '';
+  if (gmTagTem(t, 'aprovado po')) h += ' <span class="gm-selo gm-ok">Aprovado PO</span>';
+  if (gmTagTem(t, 'estimativa t')) h += ' <span class="gm-selo gm-info">Estimativa Técnica</span>';
+  if (gmTagTem(t, 'estimativa c')) h += ' <span class="gm-selo gm-info">Estimativa Comercial</span>';
+  return h;
+}}
+function gmComentario(t, max) {{
+  const lc = t.lastComment;
+  if (!lc || !lc.createdDate) return '<span style="color:var(--text3);">—</span>';
+  const txt = (lc.description || '').replace(/\s+/g, ' ').trim();
+  return `<div title="${{esc(txt)}}"><span style="color:var(--text3); font-size:11px;">${{gmFmtDataHora(lc.createdDate)}}${{lc.type === 2 ? ' · interno' : ''}}</span><br>${{esc(txt.slice(0, max || 140))}}${{txt.length > (max || 140) ? '…' : ''}}</div>`;
+}}
+function gmDias(n) {{ return Math.round(n).toLocaleString('pt-BR') + ' d'; }}
+function gmMediana(v) {{ if (!v.length) return null; const s = v.slice().sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }}
+function gmMedia(v) {{ return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; }}
+function gmFmtN(v) {{ return v === null ? '–' : gmDias(v); }}
+
+function setGmSub(sub) {{
+  gmSub = sub;
+  document.querySelectorAll('#gmSubToggle button').forEach(b => b.classList.toggle('active', b.dataset.sub === sub));
+  document.getElementById('gmAcomp').style.display = sub === 'acomp' ? '' : 'none';
+  document.getElementById('gmIndic').style.display = sub === 'indic' ? '' : 'none';
+}}
+
+function gmKpi(valor, rotulo, cls, onclick) {{
+  return `<div class="kpi ${{cls || ''}}" tabindex="0" role="button" onclick="${{onclick || ''}}"><div class="value">${{valor}}</div><div class="label">${{rotulo}}</div></div>`;
+}}
+function gmScroll(id) {{ const el = document.getElementById(id); if (el) el.scrollIntoView({{behavior: 'smooth', block: 'start'}}); }}
+
+function renderGestaoMelhorias() {{
+  const todas = gmMelhorias();
+  todas.forEach(t => {{ t._gmE = gmEtapa(t); }});
+  const por = k => todas.filter(t => t._gmE === k);
+  const comPrev = todas.filter(t => t._sla).sort((a, b) => a._sla - b._sla);
+  const vencidas = comPrev.filter(t => t._sla < NOW);
+  const prox7 = comPrev.filter(t => t._sla >= NOW && (t._sla - NOW) / 864e5 <= 7);
+  const refina = por('refina');
+  const aprovPO = refina.filter(t => gmTagTem(t, 'aprovado po'));
+
+  // ---------- KPIs
+  document.getElementById('gmKpis').innerHTML =
+    gmKpi(por('n1').length, 'Em atendimento N1', '', "gmScroll('gmKanbanBox')") +
+    gmKpi(por('n2').length, 'Aguardando validação do N2', '', "gmScroll('gmKanbanBox')") +
+    gmKpi(refina.length, `Aguardando reunião de alinhamento<br><span style="font-size:10.5px;">${{aprovPO.length}} já com Aprovado PO</span>`, '', "gmScroll('gmReuniaoBox')") +
+    gmKpi(por('tec').length, 'Aguardando estimativa técnica', '', "gmScroll('gmKanbanBox')") +
+    gmKpi(prox7.length, 'Vencem em até 7 dias', prox7.length ? 'warn' : '', "gmScroll('gmVencBox')") +
+    gmKpi(vencidas.length, 'Previsão vencida', vencidas.length ? 'danger' : '', "gmScroll('gmVencBox')");
+
+  // ---------- Proximos vencimentos
+  const linhasV = comPrev.map(t => {{
+    const dd = (t._sla - NOW) / 864e5;
+    const pill = dd < 0 ? `<span class="gm-selo gm-bad">vencida há ${{gmDias(-dd)}}</span>` : `<span class="gm-selo ${{dd <= 7 ? 'gm-warn' : 'gm-ok'}}">em ${{gmDias(dd)}}</span>`;
+    return `<tr><td style="white-space:nowrap; font-weight:600;">${{gmFmtData(t._sla)}}</td><td style="text-align:center;">${{pill}}</td>
+      <td class="col-id">${{ticketLink(t.id, t.protocol)}}</td><td class="col-subject">${{esc((t.subject || '').slice(0, 70))}}${{gmSelos(t)}}</td>
+      <td class="col-team">${{esc(t.clientOrg || '-')}}</td><td class="col-status">${{esc(t.status)}}</td><td style="min-width:260px; font-size:11.5px;">${{gmComentario(t)}}</td></tr>`;
+  }}).join('') || '<tr><td colspan="7" class="empty-msg">Nenhuma melhoria com Previsão de solução preenchida ainda.</td></tr>';
+  document.getElementById('gmVencBox').innerHTML = `<h2>📅 Próximos vencimentos — Previsão de solução</h2>
+    <div class="panel-sub">Melhorias abertas com o campo <b>Previsão de solução</b> preenchido, da data mais próxima para a mais distante. Depois de receber a data (com o número da melhoria associado), o chamado vai para Aguardando Desenvolvimento.</div>
+    <table><thead><tr><th>Previsão</th><th>Prazo</th><th>Chamado</th><th>Melhoria</th><th>Cliente</th><th>Status</th><th>Último comentário</th></tr></thead><tbody>${{linhasV}}</tbody></table>`;
+
+  // ---------- Lista para Produto avaliar (reuniao de quarta)
+  const linhasR = refina.slice().sort((a, b) => gmDiasAberto(b) - gmDiasAberto(a)).map(t => `<tr>
+      <td class="col-id">${{ticketLink(t.id, t.protocol)}}</td><td class="col-subject">${{esc((t.subject || '').slice(0, 70))}}${{gmSelos(t)}}</td>
+      <td class="col-team">${{esc(t.clientOrg || '-')}}</td><td class="col-team">${{esc(t.ownerTeam || '-')}}</td>
+      <td style="text-align:right;">${{gmDias(gmDiasAberto(t))}}</td><td style="text-align:right;" class="gm-t-${{gmCor(gmDiasNaEtapa(t))}}">${{gmDias(gmDiasNaEtapa(t))}}</td>
+      <td style="min-width:260px; font-size:11.5px;">${{gmComentario(t)}}</td></tr>`).join('') || '<tr><td colspan="7" class="empty-msg">Nenhuma melhoria aguardando a reunião.</td></tr>';
+  document.getElementById('gmReuniaoBox').innerHTML = `<h2>🗓️ Lista para Produto avaliar — reunião de alinhamento (quartas, 14:00)</h2>
+    <div class="panel-sub">Todos os chamados no status Refinamento Suporte Melhoria, do mais antigo para o mais novo. Produto decide se a melhoria será gratuita (roadmap) ou cobrada (Em atendimento - CS com tag Estimativa Técnica). Selo Aprovado PO = entra no roadmap e aguarda a data para informar o cliente.</div>
+    <table><thead><tr><th>Chamado</th><th>Melhoria</th><th>Cliente</th><th>Equipe</th><th>Aberto há</th><th>Na etapa há</th><th>Último comentário</th></tr></thead><tbody>${{linhasR}}</tbody></table>`;
+
+  // ---------- Kanban
+  document.getElementById('gmKanbanBox').innerHTML = `<h2>🧭 Melhorias paradas em cada etapa do fluxo</h2>
+    <div class="panel-sub">Borda do cartão pelo tempo sem atualização: verde até 7 dias, amarelo de 8 a 15, vermelho acima de 15. Em cada coluna, os mais parados primeiro.</div>
+    <div class="gm-board">${{GM_COLS.map(c => {{
+      const it = por(c.k).sort((a, b) => gmDiasParado(b) - gmDiasParado(a));
+      const mostra = gmAbertos[c.k] ? it : it.slice(0, GM_LIM);
+      const med = it.length ? gmMedia(it.map(gmDiasParado)) : null;
+      const cards = mostra.map(t => `<div class="gm-card gm-b-${{gmCor(gmDiasParado(t))}}">
+          <div>${{ticketLink(t.id, t.protocol)}}<span style="float:right; color:var(--text3); font-size:10.5px;">${{esc(t.ownerTeam || '')}}</span></div>
+          <div class="gm-t">${{esc((t.subject || '').slice(0, 80))}}${{gmSelos(t)}}</div>
+          <div style="color:var(--text3); font-size:10.5px;">${{esc(t.clientOrg || '-')}}</div>
+          <div class="gm-m"><span>parado há <b>${{gmDias(gmDiasParado(t))}}</b></span><span>aberto há ${{gmDias(gmDiasAberto(t))}}</span></div>
+          <div class="gm-c">${{gmComentario(t, 90)}}</div></div>`).join('') || '<div class="gm-vazio">Nenhum chamado nesta etapa</div>';
+      const mais = it.length > GM_LIM ? `<div class="gm-mais" onclick="gmAbertos['${{c.k}}']=!gmAbertos['${{c.k}}']; renderGestaoMelhorias();">${{gmAbertos[c.k] ? 'mostrar menos' : 'ver mais ' + (it.length - GM_LIM)}}</div>` : '';
+      return `<div class="gm-col ${{c.key ? 'gm-key' : ''}}"><h3>${{c.t}}<em>${{it.length}}</em></h3><div class="gm-who">${{c.who}}${{med !== null ? ` · média parado ${{gmDias(med)}}` : ''}}</div>${{cards}}${{mais}}</div>`;
+    }}).join('')}}</div>`;
+
+  renderGmIndicadores(todas);
+  setGmSub(gmSub);
+}}
+
+function renderGmIndicadores(todas) {{
+  const etapas = GM_COLS.map(c => ({{nome: c.t, itens: todas.filter(t => t._gmE === c.k)}}));
+  const dev = todas.filter(t => t.status === GM_ST_DEV);
+  const devComPrev = dev.filter(t => t._sla);
+  const csSemTag = todas.filter(t => t.status === 'Em atendimento - CS' && t._gmE !== 'tec');
+  const outros = todas.filter(t => !t._gmE && t.status !== GM_ST_DEV && !(t.status === 'Em atendimento - CS'));
+  const cont = (nome, itens) => ({{nome, itens}});
+  const linhasQtd = etapas.concat([
+    cont('Aguardando Desenvolvimento — com Previsão de solução', devComPrev),
+    cont('Aguardando Desenvolvimento — sem Previsão de solução', dev.filter(t => !t._sla)),
+    cont('Em atendimento - CS sem tag de estimativa', csSemTag),
+    cont('Outros status (Aguardando Cliente, Novo, etc.)', outros),
+  ]);
+  const idadeAb = todas.map(gmDiasAberto);
+  const tabQtd = linhasQtd.map(l => `<tr><td>${{l.nome}}</td><td style="text-align:right;">${{l.itens.length}}</td>
+    <td style="text-align:right;">${{gmFmtN(gmMedia(l.itens.map(gmDiasNaEtapa)))}}</td><td style="text-align:right;">${{gmFmtN(gmMediana(l.itens.map(gmDiasNaEtapa)))}}</td>
+    <td style="text-align:right;">${{l.itens.length ? gmDias(Math.max(...l.itens.map(gmDiasNaEtapa))) : '–'}}</td>
+    <td style="text-align:right;">${{gmFmtN(gmMedia(l.itens.map(gmDiasAberto)))}}</td></tr>`).join('');
+
+  const comPrev = todas.filter(t => t._sla);
+  const venc = comPrev.filter(t => t._sla < NOW).length;
+  const d7 = comPrev.filter(t => t._sla >= NOW && (t._sla - NOW) / 864e5 <= 7).length;
+  const d30 = comPrev.filter(t => (t._sla - NOW) / 864e5 > 7 && (t._sla - NOW) / 864e5 <= 30).length;
+  const dmais = comPrev.filter(t => (t._sla - NOW) / 864e5 > 30).length;
+
+  // por equipe e por cliente
+  const contagem = (fn) => {{ const a = {{}}; todas.forEach(t => {{ const k = fn(t) || '-'; a[k] = (a[k] || 0) + 1; }}); return Object.entries(a).sort((x, y) => y[1] - x[1]); }};
+  const bars = (entries, max) => {{ const top = entries.length ? entries[0][1] : 1; return entries.slice(0, max).map(([n, c]) => `<div class="bar-row"><div class="bar-label">${{esc(n)}}</div><div class="bar-track"><div class="bar-fill" style="width:${{(c / top * 100).toFixed(0)}}%"></div></div><div class="bar-value">${{c}}</div></div>`).join(''); }};
+
+  // historico mensal: abertas ainda em aberto por mes de criacao + resolvidas no mes (tempo ate resolver)
+  const criadasAb = {{}};
+  todas.forEach(t => {{ const ym = brasiliaDateStr(t._created).slice(0, 7); criadasAb[ym] = (criadasAb[ym] || 0) + 1; }});
+  const resolv = {{}};
+  Object.keys(MONTH_YM).forEach(k => {{
+    const its = (RESOLVED_MONTHS[k] || []).filter(r => r.category === 'Melhoria');
+    const tempos = its.filter(r => r.createdDate && r.resolvedIn).map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 864e5);
+    resolv[MONTH_YM[k]] = {{n: its.length, media: gmMedia(tempos), med: gmMediana(tempos)}};
+  }});
+  const yms = Array.from(new Set(Object.keys(criadasAb).concat(Object.keys(resolv)))).sort().filter(ym => ym >= '2025-01');
+  const tabMes = yms.map(ym => `<tr><td>${{ym.slice(5)}}/${{ym.slice(0, 4)}}</td><td style="text-align:right;">${{criadasAb[ym] || 0}}</td>
+    <td style="text-align:right;">${{resolv[ym] ? resolv[ym].n : '–'}}</td><td style="text-align:right;">${{resolv[ym] ? gmFmtN(resolv[ym].media) : '–'}}</td><td style="text-align:right;">${{resolv[ym] ? gmFmtN(resolv[ym].med) : '–'}}</td></tr>`).join('');
+
+  document.getElementById('gmIndic').innerHTML = `
+    <div class="kpi-row" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+      ${{gmKpi(todas.length, 'Melhorias abertas', '')}}
+      ${{gmKpi(gmFmtN(gmMedia(idadeAb)), 'Idade média do backlog', '')}}
+      ${{gmKpi(gmFmtN(gmMediana(idadeAb)), 'Idade mediana do backlog', '')}}
+      ${{gmKpi(comPrev.length, 'Com Previsão de solução', '')}}
+      ${{gmKpi(venc, 'Previsão vencida', venc ? 'danger' : '')}}
+    </div>
+    <div class="panel" style="margin-top:18px;"><h2>⏱️ Quantidade e tempo em cada etapa</h2>
+      <div class="panel-sub">'Na etapa' = tempo desde a última mudança para o status atual. 'Aberto há' = idade do chamado.</div>
+      <table><thead><tr><th style="text-align:left;">Etapa</th><th>Qtd</th><th>Média na etapa</th><th>Mediana na etapa</th><th>Maior na etapa</th><th>Média aberto há</th></tr></thead><tbody>${{tabQtd}}</tbody></table></div>
+    <div class="panel" style="margin-top:18px;"><h2>📅 Previsão de solução — distribuição</h2>
+      <div class="kpi-row" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+        ${{gmKpi(venc, 'Vencidas', venc ? 'danger' : '')}}${{gmKpi(d7, 'Em até 7 dias', d7 ? 'warn' : '')}}${{gmKpi(d30, 'De 8 a 30 dias', '')}}${{gmKpi(dmais, 'Acima de 30 dias', '')}}${{gmKpi(dev.filter(t => !t._sla).length, 'Aguardando Dev sem previsão', '')}}
+      </div></div>
+    <div class="panel" style="margin-top:18px;"><h2>📈 Por mês — abertas ainda em aberto x resolvidas</h2>
+      <div class="panel-sub">'Abertas' = melhorias ainda em aberto, por mês de criação. 'Resolvidas' = melhorias resolvidas no mês (primeira resolução), com o tempo da abertura até a resolução.</div>
+      <table><thead><tr><th style="text-align:left;">Mês</th><th>Abertas (ainda em aberto)</th><th>Resolvidas</th><th>Tempo médio até resolver</th><th>Mediana</th></tr></thead><tbody>${{tabMes}}</tbody></table></div>
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:18px; margin-top:18px;">
+      <div class="panel"><h2>👥 Por equipe</h2>${{bars(contagem(t => t.ownerTeam), 8)}}</div>
+      <div class="panel"><h2>🏢 Por cliente (top 10)</h2>${{bars(contagem(t => t.clientOrg), 10)}}</div>
+    </div>`;
+}}
+
 function initReuniaoMensal() {{
   if (reuniaoMensalInited) return;
   reuniaoMensalInited = true;
@@ -4038,6 +4286,8 @@ selClienteFluxo.addEventListener('change', renderFluxoAgregado);
 refreshClienteFluxoOptions();
 renderFluxoAgregado();
 enhancePanels('fluxoCardsContainer', true);
+
+renderGestaoMelhorias();
 
 function tick() {{
   const el = document.getElementById('clock');
