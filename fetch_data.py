@@ -504,7 +504,7 @@ def main():
         pendentes = [t['id'] for t in alvo
                      if str(t['id']) not in cache_uc or cache_uc[str(t['id'])].get('lad') != t.get('lastActionDate')]
         lad_por_id = {t['id']: t.get('lastActionDate') for t in alvo}
-        CHUNK = 25
+        CHUNK = 20  # 25 devolve 400 (Bad Request) com o expand de actions; 20 e o tamanho que funcionava
         for i in range(0, len(pendentes), CHUNK):
             lote = pendentes[i:i + CHUNK]
             filt = " or ".join(f"id eq {tid}" for tid in lote)
