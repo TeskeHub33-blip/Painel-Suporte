@@ -18,6 +18,7 @@ from homolog_v4 import V4_CSS
 from homolog_v5 import V5_CSS, V5_JS
 from homolog_v6 import V6_CSS, V6_JS
 from homolog_v7 import V7_CSS, V7_JS
+from homolog_v8 import V8_JS, aplicar_v8
 
 TEMA_CLARO_CSS = """
 /* ===== HOMOLOGACAO v2: tema claro EmiteAi ===== */
@@ -176,10 +177,12 @@ def aplicar_homologacao(html, badge=True):
                         '        <button type="button" data-sub="fluxo" onclick="setGmSub(\'fluxo\')">Fluxo</button>', 1)
     html = html.replace('<div id="gmIndic" style="display:none;"></div>',
                         '<div id="gmIndic" style="display:none;"></div>\n    <div id="gmFluxo" style="display:none;"></div>', 1)
-    html = html.replace('renderGestaoMelhorias();\n\nfunction tick()', FLUXO_JS + NAV_JS + BUGS_JS + V2_JS + TEMA_JS + V3_JS + V5_JS + (V6_JS if badge else '') + (V7_JS if badge else '') + '\nrenderGestaoMelhorias();\n\nfunction tick()', 1)
+    html = html.replace('renderGestaoMelhorias();\n\nfunction tick()', FLUXO_JS + NAV_JS + BUGS_JS + V2_JS + TEMA_JS + V3_JS + V5_JS + (V6_JS if badge else '') + (V7_JS if badge else '') + (V8_JS if badge else '') + '\nrenderGestaoMelhorias();\n\nfunction tick()', 1)
     html = reestruturar_navegacao(html)
     html = aplicar_tema(html)
     html = aplicar_v3(html)
+    if badge:
+        html = aplicar_v8(html)
     # 4) sem emojis nos titulos
     html = _sem_emoji_titulos(html)
     # titulos dentro de templates JS (linhas longas) tambem perdem o emoji logo apos <h2>
