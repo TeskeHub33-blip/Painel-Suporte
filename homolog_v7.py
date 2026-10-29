@@ -68,6 +68,14 @@ V7_JS = r"""
 const HF_W = 780, HF_H = 1540, HF_NW = 190, HF_NH = 84;
 const HF_X = {e: 10, c: 295, d: 580};            // esquerda (cobrado), centro (tronco), direita (gratuito / lateral)
 const HF_Y = r => 12 + r * 130;
+let HF_LARG = HF_W, HF_ESC = 1;   // largura logica do desenho e escala (se adaptam a largura da tela)
+function hfMede(idCont, larguraBase) {
+  const cont = document.getElementById(idCont); let cw = cont ? cont.clientWidth : 0; if (cw < 300) cw = 1100;
+  const Wd = (cw > 1100 ? cw - 360 - 18 : cw) - 28;                  // largura util do diagrama (o detalhamento fica ao lado em telas largas)
+  const s = Wd < larguraBase ? Wd / larguraBase : Math.min(1.3, Wd / larguraBase);
+  return {s: s, Wc: Wd < larguraBase ? larguraBase : Math.round(Wd / s)};
+}
+function hfAjustaX(Wc, X, nw, base) { const d = Math.round((Wc - base) * 0.15); X.e = 10 + d; X.d = Wc - 10 - nw - d; X.c = Math.round((Wc - nw) / 2); }
 const HF_POS = {
   cliente: [HF_X.c, HF_Y(0)], n1: [HF_X.c, HF_Y(1)], n2: [HF_X.c, HF_Y(2)], info: [HF_X.d, HF_Y(2)], refina: [HF_X.c, HF_Y(3)], decide: [HF_X.c, HF_Y(4)],
   tec: [HF_X.e, HF_Y(5)], aprcom: [HF_X.e, HF_Y(6)], orc: [HF_X.e, HF_Y(7)], assin: [HF_X.e, HF_Y(8)], n2com: [HF_X.e, HF_Y(9)],
@@ -119,6 +127,7 @@ function hfCaminho(de, para) {
 function hfSeta(x, y) { return `M${x - 5} ${y - 9} L${x} ${y} L${x + 5} ${y - 9} Z`; }
 
 renderGmFluxo = function() {
+  { const m = hfMede('gmFluxo', HF_W); HF_LARG = m.Wc; HF_ESC = m.s; hfAjustaX(m.Wc, HF_X, HF_NW, HF_W); }
   const todas = gmMelhorias(); todas.forEach(t => { t._gmE = gmEtapa(t); });
   const L = k => todas.filter(t => t._gmE === k);
   const cadeia = hfSel ? hfCadeia(hfSel) : new Set();
@@ -149,17 +158,17 @@ renderGmFluxo = function() {
   document.getElementById('gmFluxo').innerHTML = `<div class="hf-wrap">
     <div class="hf-topo"><span class="hf-rot">Exibir em cada etapa:</span>
       <span class="seg-toggle" id="hfModoToggle" role="group" aria-label="Indicador exibido">${HF_MODOS.map(m => `<button type="button" class="${m[0] === hfModo ? 'active' : ''}" onclick="hfMudaModo('${m[0]}')">${m[1]}</button>`).join('')}</span></div>
-    <div class="hf-grid"><div class="hf-diagrama" id="hfDiag"><div class="hf-canvas" id="hfCanvas" style="width:${HF_W}px; height:${HF_H}px;">
-      <svg class="hf-svg" width="${HF_W}" height="${HF_H}" viewBox="0 0 ${HF_W} ${HF_H}" aria-hidden="true">${svg}</svg>${rotulos}${nos}</div></div>
+    <div class="hf-grid"><div class="hf-diagrama" id="hfDiag"><div class="hf-canvas" id="hfCanvas" style="width:${HF_LARG}px; height:${HF_H}px;">
+      <svg class="hf-svg" width="${HF_LARG}" height="${HF_H}" viewBox="0 0 ${HF_LARG} ${HF_H}" aria-hidden="true">${svg}</svg>${rotulos}${nos}</div></div>
     <aside class="hf-detalhe" id="hfDet"></aside></div></div>`;
   hfEscala(); hfDetalhe(); hmlDestacaEtapa();
 };
 function hfEscala() {
   const d = document.getElementById('hfDiag'), c = document.getElementById('hfCanvas'); if (!d || !c) return;
-  const s = Math.min(1, (d.clientWidth - 28) / HF_W);
+  const s = HF_ESC;
   c.style.transform = 'scale(' + s + ')'; d.style.height = (HF_H * s + 36) + 'px';
 }
-window.addEventListener('resize', hfEscala);
+window.addEventListener('resize', () => { clearTimeout(window._hfT); window._hfT = setTimeout(() => { const g = document.getElementById('gmFluxo'); if (g && g.offsetParent) renderGmFluxo(); }, 150); });
 function hfSelecionar(k) { hfSel = hfSel === k ? null : k; renderGmFluxo(); }
 function hfMudaModo(m) { hfModo = m; renderGmFluxo(); }
 hmlDestacaEtapa = function() {

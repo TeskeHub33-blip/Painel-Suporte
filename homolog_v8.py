@@ -58,6 +58,7 @@ function hfbEtapa(t) {
   }
   return k;
 }
+function hfbAjusta() { const m = hfMede('gbFluxo', 780); HFB.W = m.Wc; HFB.esc = m.s; hfAjustaX(m.Wc, HFB.X, HFB.nw, 780); }
 function hfbCaixa(k) { const p = HFB.pos[k]; return {x: HFB.X[p[0]], y: HFB.Y(p[1]), w: HFB.nw, h: HFB.nh}; }
 function hfbCadeia(k, acc) { acc = acc || new Set(); (HFB.pais[k] || []).forEach(p => { acc.add(p + '>' + k); hfbCadeia(p, acc); }); return acc; }
 function hfbCaminho(de, para) {
@@ -78,6 +79,7 @@ function hfbInd(itens) {
 
 function hfbRender() {
   const alvo = document.getElementById('gbFluxo'); if (!alvo) return;
+  hfbAjusta();
   const todas = TICKETS.filter(t => t.category === 'Bug'); todas.forEach(t => { t._gbF = hfbEtapa(t); });
   const L = k => todas.filter(t => t._gbF === k);
   const cadeia = HFB.sel ? hfbCadeia(HFB.sel) : new Set();
@@ -115,10 +117,10 @@ function hfbRender() {
 }
 function hfbEscala() {
   const d = document.getElementById('hfbDiag'), c = document.getElementById('hfbCanvas'); if (!d || !c) return;
-  const s = Math.min(1, (d.clientWidth - 28) / HFB.W);
+  const s = HFB.esc || 1;
   c.style.transform = 'scale(' + s + ')'; d.style.height = (HFB.H * s + 36) + 'px';
 }
-window.addEventListener('resize', hfbEscala);
+window.addEventListener('resize', () => { clearTimeout(window._hfbT); window._hfbT = setTimeout(() => { const g = document.getElementById('gbFluxo'); if (g && g.offsetParent) hfbRender(); }, 150); });
 function hfbSelecionar(k) { HFB.sel = HFB.sel === k ? null : k; hfbRender(); }
 function hfbMudaModo(m) { HFB.modo = m; hfbRender(); }
 function hfbDestaca() {
