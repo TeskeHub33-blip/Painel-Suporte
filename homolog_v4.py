@@ -42,10 +42,10 @@ html[data-tema="dark"] { --shadow: rgba(0,0,0,0.35) 0px 2px 8px 0px; --shadow2: 
 .hml-badge { background: var(--pink-dim); color: var(--pink); border: 1px solid rgba(237,109,162,.35); border-radius: 6px; font-size: 11px; letter-spacing: .8px; }
 
 /* tabelas: cabecalho em surface2, linha com hover sutil */
-.panel table th { background: var(--surface2) !important; color: var(--text); font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0; padding: 10px 14px; border-bottom: 1px solid rgba(135,135,153,.15); }
-.panel table td { padding: 11px 14px; border-bottom: 1px solid rgba(135,135,153,.12); font-size: 13px; }
-.panel table tbody tr:hover td { background: rgba(36,36,62,.025); }
-html[data-tema="dark"] .panel table tbody tr:hover td { background: rgba(255,255,255,.03); }
+#giSub_melhorias .panel table th, #giSub_bugs .panel table th { background: var(--surface2) !important; color: var(--text); font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0; padding: 10px 14px; border-bottom: 1px solid rgba(135,135,153,.15); }
+#giSub_melhorias .panel table td, #giSub_bugs .panel table td { padding: 11px 14px; border-bottom: 1px solid rgba(135,135,153,.12); font-size: 13px; }
+#giSub_melhorias .panel table tbody tr:hover td, #giSub_bugs .panel table tbody tr:hover td { background: rgba(36,36,62,.025); }
+html[data-tema="dark"] #giSub_melhorias .panel table tbody tr:hover td, html[data-tema="dark"] #giSub_bugs .panel table tbody tr:hover td { background: rgba(255,255,255,.03); }
 
 /* botoes de acao: outlined navy; nada de rosa preenchido */
 .hml-busca button, #tabFluxo .flow-search-row .export-btn, .hml-tema {

@@ -52,6 +52,29 @@ V5_CSS = """
 .hml-pipe-seg.critica::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--pink); }
 .hml-pipe-seg.critica small { color: var(--pink); font-weight: 600; }
 .hml-pipe-seg.vazia b { color: var(--text3); }
+
+/* Emissoes x Chamados: cartoes compactos, sem estourar a largura (a tabela de cada mes cabe no proprio cartao) */
+#tabelaEmissoes .emis-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+#tabelaEmissoes .emis-card { min-width: 0; overflow-x: auto; padding: 14px 16px; }
+#tabelaEmissoes .emis-card-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+#tabelaEmissoes .emis-card table { width: 100%; table-layout: auto; font-size: 12px; }
+#tabelaEmissoes .emis-card table th { padding: 5px 8px; font-size: 12px; font-weight: 600; background: transparent !important; text-transform: none; letter-spacing: 0; color: var(--text3); border-bottom: 1px solid var(--panel-border); white-space: nowrap; }
+#tabelaEmissoes .emis-card table td { padding: 6px 8px; font-size: 12px; border-bottom: 1px solid rgba(135,135,153,.12); font-variant-numeric: tabular-nums; }
+#tabelaEmissoes .emis-card table td:first-child { white-space: normal; min-width: 96px; }
+#tabelaEmissoes .emis-card tr:last-child td { border-bottom: none; }
+
+/* Fluxograma: mesmo desenho do Fluxo de melhorias (nos com numero, setas, etapa atual em rosa) */
+#flowDiagram .fl-wrap { gap: 20px; }
+#flowDiagram .fl-lane { box-shadow: none; background: transparent; padding: 0; }
+#flowDiagram .fl-lane h3 { margin: 0 0 12px 0; }
+#flowDiagram .fl-node { max-width: 230px; flex: 1 0 190px; cursor: default; }
+#flowDiagram .fl-node[role="button"] { cursor: pointer; }
+#flowDiagram .fl-node.fl-feito { box-shadow: var(--shadow), inset 3px 0 0 var(--ok); }
+#flowDiagram .fl-node.fl-bloq { background: var(--danger-dim); box-shadow: var(--shadow), inset 0 0 0 2px var(--danger); }
+#flowDiagram .fl-node .fl-n { margin: 6px 0 2px; }
+#flowDiagram .fl-node .fl-s { margin-bottom: 4px; }
+#flowDiagram .fl-node .flow-sub { font-size: 11.5px; color: var(--text3); line-height: 1.35; }
+#flowDiagram .fl-node .flow-next-options { margin-top: 10px; }
 """
 
 V5_JS = r"""
@@ -74,6 +97,29 @@ function hmlFaixaParadas(boxId, titulo, itens, cols, chaveFn) {
 }
 document.getElementById('gmKpis').insertAdjacentHTML('beforebegin', '<div id="gmPipe"></div>');
 document.getElementById('gbKpis').insertAdjacentHTML('beforebegin', '<div id="gbPipe"></div>');
+// ===== Fluxograma com o mesmo markup do Fluxo de melhorias =====
+renderFlowDiagram = function(currentKey, stageTimes, extras, perTicket, visitedKeys, takenNextMap, blockedKey) {
+  extras = extras || {}; visitedKeys = visitedKeys || []; takenNextMap = takenNextMap || {}; stageTimes = stageTimes || {};
+  const no = (s) => {
+    const clicavel = FLOW_CLICKAVEL.indexOf(s.key) !== -1;
+    const tempo = stageTimes[s.key];
+    const qtd = clicavel ? ticketsNaEtapa(s.key).length : null;
+    const atual = s.key === currentKey, bloq = atual && s.key === blockedKey, feito = !atual && visitedKeys.indexOf(s.key) !== -1;
+    const attrs = clicavel ? `tabindex="0" role="button" onclick="abrirModalEtapaFluxo(${jsStr(s.key)}, ${jsStr(s.title)})" onkeydown="if(event.key==='Enter')abrirModalEtapaFluxo(${jsStr(s.key)}, ${jsStr(s.title)})"` : '';
+    const tempoTxt = tempo !== undefined && tempo !== null ? `<div class="fl-s">${perTicket ? 'Tempo neste chamado' : 'Tempo médio'}: <b>${fmtH(tempo)}</b></div>` : '';
+    return `<div class="fl-node ${bloq ? 'fl-bloq' : atual ? 'fl-atual' : ''} ${feito ? 'fl-feito' : ''}" id="flowbox-${s.key}" data-pid="${s.key}" ${attrs}>
+      <div class="fl-t">${esc(s.title)}</div>
+      ${qtd !== null ? `<div class="fl-n" data-alvo="${qtd}">0</div><div class="fl-s">chamados agora</div>` : ''}
+      <div class="flow-sub">${esc(s.sub)}</div>${tempoTxt}${extras[s.key] || ''}${flowNextPillsHtml(s.key, takenNextMap[s.key])}</div>`;
+  };
+  const seta = '<div class="fl-arrow"></div>';
+  document.getElementById('flowDiagram').innerHTML = `<div class="fl-wrap">
+    <div class="fl-lane"><h3>Fluxo de atendimento</h3><div class="fl-row">${FLOW_MAIN_STAGES.map(no).join(seta)}</div></div>
+    <div class="fl-lane"><h3>Desvio do fluxo</h3><div class="fl-row">${no(FLOW_SECONDARY_STAGE)}</div></div></div>`;
+  document.querySelectorAll('#flowDiagram .fl-n').forEach(el => gmContaAnima(el, Number(el.dataset.alvo)));
+};
+renderFluxoAgregado();
+
 const _v5Rgm = renderGestaoMelhorias;
 renderGestaoMelhorias = function() {
   _v5Rgm();
