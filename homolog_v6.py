@@ -32,18 +32,18 @@ V6_CSS = """
 V6_JS = r"""
 // ===== HOMOLOGACAO v6: etapas de melhorias (status + tags) =====
 const HML6_COLS = [
-  {k: 'n1', t: 'Em atendimento N1', who: "Status 'Em atendimento' · N1 e Implantação levantam as informações e repassam ao N2; se precisar de mais informações, vai para Pendente usuário"},
-  {k: 'n2', t: 'Aguardando validação do N2', who: "Status 'Em atendimento - N2' sem tag · o N2 confere se já existe, se falta configuração ou se é bug; se precisar de mais informações, vai para Pendente usuário"},
-  {k: 'info', t: 'Aguardando informações do cliente', who: "Pendente usuário: status 'Aguardando Cliente' sem tag · N1 ou N2 precisa de mais informações"},
-  {k: 'refina', t: 'Aguardando reunião de alinhamento', who: "Status 'Refinamento Suporte Melhoria' sem nenhuma tag · quarta 14:00 com Produto", key: true},
-  {k: 'aprov', t: 'Aprovado pelo produto · task a abrir', who: "Refinamento + tag Aprovado PO · volta ao N2 para abrir a task"},
-  {k: 'n2apr', t: 'N2 abrindo a task (roadmap)', who: "Em atendimento - N2 + tag Aprovado PO"},
-  {k: 'tec', t: 'Aguardando estimativa técnica', who: "Refinamento + tag Estimativa Técnica · o dev informa as horas"},
-  {k: 'aprcom', t: 'Aguardando aprovação comercial', who: "Aguardando Cliente + só a tag Estimativa Técnica · horas definidas, com o Diogo"},
-  {k: 'orc', t: 'Aguardando orçamento', who: "Em atendimento - CS + tags Estimativa Técnica e Comercial · o CS monta a proposta formal"},
-  {k: 'assin', t: 'Aguardando assinatura do cliente', who: "Aguardando Cliente + tag Estimativa Comercial · proposta formal enviada"},
-  {k: 'n2com', t: 'N2 abrindo a task (cobrado)', who: "Em atendimento - N2 + tag Estimativa Comercial"},
-  {k: 'prev', t: 'Aguardando previsão de entrega', who: "Aguardando Desenvolvimento + tag Aprovado PO ou Estimativa Comercial, sem Previsão de solução"},
+  {k: 'n1', t: 'Em atendimento N1', who: "Status Em atendimento · o N1 e a Implantação levantam as informações e passam ao N2"},
+  {k: 'n2', t: 'Aguardando validação do N2', who: "Em atendimento - N2, sem tag · o N2 confere se a melhoria já existe e se não é um bug"},
+  {k: 'info', t: 'Aguardando informações do cliente', who: "Pendente usuário: Aguardando Cliente, sem tag · falta informação do cliente"},
+  {k: 'refina', t: 'Aguardando reunião de alinhamento', who: "Refinamento Suporte Melhoria, sem tag · reunião de quarta, 14:00", key: true},
+  {k: 'aprov', t: 'Aprovado pelo produto · task a abrir', who: "Refinamento + Aprovado PO · o N2 vai abrir a task"},
+  {k: 'n2apr', t: 'N2 abrindo a task (roadmap)', who: "Em atendimento - N2 + Aprovado PO · o N2 abre a task"},
+  {k: 'tec', t: 'Aguardando estimativa técnica', who: "Refinamento + Estimativa Técnica · o desenvolvimento informa as horas"},
+  {k: 'aprcom', t: 'Aguardando aprovação comercial', who: "Aguardando Cliente + só Estimativa Técnica · horas e valor já informados, com o Diogo"},
+  {k: 'orc', t: 'Aguardando orçamento', who: "Em atendimento - CS + as duas tags · o CS monta a proposta"},
+  {k: 'assin', t: 'Aguardando assinatura do cliente', who: "Aguardando Cliente + Estimativa Comercial · proposta enviada, falta a assinatura"},
+  {k: 'n2com', t: 'N2 abrindo a task (cobrado)', who: "Em atendimento - N2 + Estimativa Comercial · o N2 abre a task"},
+  {k: 'prev', t: 'Aguardando previsão de entrega', who: "Aguardando Desenvolvimento + tag, sem Previsão de solução · falta a data de entrega"},
 ];
 GM_COLS.splice(0, GM_COLS.length, ...HML6_COLS);
 const HML6_NOMES = Object.fromEntries(HML6_COLS.map(c => [c.k, c.t]));

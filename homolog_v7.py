@@ -85,21 +85,21 @@ const HF_PAIS = {n1: ['cliente'], n2: ['n1'], refina: ['n2'], decide: ['refina']
   aprov: ['decide'], n2apr: ['aprov'], prev: ['n2com', 'n2apr'], agend: ['prev']};
 const HF_ROTULOS = [['tec', 'decide', 'cobrado', 0.5], ['aprov', 'decide', 'roadmap', 0.5]];
 const HF_INFO = {
-  cliente: {t: 'Cliente solicita melhoria', regra: 'Chamado de categoria Melhoria, preenchido no padrão.', prox: 'N1 ou Implantação levantam as informações e repassam para a fila Em atendimento - N2.'},
-  n1: {regra: "Status Em atendimento.", prox: 'Levantadas as informações, repassar para a fila Em atendimento - N2. Se precisar de mais informações do cliente, coloca em Pendente usuário (Aguardando Cliente, sem tag).'},
-  n2: {regra: "Status Em atendimento - N2, sem tag.", prox: 'O N2 confere se a melhoria já existe e falta só configuração, e se não é um bug. Se for aderente, move para Refinamento Suporte Melhoria. Se precisar de mais informações, coloca em Pendente usuário (Aguardando Cliente, sem tag).'},
-  info: {regra: "Pendente usuário: status Aguardando Cliente, sem tag.", prox: 'N1 ou N2 precisa de mais informações e colocou o chamado em Pendente usuário. Quando o cliente responde, o chamado volta para quem pediu (N1 ou N2).'},
-  refina: {regra: "Status Refinamento Suporte Melhoria, sem nenhuma tag.", prox: 'Aguarda a reunião de quarta, 14:00, com o time de Produto.'},
-  decide: {t: 'Produto decide', regra: 'Decisão tomada na reunião de alinhamento.', prox: 'Falta informação: volta para Em atendimento - N2, sem tag. Roadmap: tag Aprovado PO. Cobrada do cliente: tag Estimativa Técnica.'},
-  aprov: {regra: "Refinamento + tag Aprovado PO.", prox: 'Será feito pelo time de produto dentro das sprints. O chamado vai para Em atendimento - N2 para abrir a task.'},
-  n2apr: {regra: "Em atendimento - N2 + tag Aprovado PO.", prox: 'N2 abre a task. Depois o chamado vai para Aguardando Desenvolvimento.'},
-  tec: {regra: "Refinamento + tag Estimativa Técnica.", prox: 'Aguarda o time de desenvolvimento informar a quantidade de horas. Com as horas, o chamado vai para pendente usuário, com a tag, no nome do Diogo.'},
-  aprcom: {regra: "Aguardando Cliente + só a tag Estimativa Técnica.", prox: 'Horas definidas, aguardando a aprovação comercial. Quando o cliente retorna, o CS cria a proposta.'},
-  orc: {regra: "Em atendimento - CS + tags Estimativa Técnica e Estimativa Comercial.", prox: 'O CS monta a proposta comercial e a formaliza com o cliente.'},
-  assin: {regra: "Aguardando Cliente + tag Estimativa Comercial.", prox: 'Proposta formal enviada. Depois da aprovação, o chamado vai para a fila do N2 abrir a task.'},
-  n2com: {regra: "Em atendimento - N2 + tag Estimativa Comercial.", prox: 'N2 abre a task. Depois o chamado vai para Aguardando Desenvolvimento.'},
-  prev: {regra: "Aguardando Desenvolvimento + tag Aprovado PO ou Estimativa Comercial, sem Previsão de solução.", prox: 'Aguarda a data de entrega. Com a data, ela é preenchida em Previsão de solução e o chamado entra na lista de próximas entregas.'},
-  agend: {regra: "Aguardando Desenvolvimento + tag + Previsão de solução preenchida.", prox: 'Entrega agendada. Aparece na lista Próximas entregas, ordenada por data.'},
+  cliente: {t: 'Cliente solicita melhoria', regra: 'Chamado da categoria Melhoria, preenchido no padrão.', prox: 'O N1 ou a Implantação levanta as informações com o cliente e passa o chamado para a fila Em atendimento - N2.'},
+  n1: {regra: 'Status Em atendimento, categoria Melhoria.', prox: 'O N1 ou a Implantação levanta as informações e passa o chamado para Em atendimento - N2. Se faltar informação do cliente, coloca em Pendente usuário (Aguardando Cliente, sem tag).'},
+  n2: {regra: 'Status Em atendimento - N2, sem tag.', prox: 'O N2 confere se a melhoria já existe e só falta configuração, e se não é um bug. Sendo uma melhoria, move para Refinamento Suporte Melhoria. Se faltar informação, coloca em Pendente usuário (Aguardando Cliente, sem tag).'},
+  info: {regra: 'Pendente usuário: status Aguardando Cliente, sem tag.', prox: 'O N1 ou o N2 precisa de mais informações do cliente. Quando ele responde, o chamado volta para quem pediu.'},
+  refina: {regra: 'Status Refinamento Suporte Melhoria, sem nenhuma tag.', prox: 'Espera a reunião de alinhamento com o Produto, toda quarta às 14:00.'},
+  decide: {t: 'Produto decide', regra: 'Decisão tomada na reunião de alinhamento.', prox: 'Falta informação: o chamado volta para Em atendimento - N2, sem tag. Roadmap: recebe a tag Aprovado PO. Cobrada do cliente: recebe a tag Estimativa Técnica.'},
+  aprov: {regra: 'Status Refinamento Suporte Melhoria + tag Aprovado PO.', prox: 'O time de Produto fará a melhoria dentro das sprints. O chamado vai para Em atendimento - N2 para o N2 abrir a task.'},
+  n2apr: {regra: 'Status Em atendimento - N2 + tag Aprovado PO.', prox: 'O N2 abre a task. Depois o chamado vai para Aguardando Desenvolvimento e espera a previsão de entrega.'},
+  tec: {regra: 'Status Refinamento Suporte Melhoria + tag Estimativa Técnica.', prox: 'Espera o time de desenvolvimento informar a quantidade de horas. Com as horas, o chamado vai para Pendente usuário, no nome do Diogo, e recebe um log com o valor e as horas, avisando que o desenvolvimento terá custo.'},
+  aprcom: {regra: 'Status Aguardando Cliente + só a tag Estimativa Técnica.', prox: 'Horas e valor já informados, com o chamado no nome do Diogo. Quando o cliente retorna, o CS cria a proposta comercial.'},
+  orc: {regra: 'Status Em atendimento - CS + tags Estimativa Técnica e Estimativa Comercial.', prox: 'O CS monta a proposta comercial e a formaliza com o cliente.'},
+  assin: {regra: 'Status Aguardando Cliente + tag Estimativa Comercial.', prox: 'A proposta formal foi enviada. Quando o cliente aprovar, o chamado vai para a fila do N2 abrir a task.'},
+  n2com: {regra: 'Status Em atendimento - N2 + tag Estimativa Comercial.', prox: 'O N2 abre a task. Depois o chamado vai para Aguardando Desenvolvimento e espera a previsão de entrega.'},
+  prev: {regra: 'Status Aguardando Desenvolvimento + tag Aprovado PO ou Estimativa Comercial, sem Previsão de solução.', prox: 'Espera a data de entrega. Quando ela chega, é preenchida em Previsão de solução e o chamado entra na lista Próximas entregas.'},
+  agend: {regra: 'Status Aguardando Desenvolvimento + tag + Previsão de solução preenchida.', prox: 'Entrega agendada. O chamado aparece em Próximas entregas, ordenado pela data.'},
 };
 const HF_FIXOS = ['cliente', 'decide'];
 const HF_MODOS = [['qtd', 'Quantidade'], ['media', 'Média parada'], ['maior', 'Mais antigo parado'], ['idade', 'Idade média'], ['velhos', 'Parados há mais de 15 dias']];
