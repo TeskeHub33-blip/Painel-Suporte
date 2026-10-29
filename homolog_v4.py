@@ -88,6 +88,47 @@ html[data-tema="dark"] .hml-busca button:hover, html[data-tema="dark"] #tabFluxo
 
 /* resumo executivo: cartao sem faixa lateral */
 .hml-exec { border-left: none !important; }
+
+/* etapa da melhoria selecionada: passos no resumo e destaque no no do Fluxo */
+.hml-passos { display: flex; flex-wrap: wrap; gap: 6px; }
+.hml-passo { flex: 1 1 120px; padding: 8px 12px; border-radius: 6px; background: var(--surface2); color: var(--text3); font-size: 12px; font-weight: 600; transition: background .15s; }
+.hml-passo small { display: block; font-size: 10px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--pink); }
+.hml-passo.feito { color: var(--ok); box-shadow: inset 3px 0 0 var(--ok); }
+.hml-passo.atual { background: var(--pink-dim); color: var(--text); box-shadow: inset 0 0 0 1.5px var(--pink); }
+.fl-node.fl-atual { box-shadow: var(--shadow2), inset 0 0 0 2px var(--pink); background: var(--pink-dim); }
+.fl-node.fl-atual::before { content: 'Etapa atual'; position: absolute; top: -9px; left: 12px; padding: 1px 8px; border-radius: 6px; background: var(--pink); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
+
+/* ===== Fluxograma (aba) na mesma identidade do fluxo de melhorias ===== */
+#tabFluxo #flowDiagram { gap: 14px; }
+#tabFluxo .flow-row { gap: 0; align-items: stretch; padding: 8px 2px 10px; }
+#tabFluxo #flowRowMain::before, #tabFluxo #flowRowSecundaria::before { flex-basis: 100%; margin-bottom: 12px; font-size: 12px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; color: var(--text3); }
+#tabFluxo #flowRowMain::before { content: 'Fluxo de atendimento'; }
+#tabFluxo #flowRowSecundaria::before { content: 'Desvio do fluxo'; }
+#tabFluxo .flow-box { background: var(--panel); border: none; border-radius: 6px; box-shadow: var(--shadow); padding: 12px 14px; min-width: 168px; transition: transform .15s, box-shadow .15s;
+  animation: flIn .45s ease both; overflow: visible; }
+#tabFluxo .flow-box.resizable { overflow: visible; }
+#tabFluxo .flow-box .flow-title { font-size: 12.5px; font-weight: 600; color: var(--text); min-height: 32px; align-items: flex-start; }
+#tabFluxo .flow-box .flow-sub { font-size: 11px; color: var(--text3); line-height: 1.35; }
+#tabFluxo .flow-box .flow-time { font-size: 11px; color: var(--text-dim); }
+#tabFluxo .flow-box .flow-count { margin-top: 8px; border-radius: 6px; font-size: 12px; font-weight: 600; padding: 3px 10px; background: var(--surface2); color: var(--text); }
+#tabFluxo .flow-box.flow-done { background: var(--panel); box-shadow: var(--shadow), inset 3px 0 0 var(--ok); }
+#tabFluxo .flow-box.flow-done .flow-title { color: var(--ok); }
+#tabFluxo .flow-box.flow-current { background: var(--pink-dim); box-shadow: var(--shadow2), inset 0 0 0 2px var(--pink); }
+#tabFluxo .flow-box.flow-current .flow-title { color: var(--text); }
+#tabFluxo .flow-box.flow-current::before { content: 'Etapa atual'; position: absolute; top: -9px; left: 12px; padding: 1px 8px; border-radius: 6px; background: var(--pink); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
+#tabFluxo .flow-box.flow-blocked { background: var(--danger-dim); box-shadow: var(--shadow), inset 0 0 0 2px var(--danger); }
+#tabFluxo .flow-box.flow-blocked .flow-title { color: var(--danger); }
+#tabFluxo .flow-box.flow-clickable:hover { transform: translateY(-2px); box-shadow: var(--shadow2); border: none; }
+#tabFluxo .flow-box.flow-clickable:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
+#tabFluxo .flow-row .flow-box { margin-right: 44px; }
+#tabFluxo .flow-row .flow-box:last-child { margin-right: 0; }
+#tabFluxo .flow-row .flow-box:not(:last-child)::after { content: ''; position: absolute; right: -38px; top: 50%; width: 30px; height: 2px; transform: none; font-size: 0;
+  background: repeating-linear-gradient(90deg, var(--navy-lt) 0 6px, transparent 6px 11px); background-size: 22px 2px; animation: flFlow 1s linear infinite; }
+#tabFluxo .flow-row .flow-box:not(:last-child) .flow-title::after { content: ''; position: absolute; right: -44px; top: calc(50% - 5px); border-left: 7px solid var(--navy-lt); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+#tabFluxo .flow-next-pill { background: transparent; border: 1.25px solid #878799; border-radius: 6px; color: var(--navy); font-weight: 600; font-size: 11.5px; transition: background .15s, border-color .15s; }
+#tabFluxo .flow-next-pill:hover { background: var(--pink-dim); border-color: var(--pink); }
+#tabFluxo .flow-next-steps { background: var(--surface2); border-left: none; border-radius: 6px; }
+@media (prefers-reduced-motion: reduce) { #tabFluxo .flow-box, #tabFluxo .flow-row .flow-box:not(:last-child)::after { animation: none; } }
 """
 
 

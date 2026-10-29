@@ -61,6 +61,33 @@ findTicketByProtocol = function(protocol) {
   return RESOLVED_TODAY.find(x => String(x.protocol) === protocol) || null;
 };
 
+// ---------- etapa da melhoria no fluxo (usada no resumo executivo e no destaque do Fluxo)
+const HML_PASSOS = [['n1', 'Em atendimento N1'], ['n2', 'Validação do N2'], ['refina', 'Reunião de alinhamento'], ['tec', 'Estimativa técnica'], ['orc', 'Orçamento'], ['cliente', 'Resposta do cliente'], ['dev', 'Desenvolvimento']];
+function hmlChaveEtapaMel(t) {
+  const e = gmEtapa(t);
+  if (e === 'refina') return gmTagTem(t, 'aprovado po') ? 'po' : 'refina';
+  if (e) return e;
+  if (t.status === GM_ST_DEV) return 'dev';
+  if (t.status === 'Aguardando Cliente') return 'cliente';
+  return null;
+}
+function hmlPassosMelhoria(t) {
+  const chave = hmlChaveEtapaMel(t), passoAtual = chave === 'po' ? 'refina' : chave;
+  const idx = HML_PASSOS.findIndex(p => p[0] === passoAtual);
+  if (idx === -1) return `<div class="hml-exec-bloco"><div class="k">Etapa no fluxo de melhorias</div><div class="v">Fora das etapas do fluxo (status ${esc(t.status || '-')}).</div></div>`;
+  const itens = HML_PASSOS.map((p, i) => `<div class="hml-passo ${i < idx ? 'feito' : i === idx ? 'atual' : ''}">${i === idx ? '<small>Etapa atual</small>' : ''}${esc(p[1])}${i === idx && chave === 'po' ? '<small style="display:block;">Aprovado PO · aguardando data</small>' : ''}</div>`).join('');
+  return `<div class="hml-exec-bloco"><div class="k">Etapa no fluxo de melhorias</div><div class="hml-passos">${itens}</div></div>`;
+}
+let hmlMelhoriaSel = null;
+function hmlDestacaEtapa() {
+  document.querySelectorAll('#gmFluxo .fl-node.fl-atual').forEach(n => n.classList.remove('fl-atual'));
+  if (!hmlMelhoriaSel) return;
+  let k = hmlChaveEtapaMel(hmlMelhoriaSel);
+  if (k === 'dev') k = (hmlMelhoriaSel.tags || []).some(x => (x || '').toLowerCase().indexOf('estimativa') !== -1) ? 'dev2' : 'dev1';
+  const no = k && document.querySelector('#gmFluxo .fl-node[data-k="' + k + '"]');
+  if (no) no.classList.add('fl-atual');
+}
+
 // ---------- resumo executivo do chamado
 function hmlChip(txt, cls) { return `<span class="hml-chip ${cls || ''}">${esc(txt)}</span>`; }
 function hmlCampo(k, v) { return `<div><div class="k">${k}</div><div class="v">${v}</div></div>`; }
@@ -85,9 +112,11 @@ function hmlCartaoExecutivo(t, fonte) {
   const desc = (t.description || '').replace(/\s+/g, ' ').trim();
   const comentario = t.lastComment ? gmComentario(t, 420) : '';
   const protoJs = jsStr(String(t.protocol));
+  const ehMelhoriaAberta = aberto && !t.resolvedIn && t.category === 'Melhoria';
   return `<div class="hml-exec">
     <div class="hml-exec-topo"><div><div class="hml-prot">Chamado ${esc(t.protocol)}</div><h3>${esc(t.subject || '')}</h3><div>${chips}</div></div>
       <div class="hml-exec-acoes"><a href="${MOVIDESK_BASE}${t.id}" target="_blank" rel="noopener">Abrir no Movidesk</a>
+        ${ehMelhoriaAberta ? `<button type="button" onclick="hmlMelhoriaSel = findTicketByProtocol(${protoJs}); setGiSub('melhorias'); setGmSub('fluxo');">Ver no fluxo</button>` : ''}
         ${fonte === 'fluxo' ? '' : `<button type="button" onclick="document.getElementById('fluxoBuscaProtocolo').value=${protoJs}; showTab('fluxo'); buscarChamadoFluxoPorProtocolo();">Ver no fluxograma</button>`}
         ${fonte && fonte !== 'fluxo' ? `<button type="button" onclick="document.getElementById('${fonte}Res').innerHTML=''; document.getElementById('${fonte}Input').value='';">Fechar</button>` : ''}</div></div>
     <div class="hml-exec-grid">
@@ -100,6 +129,7 @@ function hmlCartaoExecutivo(t, fonte) {
       ${hmlCampo('SLA de solução', sla)}
       ${t.resolvedInFirstCall !== undefined && t.resolvedIn ? hmlCampo('Resolvido na 1ª resposta', t.resolvedInFirstCall ? 'Sim' : 'Não') : ''}
     </div>
+    ${ehMelhoriaAberta ? hmlPassosMelhoria(t) : ''}
     ${comentario ? `<div class="hml-exec-bloco"><div class="k">Último comentário</div><div class="v">${comentario}</div></div>` : ''}
     ${desc ? `<div class="hml-exec-bloco"><div class="k">Descrição</div><div class="v">${esc(desc.slice(0, 420))}${desc.length > 420 ? '…' : ''}</div></div>` : ''}
   </div>`;
@@ -111,6 +141,7 @@ function hmlBuscaHtml(p, rotulo) {
 function hmlBuscaChamado(p) {
   const v = document.getElementById(p + 'Input').value, res = document.getElementById(p + 'Res');
   const t = findTicketByProtocol(v);
+  if (t && t.category === 'Melhoria' && t._created !== undefined) { hmlMelhoriaSel = t; if (document.getElementById('gmFluxo').style.display !== 'none') renderGmFluxo(); }
   res.innerHTML = t ? hmlCartaoExecutivo(t, p) : `<div class="hml-erro">Chamado "${esc(v)}" não encontrado (busca entre os abertos e os resolvidos nos meses carregados).</div>`;
 }
 document.getElementById('giSub_melhorias').insertAdjacentHTML('afterbegin', hmlBuscaHtml('gmBusca', 'Buscar melhoria pelo número do chamado'));

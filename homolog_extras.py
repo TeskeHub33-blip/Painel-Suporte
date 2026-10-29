@@ -102,13 +102,16 @@ function renderGmFluxo() {
   const devSem = dev.filter(t => !t._sla);
   const aguardandoCliente = todas.filter(t => t.status === 'Aguardando Cliente');
   let delay = 0;
+  const FL_CHAVES = {'Em atendimento N1': 'n1', 'Aguardando validação do N2': 'n2', 'Aguardando reunião de alinhamento': 'refina', 'Aprovado PO · aguardando data': 'po',
+    'Aguardando estimativa técnica': 'tec', 'Aguardando orçamento': 'orc', 'Aguardando resposta do cliente': 'cliente'};
   const node = (titulo, itens, sub, extra) => {
+    const chave = (extra || '').indexOf('fl-fimdev') !== -1 ? 'dev1' : (titulo === 'Aguardando Desenvolvimento' ? 'dev2' : (FL_CHAVES[titulo] || ''));
     const parado = itens.length ? gmMedia(itens.map(gmDiasParado)) : 0;
     const cls = (extra || '') + (itens.length && parado > 15 ? ' fl-danger' : itens.length && parado > 7 ? ' fl-warn' : '');
     const ids = itens.map(t => t.id).join(',');
     const pulso = itens.some(t => gmDiasParado(t) > 30) ? ' fl-pulse' : '';
     delay += 70;
-    return `<div class="fl-node ${cls}${pulso}" style="animation-delay:${delay}ms" tabindex="0" role="button"
+    return `<div class="fl-node ${cls}${pulso}" data-k="${chave}" style="animation-delay:${delay}ms" tabindex="0" role="button"
         onclick="gmAbreLista(${jsStr(titulo)}, [${ids}])" onkeydown="if(event.key==='Enter')this.click()">
       <div class="fl-t">${titulo}</div><div class="fl-n" data-alvo="${itens.length}">0</div>
       <div class="fl-s">${sub}${itens.length ? ' · média parado ' + gmDias(parado) : ''}</div><div class="fl-bar"></div></div>`;
@@ -138,6 +141,7 @@ function renderGmFluxo() {
     <div class="fl-legenda"><span><i style="background:var(--ok)"></i>até 7 dias parado</span><span><i style="background:var(--warn-solid)"></i>8 a 15 dias</span><span><i style="background:var(--danger)"></i>mais de 15 dias</span><span><i style="background:var(--navy)"></i>início do fluxo</span><span><i style="background:var(--pink)"></i>decisão</span></div>
   </div>`;
   document.querySelectorAll('#gmFluxo .fl-n').forEach(el => gmContaAnima(el, Number(el.dataset.alvo)));
+  if (typeof hmlDestacaEtapa === 'function') hmlDestacaEtapa();
 }
 """
 
@@ -157,7 +161,7 @@ def _sem_emoji_titulos(html):
 def aplicar_homologacao(html, badge=True):
     """badge=True: versao de homologacao (etiqueta e titulo proprios). badge=False: mesmo visual e abas, sem a etiqueta (producao)."""
     # 1) tema claro (depois de todo o CSS existente, pra sobrescrever)
-    html = html.replace('</style>', TEMA_CLARO_CSS + NAV_CSS + V2_CSS + DARK_CSS + V3_CSS + (V4_CSS if badge else '') + '</style>', 1)
+    html = html.replace('</style>', TEMA_CLARO_CSS + NAV_CSS + V2_CSS + DARK_CSS + V3_CSS + V4_CSS + '</style>', 1)
     # 2) identificacao visual da versao
     if badge:
         html = html.replace('<h1>Painel Diario</h1>', '<h1>Painel Diario <span class="hml-badge">HOMOLOGAÇÃO v2</span></h1>', 1)
