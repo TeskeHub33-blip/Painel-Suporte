@@ -86,9 +86,9 @@ const HF_PAIS = {n1: ['cliente'], n2: ['n1'], refina: ['n2'], decide: ['refina']
 const HF_ROTULOS = [['tec', 'decide', 'cobrado', 0.5], ['aprov', 'decide', 'roadmap', 0.5]];
 const HF_INFO = {
   cliente: {t: 'Cliente solicita melhoria', regra: 'Chamado de categoria Melhoria, preenchido no padrão.', prox: 'N1 ou Implantação levantam as informações e repassam para a fila Em atendimento - N2.'},
-  n1: {regra: "Status Em atendimento.", prox: 'Levantadas as informações, repassar para a fila Em atendimento - N2.'},
+  n1: {regra: "Status Em atendimento.", prox: 'Levantadas as informações, repassar para a fila Em atendimento - N2. Se precisar de mais informações do cliente, coloca em Pendente usuário (Aguardando Cliente, sem tag).'},
   n2: {regra: "Status Em atendimento - N2, sem tag.", prox: 'O N2 confere se a melhoria já existe e falta só configuração, e se não é um bug. Se for aderente, move para Refinamento Suporte Melhoria. Se precisar de mais informações, coloca em Pendente usuário (Aguardando Cliente, sem tag).'},
-  info: {regra: "Pendente usuário: status Aguardando Cliente, sem tag.", prox: 'N1 ou N2 precisa de mais informações e colocou o chamado em Pendente usuário. Quando o cliente responde, o chamado volta para o N2.'},
+  info: {regra: "Pendente usuário: status Aguardando Cliente, sem tag.", prox: 'N1 ou N2 precisa de mais informações e colocou o chamado em Pendente usuário. Quando o cliente responde, o chamado volta para quem pediu (N1 ou N2).'},
   refina: {regra: "Status Refinamento Suporte Melhoria, sem nenhuma tag.", prox: 'Aguarda a reunião de quarta, 14:00, com o time de Produto.'},
   decide: {t: 'Produto decide', regra: 'Decisão tomada na reunião de alinhamento.', prox: 'Falta informação: volta para Em atendimento - N2, sem tag. Roadmap: tag Aprovado PO. Cobrada do cliente: tag Estimativa Técnica.'},
   aprov: {regra: "Refinamento + tag Aprovado PO.", prox: 'Será feito pelo time de produto dentro das sprints. O chamado vai para Em atendimento - N2 para abrir a task.'},
@@ -139,6 +139,9 @@ renderGmFluxo = function() {
   { const a = hfCaixa('n2'), b = hfCaixa('info'), y = a.y + a.h / 2;   // lateral: N2 <-> informacoes do cliente
     svg += `<path class="hf-edge lado" d="M${a.x + a.w} ${y} L${b.x} ${y}"/><path class="hf-seta" d="M${b.x - 9} ${y - 5} L${b.x} ${y} L${b.x - 9} ${y + 5} Z"/><path class="hf-seta" d="M${a.x + a.w + 9} ${y - 5} L${a.x + a.w} ${y} L${a.x + a.w + 9} ${y + 5} Z"/>`;
     rotulos += `<div class="hf-rotulo" style="left:${(a.x + a.w + b.x) / 2}px; top:${y - 14}px;">pede informação</div>`; }
+  { const a1 = hfCaixa('n1'), b1 = hfCaixa('info'), ya = a1.y + a1.h / 2, xb = b1.x + b1.w / 2;   // o N1 tambem pode colocar em Pendente usuario
+    svg += `<path class="hf-edge lado" data-e="n1>info" d="M${a1.x + a1.w} ${ya} L${xb} ${ya} L${xb} ${b1.y - 1}"/><path class="hf-seta" data-e="n1>info" d="${hfSeta(xb, b1.y)}"/>`;
+    rotulos += `<div class="hf-rotulo" style="left:${(a1.x + a1.w + xb) / 2}px; top:${ya - 14}px;">pede informação</div>`; }
   HF_ROTULOS.forEach(([k, p, txt]) => { const a = hfCaixa(k), b = hfCaixa(p); rotulos += `<div class="hf-rotulo" style="left:${a.x + a.w / 2 + (k === 'tec' ? 40 : -40)}px; top:${(a.y + b.y + b.h) / 2}px;">${txt}</div>`; });
   Object.keys(HF_POS).forEach(k => {
     const p = HF_POS[k], info = HF_INFO[k] || {};
