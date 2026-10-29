@@ -87,8 +87,8 @@ const HF_ROTULOS = [['tec', 'decide', 'cobrado', 0.5], ['aprov', 'decide', 'road
 const HF_INFO = {
   cliente: {t: 'Cliente solicita melhoria', regra: 'Chamado de categoria Melhoria, preenchido no padrão.', prox: 'N1 ou Implantação levantam as informações e repassam para a fila Em atendimento - N2.'},
   n1: {regra: "Status Em atendimento.", prox: 'Levantadas as informações, repassar para a fila Em atendimento - N2.'},
-  n2: {regra: "Status Em atendimento - N2, sem tag.", prox: 'O N2 confere se a melhoria já existe e falta só configuração, e se não é um bug. Se for aderente, move para Refinamento Suporte Melhoria.'},
-  info: {regra: "Status Aguardando Cliente, sem tag.", prox: 'N1 ou N2 pediu mais informações ao cliente. Quando ele responde, o chamado volta para o N2.'},
+  n2: {regra: "Status Em atendimento - N2, sem tag.", prox: 'O N2 confere se a melhoria já existe e falta só configuração, e se não é um bug. Se for aderente, move para Refinamento Suporte Melhoria. Se precisar de mais informações, coloca em Pendente usuário (Aguardando Cliente, sem tag).'},
+  info: {regra: "Pendente usuário: status Aguardando Cliente, sem tag.", prox: 'N1 ou N2 precisa de mais informações e colocou o chamado em Pendente usuário. Quando o cliente responde, o chamado volta para o N2.'},
   refina: {regra: "Status Refinamento Suporte Melhoria, sem nenhuma tag.", prox: 'Aguarda a reunião de quarta, 14:00, com o time de Produto.'},
   decide: {t: 'Produto decide', regra: 'Decisão tomada na reunião de alinhamento.', prox: 'Falta informação: volta para Em atendimento - N2, sem tag. Roadmap: tag Aprovado PO. Cobrada do cliente: tag Estimativa Técnica.'},
   aprov: {regra: "Refinamento + tag Aprovado PO.", prox: 'Será feito pelo time de produto dentro das sprints. O chamado vai para Em atendimento - N2 para abrir a task.'},

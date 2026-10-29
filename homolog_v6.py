@@ -33,8 +33,8 @@ V6_JS = r"""
 // ===== HOMOLOGACAO v6: etapas de melhorias (status + tags) =====
 const HML6_COLS = [
   {k: 'n1', t: 'Em atendimento N1', who: "Status 'Em atendimento' · N1 e Implantação levantam as informações e repassam ao N2"},
-  {k: 'n2', t: 'Aguardando validação do N2', who: "Status 'Em atendimento - N2' sem tag · o N2 confere se já existe, se falta configuração ou se é bug"},
-  {k: 'info', t: 'Aguardando informações do cliente', who: "Status 'Aguardando Cliente' sem tag · N1 ou N2 precisa de mais informações"},
+  {k: 'n2', t: 'Aguardando validação do N2', who: "Status 'Em atendimento - N2' sem tag · o N2 confere se já existe, se falta configuração ou se é bug; se precisar de mais informações, vai para Pendente usuário"},
+  {k: 'info', t: 'Aguardando informações do cliente', who: "Pendente usuário: status 'Aguardando Cliente' sem tag · N1 ou N2 precisa de mais informações"},
   {k: 'refina', t: 'Aguardando reunião de alinhamento', who: "Status 'Refinamento Suporte Melhoria' sem nenhuma tag · quarta 14:00 com Produto", key: true},
   {k: 'aprov', t: 'Aprovado pelo produto · task a abrir', who: "Refinamento + tag Aprovado PO · volta ao N2 para abrir a task"},
   {k: 'n2apr', t: 'N2 abrindo a task (roadmap)', who: "Em atendimento - N2 + tag Aprovado PO"},
