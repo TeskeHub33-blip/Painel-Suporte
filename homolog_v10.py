@@ -206,9 +206,10 @@ function hfxRender() {
   const c = HFX.ctx, bk = hfxBuckets(), visit = c.visitedKeys || [], taken = c.takenNextMap || {};
   if (HFX.ticket && HFX.sel === null && !HFX.manual) HFX.sel = c.currentKey;
   let svg = '', nos = '';
+  const alc = k => k === c.currentKey || visit.indexOf(k) !== -1;     // etapa que o chamado ja alcancou
   Object.keys(FLOW_NEXT_OPTIONS).forEach(de => (FLOW_NEXT_OPTIONS[de] || []).forEach(([para]) => {
     if (!HFX.pos[de] || !HFX.pos[para]) return;
-    const e = hfxCaminho(de, para), cls = (e.volta ? ' volta' : '') + (HFX.sel === de ? ' on' : '') + (taken[de] === para ? ' taken' : '');
+    const e = hfxCaminho(de, para), cls = (e.volta ? ' volta' : '') + (HFX.sel === de ? ' on' : '') + (taken[de] === para ? ' taken' : '') + (HFX.ticket && taken[de] !== para && !(alc(de) && alc(para)) ? ' pendente' : '');
     svg += `<path class="hf-edge${cls}" d="${e.d}"/><path class="hf-seta${HFX.sel === de ? ' on' : ''}${taken[de] === para ? ' taken' : ''}" d="${e.s}"/>`;
   }));
   const modoNome = HFX.modos.find(m => m[0] === HFX.modo)[1].toLowerCase();
@@ -218,6 +219,7 @@ function hfxRender() {
     if (HFX.sel === k) cls += ' sel';
     if (c.currentKey === k) cls += (c.blockedKey === k ? ' bloq' : ' fl-atual');
     else if (visit.indexOf(k) !== -1) cls += ' feito';
+    if (HFX.ticket && !alc(k)) cls += ' pendente';
     const s = HFX.modo === 'qtd' ? (ind.media === null ? 'nenhum chamado' : 'média parado ' + Math.round(ind.media) + ' d') : modoNome + ' · ' + ind.qtd + (ind.qtd === 1 ? ' chamado' : ' chamados');
     const t2 = tempo !== undefined && tempo !== null ? ` · ${c.perTicket ? 'neste chamado' : 'média geral'}: ${fmtH(tempo)}` : '';
     nos += `<button type="button" class="${cls}" data-k="${k}" id="flowbox-${k}" style="left:${bx.x}px; top:${bx.y}px;" onclick="hfxSelecionar('${k}')"><div class="hf-t">${esc(d.title)}</div><div class="hf-v">${hfxValor(ind)}</div><div class="hf-s">${esc(s + t2)}</div></button>`;

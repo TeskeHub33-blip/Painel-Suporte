@@ -134,7 +134,7 @@ renderGmFluxo = function() {
   let svg = '', nos = '', rotulos = '';
   Object.keys(HF_PAIS).forEach(k => HF_PAIS[k].forEach(p => {
     const on = cadeia.has(p + '>' + k), b = hfCaixa(k);
-    svg += `<path class="hf-edge ${on ? 'on' : ''}" d="${hfCaminho(p, k)}"/><path class="hf-seta ${on ? 'on' : ''}" d="${hfSeta(b.x + b.w / 2, b.y)}"/>`;
+    svg += `<path class="hf-edge ${on ? 'on' : ''}" data-e="${p}>${k}" d="${hfCaminho(p, k)}"/><path class="hf-seta ${on ? 'on' : ''}" data-e="${p}>${k}" d="${hfSeta(b.x + b.w / 2, b.y)}"/>`;
   }));
   { const a = hfCaixa('n2'), b = hfCaixa('info'), y = a.y + a.h / 2;   // lateral: N2 <-> informacoes do cliente
     svg += `<path class="hf-edge lado" d="M${a.x + a.w} ${y} L${b.x} ${y}"/><path class="hf-seta" d="M${b.x - 9} ${y - 5} L${b.x} ${y} L${b.x - 9} ${y + 5} Z"/><path class="hf-seta" d="M${a.x + a.w + 9} ${y - 5} L${a.x + a.w} ${y} L${a.x + a.w + 9} ${y + 5} Z"/>`;

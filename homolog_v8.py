@@ -86,7 +86,7 @@ function hfbRender() {
   let svg = '', nos = '', rot = '';
   Object.keys(HFB.pais).forEach(k => HFB.pais[k].forEach(p => {
     const on = cadeia.has(p + '>' + k), b = hfbCaixa(k);
-    svg += `<path class="hf-edge ${on ? 'on' : ''}" d="${hfbCaminho(p, k)}"/><path class="hf-seta ${on ? 'on' : ''}" d="${hfSeta(b.x + b.w / 2, b.y)}"/>`;
+    svg += `<path class="hf-edge ${on ? 'on' : ''}" data-e="${p}>${k}" d="${hfbCaminho(p, k)}"/><path class="hf-seta ${on ? 'on' : ''}" data-e="${p}>${k}" d="${hfSeta(b.x + b.w / 2, b.y)}"/>`;
   }));
   HFB.laterais.forEach(([de, para, txt]) => {
     const a = hfbCaixa(de), b = hfbCaixa(para), y = a.y + a.h / 2, dir = b.x > a.x;

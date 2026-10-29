@@ -21,6 +21,7 @@ from homolog_v7 import V7_CSS, V7_JS
 from homolog_v8 import V8_JS, aplicar_v8
 from homolog_v9 import V9_CSS, V9_JS
 from homolog_v10 import V10_CSS, V10_JS, aplicar_v10
+from homolog_v11 import V11_CSS, V11_JS
 
 TEMA_CLARO_CSS = """
 /* ===== HOMOLOGACAO v2: tema claro EmiteAi ===== */
@@ -167,7 +168,7 @@ def _sem_emoji_titulos(html):
 def aplicar_homologacao(html, badge=True):
     """badge=True: versao de homologacao (etiqueta e titulo proprios). badge=False: mesmo visual e abas, sem a etiqueta (producao)."""
     # 1) tema claro (depois de todo o CSS existente, pra sobrescrever)
-    html = html.replace('</style>', TEMA_CLARO_CSS + NAV_CSS + V2_CSS + DARK_CSS + V3_CSS + V4_CSS + V5_CSS + (V6_CSS if badge else '') + (V7_CSS if badge else '') + (V9_CSS if badge else '') + (V10_CSS if badge else '') + '</style>', 1)
+    html = html.replace('</style>', TEMA_CLARO_CSS + NAV_CSS + V2_CSS + DARK_CSS + V3_CSS + V4_CSS + V5_CSS + (V6_CSS if badge else '') + (V7_CSS if badge else '') + (V9_CSS if badge else '') + (V10_CSS if badge else '') + (V11_CSS if badge else '') + '</style>', 1)
     # 2) identificacao visual da versao
     if badge:
         html = html.replace('<h1>Painel Diario</h1>', '<h1>Painel Diario <span class="hml-badge">HOMOLOGAÇÃO v2</span></h1>', 1)
@@ -179,7 +180,7 @@ def aplicar_homologacao(html, badge=True):
                         '        <button type="button" data-sub="fluxo" onclick="setGmSub(\'fluxo\')">Fluxo</button>', 1)
     html = html.replace('<div id="gmIndic" style="display:none;"></div>',
                         '<div id="gmIndic" style="display:none;"></div>\n    <div id="gmFluxo" style="display:none;"></div>', 1)
-    html = html.replace('renderGestaoMelhorias();\n\nfunction tick()', FLUXO_JS + NAV_JS + BUGS_JS + V2_JS + TEMA_JS + V3_JS + V5_JS + (V6_JS if badge else '') + (V7_JS if badge else '') + (V8_JS if badge else '') + (V9_JS if badge else '') + (V10_JS if badge else '') + '\nrenderGestaoMelhorias();\n\nfunction tick()', 1)
+    html = html.replace('renderGestaoMelhorias();\n\nfunction tick()', FLUXO_JS + NAV_JS + BUGS_JS + V2_JS + TEMA_JS + V3_JS + V5_JS + (V6_JS if badge else '') + (V7_JS if badge else '') + (V8_JS if badge else '') + (V9_JS if badge else '') + (V10_JS if badge else '') + (V11_JS if badge else '') + '\nrenderGestaoMelhorias();\n\nfunction tick()', 1)
     html = reestruturar_navegacao(html)
     html = aplicar_tema(html)
     html = aplicar_v3(html)
