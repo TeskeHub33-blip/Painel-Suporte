@@ -1,1 +1,8 @@
-{}
+{
+  "202611000055": {
+    "gerado_em": "03/11/2026 17:11 (Brasília)",
+    "fonte": "Horus (base de conhecimento GNRE) + chamado do Movidesk; nenhum dado de produção do cliente foi consultado",
+    "analise": "Cliente Avista (Hana Miranda), urgência alta: guias GNRE de GO reprovadas, receita 100030 (ICMS Transporte). Três ocorrências: (1) 30/10, recibo 26000531630136, retorno [403] \"taxa de juros ainda não disponível para a data de cálculo\"; (2) 26/10, \"Erro na inclusão do documento\", log L247, código 700 \"Campo null\"; (3) 23/10, \"Erro na geração do código de barras\", log L347, código 700 \"Campo null\". Leitura pela base do Horus: guia Reprovada não volta sozinha, depois de corrigir a causa é preciso reprocessar. A rejeição da faixa 700 vem do lado da UF, mesmo com a guia passando no Portal Nacional. GO emite pelo DARE e não consta na tabela de detalhamento de receita; a hipótese principal é um campo obrigatório ausente (Campo null) para a receita 100030, não confirmada. A mensagem de taxa de juros não está documentada na base; tende a ser índice do estado ainda não publicado para a data de cálculo (hipótese). L247 e L347 são códigos de log internos, a investigar no log do Azure.",
+    "proximo_passo": "Tratar como possível bug de urgência alta: o N1 confere a trilha das guias e as chaves informadas e repassa ao N2 dentro do prazo de repasse, com os recibos, os códigos L247/L347 e as chaves; o N2 busca os logs no Azure. Ao cliente, confirmar o recebimento sem prometer prazo; depois da correção, reprocessar as guias."
+  }
+}

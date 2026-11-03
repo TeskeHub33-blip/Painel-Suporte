@@ -185,10 +185,20 @@ function cfgPrevia() {
   window._cfgLogs = {};
   box.innerHTML = lista.length ? lista.map(({t}) => {
     const texto = cfgMontaLog(modelo, cfgCampos(t)); window._cfgLogs[t.protocol] = texto;
-    return `<div class="panel-sub" style="margin-top:12px;">${esc(t.protocol)} · ${esc((t.subject || '').slice(0, 70))}</div><div class="cfg-log">${AUTO_ANALISES[t.protocol] ? '<div class="panel-sub" style="margin:0 0 6px 0;">Análise feita com o Horus em ' + esc(AUTO_ANALISES[t.protocol].gerado_em || '-') + '</div>' : ''}${esc(texto)}</div>
+    const hz = AUTO_ANALISES[t.protocol];
+    const statusHz = hz ? `<div class="panel-sub" style="margin:0 0 6px 0;"><b>Análise do Horus:</b> feita em ${esc(hz.gerado_em || '-')}</div>`
+      : `<div class="cfg-aviso" style="margin:8px 0 0 0;"><b>Análise do Horus:</b> ainda não feita para este chamado. O texto abaixo usa só as regras automáticas. A análise do Horus é manual por enquanto: <button type="button" class="cfg-btn" style="padding:4px 12px;" onclick="cfgPedidoHorus('${esc(t.protocol)}')">Copiar pedido para o Claude</button> <span id="cfgPedMsg_${esc(t.protocol)}" style="font-size:12px;"></span></div>`;
+    return `<div class="panel-sub" style="margin-top:12px;">${esc(t.protocol)} · ${esc((t.subject || '').slice(0, 70))}</div>${hz ? '' : statusHz}<div class="cfg-log">${hz ? statusHz : ''}${esc(texto)}</div>
       <div class="cfg-acoes"><button type="button" class="cfg-btn" id="cfgIns_${esc(t.protocol)}" onclick="cfgInserir('${esc(t.protocol)}')">Inserir no Movidesk</button></div><div id="cfgInsMsg_${esc(t.protocol)}" class="panel-sub"></div>`;
   }).join('') + '<div class="panel-sub" style="margin-top:8px;">Pré-visualização com os dados do painel. O botão só grava se a configuração salva no repositório estiver habilitada, em modo gravar, com autor e com este chamado autorizado.</div>'
     : '<div class="cfg-aviso" style="margin-top:10px;">Nenhum dos protocolos informados está no painel para pré-visualizar.</div>';
+}
+function cfgPedidoHorus(p) {
+  const msg = document.getElementById('cfgPedMsg_' + p);
+  const pedido = 'Analise o chamado ' + p + ' do Movidesk com o Horus (base de conhecimento) e grave o resultado em analises_horus.json no repositório do Painel-Suporte, com os campos analise e proximo_passo, para aparecer na pré-visualização do log. Leia o texto e os prints do chamado. Não consulte dados de clientes em produção.';
+  const ok = () => { if (msg) msg.textContent = 'Pedido copiado. Cole na conversa com o Claude.'; };
+  const falha = () => { if (msg) msg.textContent = 'Não consegui copiar. Pedido: ' + pedido; };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(pedido).then(ok, falha); else falha();
 }
 async function cfgInserir(p) {
   const texto = (window._cfgLogs || {})[p], msg = document.getElementById('cfgInsMsg_' + p), bt = document.getElementById('cfgIns_' + p);
