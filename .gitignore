@@ -29,3 +29,4 @@ dashboard_suporte.html
 
 !config_automacao.json
 !automacao_relatorio.json
+!api/*.js

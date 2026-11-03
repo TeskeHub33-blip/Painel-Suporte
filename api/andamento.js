@@ -1,0 +1,33 @@
+// Andamento da atualizacao do painel: consulta o GitHub Actions (workflow atualizar.yml).
+// Sem GITHUB_TOKEN o GitHub limita a 60 consultas/hora; com um token somente leitura sobe para 5000.
+const {REPO} = require('./_comum');
+
+const API = `https://api.github.com/repos/${REPO}/actions`;
+
+async function gh(caminho) {
+  const h = {Accept: 'application/vnd.github+json', 'User-Agent': 'painel-suporte'};
+  if (process.env.GITHUB_TOKEN) h.Authorization = 'Bearer ' + process.env.GITHUB_TOKEN;
+  const r = await fetch(API + caminho, {headers: h});
+  if (!r.ok) { const e = new Error('GitHub respondeu ' + r.status); e.status = r.status; throw e; }
+  return r.json();
+}
+
+const resumo = r => ({id: r.id, numero: r.run_number, status: r.status, conclusao: r.conclusion, inicio: r.run_started_at, atualizado: r.updated_at, evento: r.event, link: r.html_url});
+
+module.exports = async (req, res) => {
+  res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=30');
+  try {
+    const dados = await gh('/workflows/atualizar.yml/runs?per_page=8');
+    const runs = (dados.workflow_runs || []).map(resumo);
+    const emAndamento = runs.find(r => r.status === 'in_progress' || r.status === 'queued' || r.status === 'waiting');
+    let etapas = [];
+    if (emAndamento) {
+      const j = await gh(`/runs/${emAndamento.id}/jobs`);
+      const job = (j.jobs || [])[0];
+      if (job) etapas = (job.steps || []).map(s => ({nome: s.name, status: s.status, conclusao: s.conclusion, inicio: s.started_at, fim: s.completed_at}));
+    }
+    res.status(200).json({agora: new Date().toISOString(), emAndamento: emAndamento || null, etapas, historico: runs, comToken: !!process.env.GITHUB_TOKEN});
+  } catch (e) {
+    res.status(200).json({erro: e.message, limite: e.status === 403 || e.status === 429});
+  }
+};

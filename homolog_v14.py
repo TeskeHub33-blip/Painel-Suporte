@@ -38,10 +38,46 @@ V14_JS = r"""
 // ===== Aba Configuracao: automacao de chamados =====
 const CFG_REPO = 'TeskeHub33-blip/Painel-Suporte';
 function cfgLeJson(id, padrao) { try { return JSON.parse(document.getElementById(id).textContent); } catch (e) { return padrao; } }
-const AUTO_CFG = cfgLeJson('autoCfg', {}), AUTO_REL = cfgLeJson('autoRel', {});
-const CFG_PADRAO_LOG = AUTO_CFG.modelo_log || '';
+let AUTO_CFG = {}, AUTO_REL = {}, CFG_PADRAO_LOG = '';
+const CFG_VERCEL = /\.vercel\.app$/.test(location.hostname);
 function cfgRascunho() { try { return JSON.parse(localStorage.getItem('cfgAutomacaoRascunho') || 'null'); } catch (e) { return null; } }
 function cfgSalvaRascunho(o) { try { localStorage.setItem('cfgAutomacaoRascunho', JSON.stringify(o)); } catch (e) {} }
+function cfgToken() { try { return sessionStorage.getItem('cfgToken') || ''; } catch (e) { return ''; } }
+function cfgGuardaToken(t) { try { if (t) sessionStorage.setItem('cfgToken', t); else sessionStorage.removeItem('cfgToken'); } catch (e) {} }
+async function cfgCarrega() {
+  try {
+    const r = await fetch('/api/config', {headers: {Authorization: 'Bearer ' + cfgToken()}});
+    if (!r.ok) { cfgGuardaToken(''); return false; }
+    const d = await r.json(); AUTO_CFG = d.config || {}; AUTO_REL = d.relatorio || {}; CFG_PADRAO_LOG = AUTO_CFG.modelo_log || CFG_PADRAO_LOG; return true;
+  } catch (e) { return false; }
+}
+function cfgTelaSenha(msg) {
+  const root = document.getElementById('cfgCorpo'); if (!root) return;
+  root.innerHTML = `<div class="panel" style="max-width:380px; margin:30px auto; text-align:center;"><h2>Configuração protegida</h2>
+    <div class="panel-sub" style="margin-bottom:14px;">Informe a senha para abrir a configuração da automação.</div>
+    <input id="cfgSenha" type="password" class="itil-select" style="width:100%; text-align:center; margin-bottom:10px;" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')cfgEntrar()">
+    <div class="cfg-acoes" style="justify-content:center;"><button type="button" class="cfg-btn" onclick="cfgEntrar()">Entrar</button></div>
+    <div id="cfgSenhaErro" style="color:var(--danger); font-size:12px; margin-top:10px; min-height:16px;">${msg ? esc(msg) : ''}</div></div>`;
+  const i = document.getElementById('cfgSenha'); if (i) i.focus();
+}
+async function cfgEntrar() {
+  const i = document.getElementById('cfgSenha'), er = document.getElementById('cfgSenhaErro'); if (!i) return;
+  er.textContent = 'Verificando...';
+  try {
+    const r = await fetch('/api/auth', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({senha: i.value})});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { er.textContent = d.erro || 'Não foi possível validar a senha.'; i.value = ''; return; }
+    cfgGuardaToken(d.token);
+    cfgGate();
+  } catch (e) { er.textContent = 'Falha de conexão com o servidor.'; }
+}
+function cfgSair() { cfgGuardaToken(''); AUTO_CFG = {}; AUTO_REL = {}; cfgTelaSenha(''); }
+async function cfgGate() {
+  const root = document.getElementById('cfgCorpo'); if (!root) return;
+  if (!CFG_VERCEL) { root.innerHTML = '<div class="cfg-aviso">A configuração só está disponível no endereço do painel na Vercel.</div>'; return; }
+  if (cfgToken() && await cfgCarrega()) { cfgRender(); root.insertAdjacentHTML('afterbegin', '<div class="cfg-acoes" style="justify-content:flex-end; margin:0 0 8px 0;"><button type="button" class="cfg-btn" onclick="cfgSair()">Sair da configuração</button></div>'); return; }
+  cfgTelaSenha('');
+}
 function cfgForm() {
   const v = id => { const e = document.getElementById(id); return e ? e.value : ''; }, c = id => { const e = document.getElementById(id); return !!(e && e.checked); };
   const protocolos = Array.from(new Set((v('cfgProtocolos').match(/\d{6,}/g) || [])));
@@ -156,9 +192,9 @@ function cfgCopia() {
     _s(name, skip);
     const p = document.getElementById('tabConfig'), b = document.getElementById('tabBtnConfig');
     if (p) p.classList.toggle('active', name === 'config'); if (b) b.classList.toggle('active', name === 'config');
-    if (name === 'config') { window._hmlAba = 'config'; if (typeof hmlAtualizaBarra === 'function') hmlAtualizaBarra(); }
+    if (name === 'config') { window._hmlAba = 'config'; if (typeof hmlAtualizaBarra === 'function') hmlAtualizaBarra(); cfgGate(); }
   };
-  cfgRender();
+  if (CFG_VERCEL) { const b = document.getElementById('tabBtnConfig'); if (b) b.style.display = ''; }
 }
 """
 
@@ -172,11 +208,9 @@ def _json(nome, padrao):
 
 
 def aplicar_v14(html):
-    cfg = json.dumps(_json('config_automacao.json', {}), ensure_ascii=False).replace('</', '<\\/')
-    rel = json.dumps(_json('automacao_relatorio.json', {}), ensure_ascii=False).replace('</', '<\\/')
-    dados = f'<script type="application/json" id="autoCfg">{cfg}</script><script type="application/json" id="autoRel">{rel}</script>\n  '
+    dados = ''  # a configuracao NAO vai mais dentro da pagina: so /api/config entrega, com senha
     painel = ('<div class="tab-panel" id="tabConfig"><div class="panel-sub" style="margin-bottom:12px;">Automação de análise e log nos chamados. '
               'Começa desabilitada e só atua nos chamados que você informar.</div><div id="cfgCorpo"></div></div>\n\n  ')
-    botao = '<button class="tab-btn" id="tabBtnConfig" onclick="showTab(\'config\')">Configuração</button>\n    '
+    botao = '<button class="tab-btn" id="tabBtnConfig" style="display:none;" onclick="showTab(\'config\')">Configuração</button>\n    '
     html = html.replace('<button class="tab-btn" id="tabBtnFluxo"', botao + '<button class="tab-btn" id="tabBtnFluxo"', 1)
     return html.replace('<div class="tab-panel" id="tabFluxo">', dados + painel + '<div class="tab-panel" id="tabFluxo">', 1)
