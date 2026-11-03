@@ -172,6 +172,14 @@ def conferir(ticket_id, texto, tipo):
 BUSCA_LIBERADA = False  # a busca automatica so' sera liberada quando o usuario pedir
 
 
+def analises_horus():
+    """Analises feitas com o Horus (sob demanda, no Claude): analises_horus.json {protocolo: {analise, proximo_passo, gerado_em}}."""
+    try:
+        return json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "analises_horus.json"), encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def historico_com(rel):
     try:
         antigo = json.load(open(REL_PATH, encoding="utf-8")).get("historico") or []
@@ -205,7 +213,13 @@ def main():
             if not t:
                 item.update(resultado="nao_encontrado")
             else:
-                texto = montar_log(cfg.get("modelo_log", ""), analisar(t))
+                campos = analisar(t)
+                h = analises_horus().get(prot)
+                if h:
+                    campos["analise"] = h.get("analise") or campos["analise"]
+                    campos["proximo_passo"] = h.get("proximo_passo") or campos["proximo_passo"]
+                    item["analise_horus"] = h.get("gerado_em")
+                texto = montar_log(cfg.get("modelo_log", ""), campos)
                 item.update(id=t.get("id"), assunto=t.get("subject"), log=texto)
                 if not gravar:
                     item["resultado"] = "simulado"

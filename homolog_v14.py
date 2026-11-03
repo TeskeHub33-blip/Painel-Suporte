@@ -38,7 +38,7 @@ V14_JS = r"""
 // ===== Aba Configuracao: automacao de chamados =====
 const CFG_REPO = 'TeskeHub33-blip/Painel-Suporte';
 function cfgLeJson(id, padrao) { try { return JSON.parse(document.getElementById(id).textContent); } catch (e) { return padrao; } }
-let AUTO_CFG = {}, AUTO_REL = {}, CFG_PADRAO_LOG = '';
+let AUTO_CFG = {}, AUTO_REL = {}, AUTO_ANALISES = {}, CFG_PADRAO_LOG = '';
 const CFG_VERCEL = /\.vercel\.app$/.test(location.hostname);
 function cfgRascunho() { try { return JSON.parse(localStorage.getItem('cfgAutomacaoRascunho') || 'null'); } catch (e) { return null; } }
 function cfgSalvaRascunho(o) { try { localStorage.setItem('cfgAutomacaoRascunho', JSON.stringify(o)); } catch (e) {} }
@@ -48,7 +48,7 @@ async function cfgCarrega() {
   try {
     const r = await fetch('/api/config');
     if (!r.ok) { cfgGuardaToken(''); return false; }
-    const d = await r.json(); AUTO_CFG = d.config || {}; AUTO_REL = d.relatorio || {}; CFG_PADRAO_LOG = AUTO_CFG.modelo_log || CFG_PADRAO_LOG; return true;
+    const d = await r.json(); AUTO_CFG = d.config || {}; AUTO_REL = d.relatorio || {}; AUTO_ANALISES = d.analises || {}; CFG_PADRAO_LOG = AUTO_CFG.modelo_log || CFG_PADRAO_LOG; return true;
   } catch (e) { return false; }
 }
 function cfgTelaSenha(msg) {
@@ -106,8 +106,11 @@ function cfgCampos(t) {
   if (t._sla) { const hh = (t._sla - NOW) / 36e5; sla = (hh < 0 ? 'venceu há ' + cfgFmt(-hh) : 'vence em ' + cfgFmt(hh)) + ' (' + hmlDt(t.slaSolutionDate) + ')'; if (hh < 0) achados.push('SLA vencido'); }
   if (t.category === 'Bug' && (t.urgency === 'Alta' || t.urgency === 'Média')) achados.push('Bug de urgência ' + t.urgency + ': conferir o prazo de repasse ao N2');
   if (t.category === 'Melhoria' && !(t.tags || []).length && t.status === 'Refinamento Suporte Melhoria') achados.push('Melhoria sem tag: entra na pauta da reunião de alinhamento');
-  return {protocolo: t.protocol, categoria: t.category || 'Sem categoria', urgencia: t.urgency || 'não informada', status: t.status || '-', etapa: cfgEtapa(t), parado: cfgFmt(h), sla: sla,
+  const base = {protocolo: t.protocol, categoria: t.category || 'Sem categoria', urgencia: t.urgency || 'não informada', status: t.status || '-', etapa: cfgEtapa(t), parado: cfgFmt(h), sla: sla,
     analise: achados.length ? achados.join('; ') : 'Nenhum alerta pelas regras automáticas.', proximo_passo: CFG_PROXIMO[t.status] || 'Seguir o fluxo de atendimento conforme o status.', data_hora: hmlDt(new Date().toISOString())};
+  const hz = AUTO_ANALISES[t.protocol];
+  if (hz) { base.analise = hz.analise || base.analise; if (hz.proximo_passo) base.proximo_passo = hz.proximo_passo; }
+  return base;
 }
 function cfgMontaLog(modelo, campos) { let s = modelo || ''; Object.keys(campos).forEach(k => { s = s.split('{' + k + '}').join(campos[k]); }); return s; }
 function cfgEsc(s) { return esc(s); }
@@ -178,7 +181,7 @@ function cfgValida() {
 }
 function cfgPrevia() {
   const modelo = document.getElementById('cfgModelo').value, lista = cfgAchados().filter(x => x.t), box = document.getElementById('cfgPrevia');
-  box.innerHTML = lista.length ? lista.map(({t}) => `<div class="panel-sub" style="margin-top:12px;">${esc(t.protocol)} · ${esc((t.subject || '').slice(0, 70))}</div><div class="cfg-log">${esc(cfgMontaLog(modelo, cfgCampos(t)))}</div>`).join('') + '<div class="panel-sub" style="margin-top:8px;">Pré-visualização com os dados do painel. O texto gravado pela automação é montado pelo workflow, com os dados do Movidesk no momento da execução.</div>'
+  box.innerHTML = lista.length ? lista.map(({t}) => `<div class="panel-sub" style="margin-top:12px;">${esc(t.protocol)} · ${esc((t.subject || '').slice(0, 70))}</div><div class="cfg-log">${AUTO_ANALISES[t.protocol] ? '<div class="panel-sub" style="margin:0 0 6px 0;">Análise feita com o Horus em ' + esc(AUTO_ANALISES[t.protocol].gerado_em || '-') + '</div>' : ''}${esc(cfgMontaLog(modelo, cfgCampos(t)))}</div>`).join('') + '<div class="panel-sub" style="margin-top:8px;">Pré-visualização com os dados do painel. O texto gravado pela automação é montado pelo workflow, com os dados do Movidesk no momento da execução.</div>'
     : '<div class="cfg-aviso" style="margin-top:10px;">Nenhum dos protocolos informados está no painel para pré-visualizar.</div>';
 }
 function cfgGera() { document.getElementById('cfgJson').value = JSON.stringify(cfgForm(), null, 2); }

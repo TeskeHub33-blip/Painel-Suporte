@@ -9,6 +9,6 @@ async function le(arquivo) {
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  const [config, relatorio] = await Promise.all([le('config_automacao.json'), le('automacao_relatorio.json')]);
-  return res.status(200).json({config, relatorio});
+  const [config, relatorio, analises] = await Promise.all([le('config_automacao.json'), le('automacao_relatorio.json'), le('analises_horus.json')]);
+  return res.status(200).json({config, relatorio, analises});
 };
