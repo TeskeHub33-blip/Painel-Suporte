@@ -150,7 +150,7 @@ def ja_tem_log_recente(ticket_id, minutos=60):
     r = chamar("GET", "/tickets", {"id": str(ticket_id), "$select": "id", "$expand": "actions($select=id,type,description,createdDate)"})
     for a in (r or {}).get("actions", []) or []:
         d = parse_dt(a.get("createdDate"))
-        if PREFIXO_LOG in (a.get("description") or "") and d and (datetime.now(timezone.utc) - d).total_seconds() < minutos * 60:
+        if (PREFIXO_LOG in (a.get("description") or "") or "[ANÁLISE IA]" in (a.get("description") or "")) and d and (datetime.now(timezone.utc) - d).total_seconds() < minutos * 60:
             return True
     return False
 
@@ -164,7 +164,7 @@ def gravar_log(ticket_id, texto, tipo, autor_id):
 
 def texto_html(texto):
     """Movidesk nao da margem entre <p>: uma linha por <p> e <p><br></p> como linha em branco."""
-    esc = lambda x: x.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    esc = lambda x: re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", x.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
     return "".join("<p>%s</p>" % esc(l) if l.strip() else "<p><br></p>" for l in texto.strip().splitlines())
 
 
@@ -222,11 +222,11 @@ def main():
             else:
                 campos = analisar(t)
                 h = analises_horus().get(prot)
-                if h:
-                    campos["analise"] = h.get("analise") or campos["analise"]
-                    campos["proximo_passo"] = h.get("proximo_passo") or campos["proximo_passo"]
+                if h and h.get("log"):
+                    texto = h["log"]
                     item["analise_horus"] = h.get("gerado_em")
-                texto = montar_log(cfg.get("modelo_log", ""), campos)
+                else:
+                    texto = montar_log(cfg.get("modelo_log", ""), campos)
                 item.update(id=t.get("id"), assunto=t.get("subject"), log=texto)
                 if not gravar:
                     item["resultado"] = "simulado"

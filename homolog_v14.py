@@ -184,11 +184,11 @@ function cfgPrevia() {
   const modelo = document.getElementById('cfgModelo').value, lista = cfgAchados().filter(x => x.t), box = document.getElementById('cfgPrevia');
   window._cfgLogs = {};
   box.innerHTML = lista.length ? lista.map(({t}) => {
-    const texto = cfgMontaLog(modelo, cfgCampos(t)); window._cfgLogs[t.protocol] = texto;
+    const hzx = AUTO_ANALISES[t.protocol], texto = (hzx && hzx.log) ? hzx.log : cfgMontaLog(modelo, cfgCampos(t)); window._cfgLogs[t.protocol] = texto;
     const hz = AUTO_ANALISES[t.protocol];
     const statusHz = hz ? `<div class="panel-sub" style="margin:0 0 6px 0;"><b>Análise do Horus:</b> feita em ${esc(hz.gerado_em || '-')}</div>`
       : `<div class="cfg-aviso" style="margin:8px 0 0 0;"><b>Análise do Horus:</b> ainda não feita para este chamado. O texto abaixo usa só as regras automáticas. A análise do Horus é manual por enquanto: <button type="button" class="cfg-btn" style="padding:4px 12px;" onclick="cfgPedidoHorus('${esc(t.protocol)}')">Copiar pedido para o Claude</button> <span id="cfgPedMsg_${esc(t.protocol)}" style="font-size:12px;"></span></div>`;
-    return `<div class="panel-sub" style="margin-top:12px;">${esc(t.protocol)} · ${esc((t.subject || '').slice(0, 70))}</div>${hz ? '' : statusHz}<div class="cfg-log">${hz ? statusHz : ''}${esc(texto)}</div>
+    return `<div class="panel-sub" style="margin-top:12px;">${esc(t.protocol)} · ${esc((t.subject || '').slice(0, 70))}</div>${hz ? '' : statusHz}<div class="cfg-log">${hz ? statusHz : ''}${esc(texto).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</div>
       <div class="cfg-acoes"><button type="button" class="cfg-btn" id="cfgIns_${esc(t.protocol)}" onclick="cfgInserir('${esc(t.protocol)}')">Inserir no Movidesk</button></div><div id="cfgInsMsg_${esc(t.protocol)}" class="panel-sub"></div>`;
   }).join('') + '<div class="panel-sub" style="margin-top:8px;">Pré-visualização com os dados do painel. O botão só grava se a configuração salva no repositório estiver habilitada, em modo gravar, com autor e com este chamado autorizado.</div>'
     : '<div class="cfg-aviso" style="margin-top:10px;">Nenhum dos protocolos informados está no painel para pré-visualizar.</div>';

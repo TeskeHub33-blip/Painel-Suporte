@@ -8,6 +8,7 @@ const API = 'https://api.movidesk.com/public/v1';
 const PREFIXO = 'LOG DE ANÁLISE AUTOMÁTICA';
 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const negrito = s => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 const mascara = t => String(t).replace(/token=[^&\s']+/g, 'token=***');
 
 async function md(metodo, caminho, params, corpo) {
@@ -46,17 +47,18 @@ module.exports = async (req, res) => {
     }
     if (!t) return fim(404, 'Chamado não encontrado no Movidesk.');
     const antes = await md('GET', '/tickets', {id: t.id, '$select': 'id', '$expand': 'actions($select=id,type,description,createdDate)'});
-    const recente = ((antes && antes.actions) || []).some(a => (a.description || '').indexOf(PREFIXO) !== -1 && Date.now() - new Date(a.createdDate).getTime() < 60 * 60 * 1000);
+    const recente = ((antes && antes.actions) || []).some(a => ((a.description || '').indexOf(PREFIXO) !== -1 || (a.description || '').indexOf('[ANÁLISE IA]') !== -1) && Date.now() - new Date(a.createdDate).getTime() < 60 * 60 * 1000);
     if (recente) return fim(409, 'Este chamado já recebeu um log automático na última hora. Nada foi gravado.');
 
     // Movidesk nao da margem entre <p>: uma linha por <p> e <p><br></p> como linha em branco.
-    const html = texto.split(/\r?\n/).map(l => l.trim() ? `<p>${esc(l)}</p>` : '<p><br></p>').join('');
+    const html = texto.split(/\r?\n/).map(l => l.trim() ? `<p>${negrito(esc(l))}</p>` : '<p><br></p>').join('');
     const tipo = Number(cfg.tipo_acao || 1);
     const acaoNova = {type: tipo, description: html};
     if (String(cfg.autor_id || '').trim()) acaoNova.createdBy = {id: String(cfg.autor_id).trim()};
     await md('PATCH', '/tickets', {id: t.id}, {actions: [acaoNova]});
     const depois = await md('GET', '/tickets', {id: t.id, '$select': 'id', '$expand': 'actions($select=id,type,description,createdDate)'});
-    const acao = ((depois && depois.actions) || []).filter(a => (a.description || '').indexOf(esc(texto.split('\n')[0].trim())) !== -1).pop();
+    const marca = ((texto.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/) || [])[0]) || esc(texto.split('\n')[0].replace(/\*\*/g, '').trim());
+    const acao = ((depois && depois.actions) || []).filter(a => (a.description || '').indexOf(marca) !== -1).pop();
     if (!acao) return fim(200, null, {aviso: 'Gravado, mas não consegui reler a ação para conferir o tipo.'});
     const ok = Number(acao.type) === tipo;
     return fim(200, null, {tipoGravado: acao.type, tipoEsperado: tipo, aviso: ok ? '' : `Atenção: a ação ficou com tipo ${acao.type} (esperado ${tipo}). Confira no Movidesk se ficou interna.`});
