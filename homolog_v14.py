@@ -46,7 +46,7 @@ function cfgToken() { try { return sessionStorage.getItem('cfgToken') || ''; } c
 function cfgGuardaToken(t) { try { if (t) sessionStorage.setItem('cfgToken', t); else sessionStorage.removeItem('cfgToken'); } catch (e) {} }
 async function cfgCarrega() {
   try {
-    const r = await fetch('/api/config', {headers: {Authorization: 'Bearer ' + cfgToken()}});
+    const r = await fetch('/api/config');
     if (!r.ok) { cfgGuardaToken(''); return false; }
     const d = await r.json(); AUTO_CFG = d.config || {}; AUTO_REL = d.relatorio || {}; CFG_PADRAO_LOG = AUTO_CFG.modelo_log || CFG_PADRAO_LOG; return true;
   } catch (e) { return false; }
@@ -75,8 +75,7 @@ function cfgSair() { cfgGuardaToken(''); AUTO_CFG = {}; AUTO_REL = {}; cfgTelaSe
 async function cfgGate() {
   const root = document.getElementById('cfgCorpo'); if (!root) return;
   if (!CFG_VERCEL) { root.innerHTML = '<div class="cfg-aviso">A configuração só está disponível no endereço do painel na Vercel.</div>'; return; }
-  if (cfgToken() && await cfgCarrega()) { cfgRender(); root.insertAdjacentHTML('afterbegin', '<div class="cfg-acoes" style="justify-content:flex-end; margin:0 0 8px 0;"><button type="button" class="cfg-btn" onclick="cfgSair()">Sair da configuração</button></div>'); return; }
-  cfgTelaSenha('');
+  if (await cfgCarrega()) { cfgRender(); if (typeof andRender === 'function' && typeof andUltimo !== 'undefined' && andUltimo) andRender(andUltimo); } else root.innerHTML = '<div class="cfg-aviso">Não foi possível carregar a configuração agora. Tente de novo em instantes.</div>';
 }
 function cfgForm() {
   const v = id => { const e = document.getElementById(id); return e ? e.value : ''; }, c = id => { const e = document.getElementById(id); return !!(e && e.checked); };
