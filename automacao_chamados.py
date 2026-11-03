@@ -6,7 +6,7 @@ Seguranca (tudo precisa estar de acordo para gravar):
   2. config_automacao.json com "modo": "gravar"
   3. variavel GRAVAR=true (input do workflow)  -> sem isso roda sempre como simulacao
   4. so' atua nos chamados de "protocolos_autorizados" (a busca automatica apenas LISTA candidatos, nunca grava)
-  5. "autor_id" preenchido (id do agente no Movidesk)
+  5. "autor_id" e opcional (id de um AGENTE no Movidesk); vazio = a acao fica com o autor do token
 O token vem da variavel de ambiente MOVIDESK_TOKEN e nunca e' impresso.
 Cada gravacao e' conferida depois (o tipo da acao precisa ser o configurado em "tipo_acao").
 """
@@ -150,18 +150,27 @@ def ja_tem_log_recente(ticket_id, minutos=60):
     r = chamar("GET", "/tickets", {"id": str(ticket_id), "$select": "id", "$expand": "actions($select=id,type,description,createdDate)"})
     for a in (r or {}).get("actions", []) or []:
         d = parse_dt(a.get("createdDate"))
-        if (a.get("description") or "").startswith(PREFIXO_LOG) and d and (datetime.now(timezone.utc) - d).total_seconds() < minutos * 60:
+        if PREFIXO_LOG in (a.get("description") or "") and d and (datetime.now(timezone.utc) - d).total_seconds() < minutos * 60:
             return True
     return False
 
 
 def gravar_log(ticket_id, texto, tipo, autor_id):
-    chamar("PATCH", "/tickets", {"id": str(ticket_id)}, {"actions": [{"type": int(tipo), "description": texto, "createdBy": {"id": str(autor_id)}}]})
+    acao = {"type": int(tipo), "description": texto_html(texto)}
+    if str(autor_id or "").strip():
+        acao["createdBy"] = {"id": str(autor_id).strip()}
+    chamar("PATCH", "/tickets", {"id": str(ticket_id)}, {"actions": [acao]})
+
+
+def texto_html(texto):
+    """Movidesk nao da margem entre <p>: uma linha por <p> e <p><br></p> como linha em branco."""
+    esc = lambda x: x.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return "".join("<p>%s</p>" % esc(l) if l.strip() else "<p><br></p>" for l in texto.strip().splitlines())
 
 
 def conferir(ticket_id, texto, tipo):
     r = chamar("GET", "/tickets", {"id": str(ticket_id), "$select": "id", "$expand": "actions($select=id,type,description,createdDate)"})
-    acoes = [a for a in ((r or {}).get("actions") or []) if (a.get("description") or "").strip() == texto.strip()]
+    acoes = [a for a in ((r or {}).get("actions") or []) if (a.get("description") or "").strip() == texto_html(texto)]
     if not acoes:
         return False, "ação não encontrada ao reler o chamado"
     a = acoes[-1]
@@ -198,11 +207,9 @@ def main():
     if not cfg.get("habilitada"):
         rel["avisos"].append("Automação desabilitada na configuração: nada foi lido nem gravado.")
         return salvar(rel)
-    gravar = gravar_pedido and cfg.get("modo") == "gravar" and str(cfg.get("autor_id") or "").strip() != ""
+    gravar = gravar_pedido and cfg.get("modo") == "gravar"
     if cfg.get("modo") == "gravar" and not gravar_pedido:
         rel["avisos"].append("Modo 'gravar' na configuração, mas o workflow foi iniciado sem confirmar a gravação: rodou como simulação.")
-    if cfg.get("modo") == "gravar" and not str(cfg.get("autor_id") or "").strip():
-        rel["avisos"].append("Falta o autor_id (id do agente no Movidesk): rodou como simulação.")
     protocolos = [str(p).strip() for p in cfg.get("protocolos_autorizados", []) if str(p).strip()]
     if not protocolos:
         rel["avisos"].append("Nenhum chamado autorizado na configuração.")
@@ -226,8 +233,8 @@ def main():
                 elif ja_tem_log_recente(t["id"]):
                     item["resultado"] = "ignorado_duplicado"
                 else:
-                    gravar_log(t["id"], texto, cfg.get("tipo_acao", 2), cfg["autor_id"])
-                    ok, detalhe = conferir(t["id"], texto, cfg.get("tipo_acao", 2))
+                    gravar_log(t["id"], texto, cfg.get("tipo_acao", 1), cfg.get("autor_id"))
+                    ok, detalhe = conferir(t["id"], texto, cfg.get("tipo_acao", 1))
                     item.update(resultado="gravado" if ok else "gravado_tipo_diferente", conferencia=detalhe)
                     if not ok:
                         rel["avisos"].append("ATENÇÃO %s: %s. Confira se o log ficou interno e ajuste tipo_acao." % (prot, detalhe))

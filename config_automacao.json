@@ -3,7 +3,7 @@
   "modo": "simulacao",
   "protocolos_autorizados": [],
   "autor_id": "",
-  "tipo_acao": 2,
+  "tipo_acao": 1,
   "busca_automatica": {
     "habilitada": false,
     "status": "Novo",

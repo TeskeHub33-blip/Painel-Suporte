@@ -37,7 +37,6 @@ module.exports = async (req, res) => {
     const cfg = await configRepo();
     if (!cfg.habilitada) return fim(403, 'Automação desabilitada na configuração do repositório (habilitada = false). Nada foi gravado.');
     if (cfg.modo !== 'gravar') return fim(403, 'Modo "simulacao" na configuração. Para inserir de verdade, mude para "gravar" e salve no GitHub.');
-    if (!String(cfg.autor_id || '').trim()) return fim(403, 'Falta o autor_id (id do agente no Movidesk) na configuração.');
     if (!(cfg.protocolos_autorizados || []).map(String).includes(protocolo)) return fim(403, 'Este chamado não está em "Chamados autorizados" na configuração salva.');
 
     let t = null;
@@ -50,11 +49,14 @@ module.exports = async (req, res) => {
     const recente = ((antes && antes.actions) || []).some(a => (a.description || '').indexOf(PREFIXO) !== -1 && Date.now() - new Date(a.createdDate).getTime() < 60 * 60 * 1000);
     if (recente) return fim(409, 'Este chamado já recebeu um log automático na última hora. Nada foi gravado.');
 
-    const html = esc(texto).replace(/\r?\n/g, '<br>');
-    const tipo = Number(cfg.tipo_acao || 2);
-    await md('PATCH', '/tickets', {id: t.id}, {actions: [{type: tipo, description: html, createdBy: {id: String(cfg.autor_id)}}]});
+    // Movidesk nao da margem entre <p>: uma linha por <p> e <p><br></p> como linha em branco.
+    const html = texto.split(/\r?\n/).map(l => l.trim() ? `<p>${esc(l)}</p>` : '<p><br></p>').join('');
+    const tipo = Number(cfg.tipo_acao || 1);
+    const acaoNova = {type: tipo, description: html};
+    if (String(cfg.autor_id || '').trim()) acaoNova.createdBy = {id: String(cfg.autor_id).trim()};
+    await md('PATCH', '/tickets', {id: t.id}, {actions: [acaoNova]});
     const depois = await md('GET', '/tickets', {id: t.id, '$select': 'id', '$expand': 'actions($select=id,type,description,createdDate)'});
-    const acao = ((depois && depois.actions) || []).filter(a => (a.description || '').indexOf(esc(texto.split('\n')[0])) !== -1).pop();
+    const acao = ((depois && depois.actions) || []).filter(a => (a.description || '').indexOf(esc(texto.split('\n')[0].trim())) !== -1).pop();
     if (!acao) return fim(200, null, {aviso: 'Gravado, mas não consegui reler a ação para conferir o tipo.'});
     const ok = Number(acao.type) === tipo;
     return fim(200, null, {tipoGravado: acao.type, tipoEsperado: tipo, aviso: ok ? '' : `Atenção: a ação ficou com tipo ${acao.type} (esperado ${tipo}). Confira no Movidesk se ficou interna.`});

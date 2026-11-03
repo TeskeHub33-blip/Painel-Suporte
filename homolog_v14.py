@@ -80,7 +80,7 @@ async function cfgGate() {
 function cfgForm() {
   const v = id => { const e = document.getElementById(id); return e ? e.value : ''; }, c = id => { const e = document.getElementById(id); return !!(e && e.checked); };
   const protocolos = Array.from(new Set((v('cfgProtocolos').match(/\d{6,}/g) || [])));
-  return {habilitada: c('cfgHabilitada'), modo: v('cfgModo') || 'simulacao', protocolos_autorizados: protocolos, autor_id: v('cfgAutor').trim(), tipo_acao: Number(v('cfgTipo') || 2),
+  return {habilitada: c('cfgHabilitada'), modo: v('cfgModo') || 'simulacao', protocolos_autorizados: protocolos, autor_id: v('cfgAutor').trim(), tipo_acao: Number(v('cfgTipo') || 1),
     busca_automatica: {habilitada: false, status: v('cfgStatus').trim() || 'Novo', limite_por_execucao: Math.max(1, Math.min(50, Number(v('cfgLimite') || 5)))},
     modelo_log: v('cfgModelo') || CFG_PADRAO_LOG, observacao: 'Começa desabilitada. Só atua em chamados listados em protocolos_autorizados. Em modo simulacao nada é gravado no Movidesk.'};
 }
@@ -134,8 +134,8 @@ function cfgRender() {
       <div class="cfg-grid">
         <label class="cfg-chave"><input type="checkbox" id="cfgHabilitada" ${base.habilitada ? 'checked' : ''}> Habilitar a automação</label>
         <label class="cfg-c"><span>Modo</span><select id="cfgModo"><option value="simulacao" ${base.modo !== 'gravar' ? 'selected' : ''}>Simulação (lê e monta o log, não grava)</option><option value="gravar" ${base.modo === 'gravar' ? 'selected' : ''}>Gravar nota no chamado</option></select></label>
-        <label class="cfg-c"><span>Tipo da ação no Movidesk</span><select id="cfgTipo"><option value="2" ${Number(base.tipo_acao) !== 1 ? 'selected' : ''}>2 · nota interna (esperado)</option><option value="1" ${Number(base.tipo_acao) === 1 ? 'selected' : ''}>1 · resposta pública (ATENÇÃO: o cliente vê)</option></select></label>
-        <label class="cfg-c"><span>Id do agente autor (createdBy.id no Movidesk)</span><input type="text" id="cfgAutor" value="${esc(base.autor_id || '')}" placeholder="obrigatório para gravar"></label>
+        <label class="cfg-c"><span>Tipo da ação no Movidesk</span><select id="cfgTipo"><option value="1" ${Number(base.tipo_acao) !== 2 ? 'selected' : ''}>1 · ação interna (o cliente NÃO vê)</option><option value="2" ${Number(base.tipo_acao) === 2 ? 'selected' : ''}>2 · resposta pública (ATENÇÃO: o cliente vê)</option></select></label>
+        <label class="cfg-c"><span>Id do agente autor (opcional; vazio = autor do token)</span><input type="text" id="cfgAutor" value="${esc(base.autor_id || '')}" placeholder="deixe vazio para gravar sem autor"></label>
         <label class="cfg-chave" style="opacity:.55;"><input type="checkbox" id="cfgBusca" disabled> Busca automática (desativada por enquanto)</label>
         <label class="cfg-c"><span>Status procurado</span><input type="text" id="cfgStatus" value="${esc(b.status || 'Novo')}"></label>
         <label class="cfg-c"><span>Limite por execução</span><input type="number" id="cfgLimite" min="1" max="50" value="${esc(b.limite_por_execucao || 5)}"></label>
