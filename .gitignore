@@ -26,3 +26,6 @@ dashboard_suporte.html
 !sensedata_nps.json
 !ciot_mensal.json
 !ultimo_comentario.json
+
+!config_automacao.json
+!automacao_relatorio.json

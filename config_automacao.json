@@ -1,0 +1,14 @@
+{
+  "habilitada": false,
+  "modo": "simulacao",
+  "protocolos_autorizados": [],
+  "autor_id": "",
+  "tipo_acao": 2,
+  "busca_automatica": {
+    "habilitada": false,
+    "status": "Novo",
+    "limite_por_execucao": 5
+  },
+  "modelo_log": "LOG DE ANÁLISE AUTOMÁTICA · {data_hora}\nChamado: {protocolo} · {categoria} · urgência {urgencia}\nSituação: {status} · {etapa} · sem atualização há {parado}\nSLA: {sla}\nAnálise: {analise}\nPróximo passo: {proximo_passo}\n(Log gerado automaticamente pelo Painel de Suporte. Revise antes de agir.)",
+  "observacao": "Começa desabilitada. Só atua em chamados listados em protocolos_autorizados. Em modo simulacao nada é gravado no Movidesk."
+}

@@ -1,0 +1,56 @@
+name: Automação de chamados (log interno)
+
+# Só roda quando alguém dispara manualmente. NUNCA tem agendamento.
+# O que ela faz é definido em config_automacao.json (começa desabilitada e só atua nos protocolos informados).
+on:
+  workflow_dispatch:
+    inputs:
+      gravar:
+        description: "Gravar de verdade no Movidesk? (precisa também de modo=gravar e habilitada=true na configuração)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: automacao-chamados
+  cancel-in-progress: false
+
+jobs:
+  automacao:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: pip install requests
+
+      - name: Executar automacao
+        env:
+          MOVIDESK_TOKEN: ${{ secrets.MOVIDESK_TOKEN }}
+          GRAVAR: ${{ inputs.gravar }}
+        run: python automacao_chamados.py
+
+      - name: Publicar relatorio
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add automacao_relatorio.json
+          if git diff --staged --quiet; then
+            echo "Sem mudanca no relatorio."
+            exit 0
+          fi
+          git commit -m "Relatorio da automacao $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          for i in 1 2 3 4 5; do
+            if git push; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || git rebase --abort
+            sleep $(( (RANDOM % 6) + 2 ))
+          done
+          echo "Nao foi possivel publicar o relatorio."
+          exit 1
