@@ -179,10 +179,28 @@ function cfgValida() {
     ? `<tr><td>${ticketLink(t.id, t.protocol)}</td><td>sim</td><td>${esc(t.status || '')}</td><td>${esc(t.category || '')}</td><td>${esc(t.clientOrg || '–')}</td></tr>`
     : `<tr><td>${esc(p)}</td><td>não encontrado</td><td colspan="3" style="color:var(--text3);">O painel só tem chamados abertos e os resolvidos dos meses carregados. A automação consulta o Movidesk direto, então ainda pode achar.</td></tr>`).join('')}</tbody></table>`;
 }
+window._cfgLogs = {};
 function cfgPrevia() {
   const modelo = document.getElementById('cfgModelo').value, lista = cfgAchados().filter(x => x.t), box = document.getElementById('cfgPrevia');
-  box.innerHTML = lista.length ? lista.map(({t}) => `<div class="panel-sub" style="margin-top:12px;">${esc(t.protocol)} · ${esc((t.subject || '').slice(0, 70))}</div><div class="cfg-log">${AUTO_ANALISES[t.protocol] ? '<div class="panel-sub" style="margin:0 0 6px 0;">Análise feita com o Horus em ' + esc(AUTO_ANALISES[t.protocol].gerado_em || '-') + '</div>' : ''}${esc(cfgMontaLog(modelo, cfgCampos(t)))}</div>`).join('') + '<div class="panel-sub" style="margin-top:8px;">Pré-visualização com os dados do painel. O texto gravado pela automação é montado pelo workflow, com os dados do Movidesk no momento da execução.</div>'
+  window._cfgLogs = {};
+  box.innerHTML = lista.length ? lista.map(({t}) => {
+    const texto = cfgMontaLog(modelo, cfgCampos(t)); window._cfgLogs[t.protocol] = texto;
+    return `<div class="panel-sub" style="margin-top:12px;">${esc(t.protocol)} · ${esc((t.subject || '').slice(0, 70))}</div><div class="cfg-log">${AUTO_ANALISES[t.protocol] ? '<div class="panel-sub" style="margin:0 0 6px 0;">Análise feita com o Horus em ' + esc(AUTO_ANALISES[t.protocol].gerado_em || '-') + '</div>' : ''}${esc(texto)}</div>
+      <div class="cfg-acoes"><button type="button" class="cfg-btn" id="cfgIns_${esc(t.protocol)}" onclick="cfgInserir('${esc(t.protocol)}')">Inserir no Movidesk</button></div><div id="cfgInsMsg_${esc(t.protocol)}" class="panel-sub"></div>`;
+  }).join('') + '<div class="panel-sub" style="margin-top:8px;">Pré-visualização com os dados do painel. O botão só grava se a configuração salva no repositório estiver habilitada, em modo gravar, com autor e com este chamado autorizado.</div>'
     : '<div class="cfg-aviso" style="margin-top:10px;">Nenhum dos protocolos informados está no painel para pré-visualizar.</div>';
+}
+async function cfgInserir(p) {
+  const texto = (window._cfgLogs || {})[p], msg = document.getElementById('cfgInsMsg_' + p), bt = document.getElementById('cfgIns_' + p);
+  if (!texto || !msg) return;
+  if (!confirm('Inserir este log como ação no chamado ' + p + ' no Movidesk?\n\nO texto exibido na pré-visualização será gravado.')) return;
+  bt.disabled = true; msg.style.color = ''; msg.textContent = 'Inserindo no Movidesk...';
+  try {
+    const r = await fetch('/api/inserir', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({protocolo: p, texto: texto})});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.erro) { msg.style.color = 'var(--danger)'; msg.textContent = d.erro || 'Falha ao inserir.'; bt.disabled = false; return; }
+    msg.style.color = ''; msg.textContent = 'Inserido no chamado ' + p + '.' + (d.aviso ? ' ' + d.aviso : '');
+  } catch (e) { msg.style.color = 'var(--danger)'; msg.textContent = 'Falha de conexão com o servidor.'; bt.disabled = false; }
 }
 function cfgGera() { document.getElementById('cfgJson').value = JSON.stringify(cfgForm(), null, 2); }
 function cfgCopia() {
