@@ -82,7 +82,7 @@ function cfgForm() {
   const v = id => { const e = document.getElementById(id); return e ? e.value : ''; }, c = id => { const e = document.getElementById(id); return !!(e && e.checked); };
   const protocolos = Array.from(new Set((v('cfgProtocolos').match(/\d{6,}/g) || [])));
   return {habilitada: c('cfgHabilitada'), modo: v('cfgModo') || 'simulacao', protocolos_autorizados: protocolos, autor_id: v('cfgAutor').trim(), tipo_acao: Number(v('cfgTipo') || 2),
-    busca_automatica: {habilitada: c('cfgBusca'), status: v('cfgStatus').trim() || 'Novo', limite_por_execucao: Math.max(1, Math.min(50, Number(v('cfgLimite') || 5)))},
+    busca_automatica: {habilitada: false, status: v('cfgStatus').trim() || 'Novo', limite_por_execucao: Math.max(1, Math.min(50, Number(v('cfgLimite') || 5)))},
     modelo_log: v('cfgModelo') || CFG_PADRAO_LOG, observacao: 'Começa desabilitada. Só atua em chamados listados em protocolos_autorizados. Em modo simulacao nada é gravado no Movidesk.'};
 }
 function cfgEtapa(t) {
@@ -134,7 +134,7 @@ function cfgRender() {
         <label class="cfg-c"><span>Modo</span><select id="cfgModo"><option value="simulacao" ${base.modo !== 'gravar' ? 'selected' : ''}>Simulação (lê e monta o log, não grava)</option><option value="gravar" ${base.modo === 'gravar' ? 'selected' : ''}>Gravar nota no chamado</option></select></label>
         <label class="cfg-c"><span>Tipo da ação no Movidesk</span><select id="cfgTipo"><option value="2" ${Number(base.tipo_acao) !== 1 ? 'selected' : ''}>2 · nota interna (esperado)</option><option value="1" ${Number(base.tipo_acao) === 1 ? 'selected' : ''}>1 · resposta pública (ATENÇÃO: o cliente vê)</option></select></label>
         <label class="cfg-c"><span>Id do agente autor (createdBy.id no Movidesk)</span><input type="text" id="cfgAutor" value="${esc(base.autor_id || '')}" placeholder="obrigatório para gravar"></label>
-        <label class="cfg-chave"><input type="checkbox" id="cfgBusca" ${b.habilitada ? 'checked' : ''}> Busca automática de chamados (só lista candidatos)</label>
+        <label class="cfg-chave" style="opacity:.55;"><input type="checkbox" id="cfgBusca" disabled> Busca automática (desativada por enquanto)</label>
         <label class="cfg-c"><span>Status procurado</span><input type="text" id="cfgStatus" value="${esc(b.status || 'Novo')}"></label>
         <label class="cfg-c"><span>Limite por execução</span><input type="number" id="cfgLimite" min="1" max="50" value="${esc(b.limite_por_execucao || 5)}"></label>
       </div></div>
@@ -156,6 +156,8 @@ function cfgRender() {
         <li>Em Abrir o workflow, clique em Run workflow. Deixe <b>gravar desligado</b> para só simular. Ligue só quando o modo e o autor estiverem certos.</li>
         <li>Depois da execução, o relatório aparece abaixo na próxima atualização do painel.</li></ol></div>
 
+    <div class="panel" style="margin-top:18px;"><h2>Últimas execuções da automação</h2>
+      ${(rel.historico || []).length ? `<table><thead><tr><th>Quando</th><th>Modo</th><th>Chamados buscados</th></tr></thead><tbody>${rel.historico.map(h => `<tr><td>${esc(h.executado_em || '-')}</td><td>${h.habilitada ? esc(h.modo || '-') : 'desabilitada'}</td><td>${(h.chamados || []).length ? h.chamados.map(c => esc(c.protocolo) + ' <small style="color:var(--text3);">(' + esc(c.resultado || '-') + ')</small>').join(', ') : 'nenhum'}</td></tr>`).join('')}</tbody></table>` : '<div class="panel-sub">Ainda não houve execução.</div>'}</div>
     <div class="panel" style="margin-top:18px;"><h2>Último relatório da automação</h2>
       ${rel.executado_em ? `<div class="panel-sub">Executado em ${esc(rel.executado_em)} · automação ${rel.habilitada ? 'habilitada' : 'desabilitada'} · modo ${esc(rel.modo || '-')}</div>
         ${(rel.avisos || []).map(a => `<div class="cfg-aviso">${esc(a)}</div>`).join('')}
@@ -209,8 +211,9 @@ def _json(nome, padrao):
 
 def aplicar_v14(html):
     dados = ''  # a configuracao NAO vai mais dentro da pagina: so /api/config entrega, com senha
-    painel = ('<div class="tab-panel" id="tabConfig"><div class="panel-sub" style="margin-bottom:12px;">Automação de análise e log nos chamados. '
-              'Começa desabilitada e só atua nos chamados que você informar.</div><div id="cfgCorpo"></div></div>\n\n  ')
-    botao = '<button class="tab-btn" id="tabBtnConfig" style="display:none;" onclick="showTab(\'config\')">Configuração</button>\n    '
-    html = html.replace('<button class="tab-btn" id="tabBtnFluxo"', botao + '<button class="tab-btn" id="tabBtnFluxo"', 1)
+    painel = ('<div class="tab-panel" id="tabConfig"><div class="panel-sub" style="margin-bottom:12px;">Acompanhe a atualização do painel e configure a automação de log nos chamados. '
+              'A automação começa desabilitada e só atua nos chamados que você informar.</div><div id="cfgCorpo"></div></div>\n\n  ')
+    botao = '<button class="tab-btn" id="tabBtnConfig" style="display:none;" onclick="showTab(\'config\')">Configuração e andamento</button>\n    '
+    marca = '<button class="tab-btn" id="tabBtnFluxo" onclick="showTab(\'fluxo\')">Fluxograma</button>'
+    html = html.replace(marca, marca + '\n    ' + botao.strip(), 1)
     return html.replace('<div class="tab-panel" id="tabFluxo">', dados + painel + '<div class="tab-panel" id="tabFluxo">', 1)

@@ -169,6 +169,19 @@ def conferir(ticket_id, texto, tipo):
 
 
 # ---------------------------------------------------------------- execucao
+BUSCA_LIBERADA = False  # a busca automatica so' sera liberada quando o usuario pedir
+
+
+def historico_com(rel):
+    try:
+        antigo = json.load(open(REL_PATH, encoding="utf-8")).get("historico") or []
+    except Exception:
+        antigo = []
+    atual = {"executado_em": rel.get("executado_em"), "modo": rel.get("modo"), "habilitada": rel.get("habilitada"),
+             "chamados": [{"protocolo": r.get("protocolo"), "resultado": r.get("resultado")} for r in rel.get("resultados", [])]}
+    return ([atual] + antigo)[:30]
+
+
 def main():
     cfg = json.load(open(CFG_PATH, encoding="utf-8"))
     gravar_pedido = os.environ.get("GRAVAR", "false").strip().lower() == "true"
@@ -208,7 +221,9 @@ def main():
             item.update(resultado="erro", erro=mascara(e))
         rel["resultados"].append(item)
     busca = cfg.get("busca_automatica") or {}
-    if busca.get("habilitada"):
+    if busca.get("habilitada") and not BUSCA_LIBERADA:
+        rel["avisos"].append("A busca automática está desativada por enquanto: nenhum chamado foi procurado, só os protocolos informados foram lidos.")
+    elif busca.get("habilitada"):
         try:
             r = chamar("GET", "/tickets", {"$select": "id,protocol,subject,category,urgency,status,createdDate", "$filter": "status eq '%s'" % str(busca.get("status", "Novo")).replace("'", ""),
                                            "$orderby": "id asc", "$top": str(int(busca.get("limite_por_execucao", 5)))})
@@ -220,6 +235,7 @@ def main():
 
 
 def salvar(rel):
+    rel["historico"] = historico_com(rel)
     json.dump(rel, open(REL_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     print(json.dumps({k: v for k, v in rel.items() if k != "resultados"}, ensure_ascii=False))
     for it in rel["resultados"]:
