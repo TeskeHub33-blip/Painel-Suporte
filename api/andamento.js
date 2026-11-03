@@ -26,12 +26,18 @@ module.exports = async (req, res) => {
       const job = (j.jobs || [])[0];
       if (job) etapas = (job.steps || []).map(s => ({nome: s.name, status: s.status, conclusao: s.conclusion, inicio: s.started_at, fim: s.completed_at}));
     }
-    let automacao = [];
+    let automacao = [], automacaoEtapas = [];
     try {
       const da = await gh('/workflows/automacao_chamados.yml/runs?per_page=3');
       automacao = (da.workflow_runs || []).map(resumo);
+      const rodandoA = automacao.find(r => r.status !== 'completed');
+      if (rodandoA) {
+        const ja = await gh(`/runs/${rodandoA.id}/jobs`);
+        const jobA = (ja.jobs || [])[0];
+        if (jobA) automacaoEtapas = (jobA.steps || []).map(x => ({nome: x.name, status: x.status, conclusao: x.conclusion, inicio: x.started_at, fim: x.completed_at}));
+      }
     } catch (e) { /* sem a automacao nao quebra o andamento */ }
-    res.status(200).json({agora: new Date().toISOString(), emAndamento: emAndamento || null, etapas, historico: runs, automacao, comToken: !!process.env.GITHUB_TOKEN});
+    res.status(200).json({agora: new Date().toISOString(), emAndamento: emAndamento || null, etapas, historico: runs, automacao, automacaoEtapas, comToken: !!process.env.GITHUB_TOKEN});
   } catch (e) {
     res.status(200).json({erro: e.message, limite: e.status === 403 || e.status === 429});
   }

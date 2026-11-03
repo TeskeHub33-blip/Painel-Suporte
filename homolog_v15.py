@@ -40,6 +40,13 @@ function andSelo(r) {
   if (r.status !== 'completed') return '<span class="and-selo rodando"><i></i>' + (r.status === 'queued' ? 'Na fila' : 'Atualizando agora') + '</span>';
   return r.conclusao === 'success' ? '<span class="and-selo ok"><i></i>Concluída</span>' : r.conclusao === 'cancelled' ? '<span class="and-selo"><i></i>Cancelada</span>' : '<span class="and-selo erro"><i></i>Falhou</span>';
 }
+function andLista(etapas, agora) {
+  return etapas.map(e => {
+    const cls = e.status === 'completed' ? (e.conclusao === 'failure' ? 'falhou' : 'feito') : e.status === 'in_progress' ? 'atual' : 'espera';
+    const t = e.inicio ? andDur((e.fim ? new Date(e.fim).getTime() : agora) - new Date(e.inicio).getTime()) : '';
+    return `<li class="${cls}"><span class="pt"></span>${esc(e.nome)}<span class="tp">${t}</span></li>`;
+  }).join('');
+}
 function andRender(d) {
   const root = document.getElementById('andCorpo'); if (!root) return;
   if (!d || d.erro) {
@@ -49,15 +56,14 @@ function andRender(d) {
   const etapas = (d.etapas || []).filter(e => !/^(Set up job|Post |Complete job)/.test(e.nome));
   const feitas = etapas.filter(e => e.status === 'completed').length, pct = rodando && etapas.length ? Math.round(feitas * 100 / etapas.length) : (ult ? 100 : 0);
   const dec = rodando ? agora - new Date(rodando.inicio).getTime() : (ult ? new Date(ult.atualizado) - new Date(ult.inicio) : null);
-  const lista = etapas.map(e => {
-    const cls = e.status === 'completed' ? (e.conclusao === 'failure' ? 'falhou' : 'feito') : e.status === 'in_progress' ? 'atual' : 'espera';
-    const t = e.inicio ? andDur((e.fim ? new Date(e.fim).getTime() : agora) - new Date(e.inicio).getTime()) : '';
-    return `<li class="${cls}"><span class="pt"></span>${esc(e.nome)}<span class="tp">${t}</span></li>`;
-  }).join('');
+  const lista = andLista(etapas, agora);
   const hist = d.historico.map(r => `<tr><td>#${r.numero}</td><td>${andHora(r.inicio)}</td><td>${r.status === 'completed' ? esc({success: 'Concluída', failure: 'Falhou', cancelled: 'Cancelada'}[r.conclusao] || r.conclusao) : 'Em andamento'}</td><td>${r.status === 'completed' ? andDur(new Date(r.atualizado) - new Date(r.inicio)) : andDur(agora - new Date(r.inicio).getTime())}</td><td>${r.evento === 'schedule' ? 'Automática' : 'Manual'}</td></tr>`).join('');
   const aut = (d.automacao || [])[0], protos = (typeof AUTO_CFG === 'object' && AUTO_CFG.protocolos_autorizados) || [], logado = !!(typeof AUTO_CFG === 'object' && Object.keys(AUTO_CFG).length);
+  const autRod = aut && aut.status !== 'completed', etA = (d.automacaoEtapas || []).filter(e => !/^(Set up job|Post |Complete job)/.test(e.nome)), feitasA = etA.filter(e => e.status === 'completed').length, pctA = etA.length ? Math.round(feitasA * 100 / etA.length) : 5;
+  const barraAut = autRod ? `<div class="and-barra"><div style="width:${pctA}%"></div></div><div class="and-nota">Disparo ${aut.evento === 'schedule' ? 'automático' : 'manual'} · rodando há <b>${andDur(agora - new Date(aut.inicio).getTime())}</b> · ${feitasA} de ${etA.length || '?'} etapas. Cada chamado leva alguns segundos por causa do limite de consultas do Movidesk.</div><ul class="and-etapas">${andLista(etA, agora)}</ul>` : '';
   const blocoAut = `<div class="panel" style="margin-top:18px;"><h2>Automação de chamados</h2><div class="and-topo">${andSelo(aut)}
       <span style="font-size:13px; color:var(--text-dim);">${aut ? (aut.status === 'completed' ? 'Última execução em ' + andHora(aut.atualizado) + ' (' + (aut.evento === 'schedule' ? 'automática' : 'manual') + ')' : 'Executando desde ' + andHora(aut.inicio)) : 'Nenhuma execução ainda. A automação só roda quando você dispara.'}</span></div>
+      ${barraAut}
       ${logado ? (protos.length ? `<div class="and-nota" style="font-size:13px; color:var(--text);">Chamados informados para atualização: <b>${protos.map(esc).join(', ')}</b> · automação ${AUTO_CFG.habilitada ? 'habilitada' : 'desabilitada'} · modo ${esc(AUTO_CFG.modo || 'simulacao')}</div>` : '<div class="and-nota">Nenhum chamado informado na configuração.</div>') : '<div class="and-nota">Carregando a configuração...</div>'}
       ${logado && (AUTO_REL.resultados || []).length ? `<table><thead><tr><th>Chamado</th><th>Resultado</th><th>Assunto</th></tr></thead><tbody>${AUTO_REL.resultados.map(r => `<tr><td>${esc(r.protocolo)}</td><td>${esc(r.resultado)}</td><td>${esc(r.assunto || r.erro || '')}</td></tr>`).join('')}</tbody></table>` : ''}</div>`;
   root.innerHTML = `
