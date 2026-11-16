@@ -32,3 +32,4 @@ dashboard_suporte.html
 !api/*.js
 
 !analises_horus.json
+!escala.json

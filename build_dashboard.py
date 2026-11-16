@@ -2271,23 +2271,7 @@ document.getElementById('kpiRow2').innerHTML =
   kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Chamados alto impacto', 'cargaParada', hintAltoImpacto) +
   kpiTile(classificacaoIncorreta.length === 0 ? 'ok' : 'warn', classificacaoIncorreta.length, 'Possivel classificacao incorreta', 'classificacaoIncorreta');
 
-document.getElementById('gridChatsLive').innerHTML = `
-  <div class="panel">
-    <h2>💬 Chats em atendimento — quem e ha quanto tempo${{exportButtonHtml("exportLiveList(chatsEmAtendimentoLive, 'chats_em_atendimento.txt')")}}</h2>
-    <div class="panel-sub">${{chatsEmAtendimentoLive.length}} chamados de origem chat em atendimento agora (tempo desde a ultima atualizacao) · aproximacao — ver observacao abaixo</div>
-    <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Tempo</th></tr></thead>
-      <tbody>${{tableHtml(chatsEmAtendimentoLive.sort((a,b)=>(b._hoursSinceUpdate||0)-(a._hoursSinceUpdate||0)), 'update', 20)}}</tbody></table>
-  </div>
-  <div class="panel">
-    <h2>💬 Chats aguardando atendimento${{exportButtonHtml("exportLiveList(chatsAguardandoLive, 'chats_aguardando.txt')")}}</h2>
-    <div class="panel-sub">${{chatsAguardandoLive.length}} chamados de origem chat aguardando (status Novo) · aproximacao — ver observacao abaixo</div>
-    <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Tempo</th></tr></thead>
-      <tbody>${{tableHtml(chatsAguardandoLive.sort((a,b)=>(b._hoursOpen||0)-(a._hoursOpen||0)), 'open', 20)}}</tbody></table>
-  </div>
-  <div class="empty-msg" style="grid-column: 1 / -1; margin-top:4px; line-height:1.5;">
-    ⚠️ Limitacao conhecida: conversas de chat/WhatsApp (bot NLU) so aparecem aqui depois de viradas em chamado formal no Movidesk — enquanto o bot ainda esta atendendo, a conversa nao existe como Ticket na API e por isso nao aparece nesta lista, mesmo estando ativa na tela "Conversas em atendimento" do Movidesk. Alem disso, os dados sao atualizados a cada ~15 minutos — um chat que ja foi resolvido pode continuar aparecendo aqui como "em atendimento" ate o proximo ciclo.
-  </div>
-`;
+document.getElementById('gridChatsLive').innerHTML = (typeof renderEscalaAgora === 'function') ? renderEscalaAgora() : '';
 
 const metaPctPrimeira = metaMelhoria10(media3Meses.pctPrimeira, false);
 const metaPctSla = metaMelhoria10(media3Meses.pctSla, false);

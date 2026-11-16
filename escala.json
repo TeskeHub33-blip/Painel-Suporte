@@ -1,0 +1,824 @@
+{
+ "gerado_em": "16/11/2026 16:54 (Brasília)",
+ "fonte": "Planilhas Atividades_Suporte_EmiteAi (escala) e Programação de Alocação de Sobreaviso (SharePoint, time Operações/Suporte)",
+ "util": {
+  "2026-11-16": {
+   "novos": [
+    "João M.",
+    "João M.",
+    "Alexander J.",
+    "Alexander J.",
+    "Alexander J.",
+    "Alexander J.",
+    "Alexander J.",
+    "—",
+    "Alexander J.",
+    "Alexander J.",
+    "Alexander J.",
+    "—",
+    "Bruna R.",
+    "Bruna R.",
+    "Bruna R.",
+    "Bruna R.",
+    "Bruna R.",
+    "Alife C.",
+    "Alife C.",
+    "Bruna R.",
+    "Alife C.",
+    "Alife C.",
+    "Alife C.",
+    "Alife C."
+   ],
+   "priorizados": [
+    "—",
+    "—",
+    "—",
+    "Vitor H.",
+    "André L.",
+    "André L.",
+    "André L.",
+    "André L.",
+    "André L.",
+    "Vitor H.",
+    "Vitor H.",
+    "Vitor H.",
+    "—",
+    "—",
+    "—",
+    "—",
+    "—",
+    "Alife C.",
+    "Alife C.",
+    "—",
+    "Alife C.",
+    "Alife C.",
+    "Alife C.",
+    "Alife C."
+   ]
+  }
+ },
+ "sobreaviso": {
+  "2026-10-31": [
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Guilherme Meyer"
+   ],
+   [
+    "Guilherme Meyer"
+   ],
+   [
+    "Guilherme Meyer"
+   ],
+   [
+    "Guilherme Meyer"
+   ],
+   [],
+   [],
+   [],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "Gabriel"
+   ],
+   [
+    "Gabriel"
+   ],
+   [
+    "Gabriel"
+   ],
+   [
+    "Gabriel"
+   ],
+   [
+    "Alife"
+   ],
+   [
+    "Alife"
+   ],
+   [
+    "Alife"
+   ]
+  ],
+  "2026-11-01": [
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ]
+  ],
+  "2026-11-02": [
+   [
+    "Maria Paula",
+    "Alife"
+   ],
+   [
+    "Maria Paula",
+    "Alife"
+   ],
+   [
+    "Maria Paula",
+    "Alife"
+   ],
+   [
+    "Maria Paula",
+    "Alife"
+   ],
+   [
+    "Maria Paula",
+    "Alife"
+   ],
+   [
+    "Maria Paula",
+    "Alife"
+   ],
+   [
+    "Laura",
+    "Alife"
+   ],
+   [
+    "Laura",
+    "Alife"
+   ],
+   [
+    "Laura",
+    "Alexander Junior"
+   ],
+   [
+    "Laura",
+    "Alexander Junior"
+   ],
+   [
+    "João",
+    "Alexander Junior"
+   ],
+   [
+    "João",
+    "Alexander Junior"
+   ],
+   [
+    "João",
+    "Alexander Junior"
+   ],
+   [
+    "João",
+    "Alexander Junior"
+   ],
+   [
+    "João",
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior",
+    "Bruna"
+   ],
+   [
+    "Alexander Junior",
+    "Bruna"
+   ],
+   [
+    "Alexander Junior",
+    "Bruna"
+   ],
+   [
+    "Alexander Junior",
+    "Bruna"
+   ],
+   [
+    "Alexander Junior",
+    "Bruna"
+   ],
+   [
+    "Alexander Junior",
+    "Alife"
+   ]
+  ],
+  "2026-11-07": [
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [],
+   [],
+   [],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Bruna"
+   ]
+  ],
+  "2026-11-08": [
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ]
+  ],
+  "2026-11-14": [
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Bruna"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Alife"
+   ],
+   [
+    "Alife"
+   ]
+  ],
+  "2026-11-15": [
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "Guilherme Meyer"
+   ],
+   [
+    "Guilherme Meyer"
+   ],
+   [
+    "Guilherme Meyer"
+   ],
+   [
+    "Guilherme Meyer"
+   ],
+   [
+    "Guilherme Meyer"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ]
+  ],
+  "2026-11-20": [
+   [
+    "Alexander Junior",
+    "Alife"
+   ],
+   [
+    "Alexander Junior",
+    "Alife"
+   ],
+   [
+    "Alexander Junior",
+    "Alife"
+   ],
+   [
+    "Alexander Junior",
+    "Alife"
+   ],
+   [
+    "Alexander Junior",
+    "Alife"
+   ],
+   [
+    "Alexander Junior",
+    "Alife"
+   ],
+   [
+    "Alexander Junior",
+    "Alife"
+   ],
+   [
+    "João",
+    "Alife"
+   ],
+   [
+    "João",
+    "Maria Paula"
+   ],
+   [
+    "João",
+    "Maria Paula"
+   ],
+   [
+    "João",
+    "Maria Paula"
+   ],
+   [
+    "João",
+    "Maria Paula"
+   ],
+   [
+    "João",
+    "Maria Paula"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ],
+   [
+    "Laura"
+   ]
+  ],
+  "2026-11-21": [
+   [
+    "Alife"
+   ],
+   [
+    "Alife"
+   ],
+   [
+    "Alife"
+   ],
+   [
+    "Alife"
+   ],
+   [
+    "Alife"
+   ],
+   [
+    "Alife"
+   ],
+   [
+    "Alife"
+   ],
+   [
+    "Alife"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Monique"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ]
+  ],
+  "2026-11-22": [
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Maria Paula"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "Alexander Junior"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ],
+   [
+    "João"
+   ]
+  ]
+ }
+}
