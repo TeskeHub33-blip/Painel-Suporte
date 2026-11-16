@@ -90,6 +90,7 @@ function hfContaTudo(sel) { document.querySelectorAll(sel + ' .hf-v').forEach(hf
 const HML_ABAS = {live: 'Ao Vivo', hist: 'Histórico', clientes: 'Clientes', oneOnOne: 'One-on-One', gamificacao: 'Gamificação', reuniaoMensal: 'Reunião Mensal', fluxo: 'Fluxograma'};
 window._hmlAba = 'live'; window._hmlSub = 'reuniao'; window._glTicket = null;
 function hmlBarraVisivel() {
+  return false;   // a busca de chamados existe so' no Fluxograma e nos fluxos de Melhorias e Bugs
   const a = window._hmlAba;
   if (a === 'fluxo' || a === 'config' || a === 'andamento' || (a === 'reuniaoMensal' && (window._hmlSub === 'melhorias' || window._hmlSub === 'bugs'))) return false;
   if (a === 'oneOnOne' || a === 'gamificacao' || a === 'reuniaoMensal') { try { return sessionStorage.getItem(a + 'Unlocked') === '1'; } catch (e) { return false; } }   // abas com senha: so' depois de liberadas
