@@ -32,7 +32,20 @@ html[data-tema="dark"] { --sb-bg: #15152B; }
 .tabs .sb-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--sb-muted); padding: 16px 12px 6px 12px; }
 .tabs .sb-label:first-child { padding-top: 4px; }
 
+.header .hdr-menu { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 8px; cursor: pointer; color: var(--text-dim); padding: 0; }
+.header .hdr-menu:hover { background: var(--surface2); color: var(--text); }
+.header .hdr-menu svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; }
+.dashboard-root { transition: padding-left .22s cubic-bezier(0.4,0,0.2,1); }
+html.sb-min .dashboard-root { padding-left: 91px; }
+html.sb-min .tabs { width: 65px; padding-left: 10px; padding-right: 10px; }
+html.sb-min .tabs .tab-btn { font-size: 0; gap: 0; justify-content: center; padding: 11px 0; }
+html.sb-min .tabs .tab-btn.active::before { left: -10px; }
+html.sb-min .tabs .sb-label { height: 1px; padding: 0; margin: 8px 6px; overflow: hidden; background: rgba(255,255,255,.12); font-size: 0; }
+html.sb-min .tabs .sb-label:first-child { display: none; }
+
 @media (max-width: 1000px) {
+  html.sb-min .dashboard-root { padding-left: 16px; }
+  html.sb-min .tabs { display: none; }
   .dashboard-root { padding: 90px 16px 20px 16px; }
   .tabs { position: static; width: auto; flex-direction: row; flex-wrap: wrap; border-radius: 8px; margin-bottom: 14px; padding: 8px; }
   .tabs .tab-btn { width: auto; }
@@ -67,6 +80,11 @@ function v18Menu() {
   secao('tabBtnLive', 'Operação'); secao('tabBtnOneOnOne', 'Liderança'); secao('tabBtnFluxo', 'Análise');
   if (typeof CFG_VERCEL !== 'undefined' && CFG_VERCEL) secao('tabBtnConfig', 'Sistema');
 }
+function v18AlternaMenu() {
+  const min = document.documentElement.classList.toggle('sb-min');
+  try { localStorage.setItem('hmlMenuMin', min ? '1' : '0'); } catch (e) {}
+  const b = document.getElementById('hdrMenu'); if (b) b.setAttribute('aria-expanded', min ? 'false' : 'true');
+}
 function v18Crumb() {
   const a = document.querySelector('.tabs .tab-btn.active'), el = document.getElementById('hdrPag'); if (!a || !el) return;
   el.textContent = (a.textContent || '').trim();
@@ -75,6 +93,8 @@ function v18Crumb() {
   const _s3 = showTab;
   showTab = function(name, skip) { _s3(name, skip); v18Crumb(); };
   v18Menu(); v18Crumb();
+  document.querySelectorAll('.tabs .tab-btn').forEach(b => { if (!b.title) b.title = (b.textContent || '').trim(); });   // dica ao passar o mouse com o menu recolhido
+  try { if (localStorage.getItem('hmlMenuMin') === '1') document.documentElement.classList.add('sb-min'); } catch (e) {}
 }
 """
 
@@ -91,6 +111,6 @@ def aplicar_v18(html):
     if not m:
         return html
     badge = re.search(r'<span class="hml-badge">[^<]*</span>', m.group(1))
-    novo = (f'<div class="header-left">{LOGO}<span class="marca">emiteaí</span>{badge.group(0) if badge else ""}'
+    novo = (f'<div class="header-left"><button type="button" class="hdr-menu" id="hdrMenu" onclick="v18AlternaMenu()" aria-label="Mostrar ou esconder o menu lateral" aria-expanded="true" title="Mostrar ou esconder o menu"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>{LOGO}<span class="marca">emiteaí</span>{badge.group(0) if badge else ""}'
             '<span class="hdr-sep"></span><nav class="hdr-crumb" aria-label="Local">Painel Diário<i>/</i><b id="hdrPag">Ao Vivo</b></nav>\n    </div>\n    <div class="header-right">')
     return html[:m.start()] + novo + html[m.end():]
