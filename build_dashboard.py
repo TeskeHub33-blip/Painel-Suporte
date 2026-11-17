@@ -151,6 +151,16 @@ def extract_motivo_priorizacao(custom_field_values):
                 return '; '.join(nomes)
     return None
 
+# Campo personalizado "Task Devops": numero da task do Azure DevOps associada ao chamado (ex.: 23492).
+TASK_DEVOPS_FIELD_ID = 152248
+def extract_task_devops(custom_field_values):
+    for cf in (custom_field_values or []):
+        if cf.get('customFieldId') == TASK_DEVOPS_FIELD_ID:
+            v = str(cf.get('value') or '').strip()
+            if v:
+                return v[:40]
+    return None
+
 MESES_PT = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 def month_label(dt):
     return f"{MESES_PT[dt.month-1]}/{dt.year}"
@@ -188,6 +198,7 @@ for t in raw_tickets:
         'clientOrg': extract_org(t.get('clients')),
         'statusHistories': clean_status_histories(t.get('statusHistories')),
         'motivoPriorizacao': extract_motivo_priorizacao(t.get('customFieldValues')),
+        'taskDevops': extract_task_devops(t.get('customFieldValues')),
         'interacoesCliente': t.get('interacoesCliente'),
         'lastComment': ({'description': redact_secrets((t['lastComment'].get('description') or '')[:300]),
                          'createdDate': t['lastComment'].get('createdDate'), 'type': t['lastComment'].get('type')}
@@ -1035,9 +1046,9 @@ const FILTERS = {{
   naoAtualizadosHoje: t => (t.status === 'Em atendimento' || t.status === 'Aguardando Cliente' || t.status === N2_HANDOFF_STATUS) && !t._updatedToday,
   cargaParada: t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && !!t.motivoPriorizacao && t.motivoPriorizacao.split('; ').some(m => m !== 'Whatsapp'),
   // Realizar reuniao com cliente: em atendimento (N1 ou N2) com MAIS de 5 interacoes publicas com o cliente e ainda sem solucao.
-  // Fora do card: chamado com task associada (passou pela fila de desenvolvimento ou tem log do devops) e chamados do cliente Shopee.
+  // Fora do card: chamado com task associada (campo "Task Devops" preenchido, passou pela fila de desenvolvimento ou tem log do devops) e chamados do cliente Shopee.
   reuniaoCliente: t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && typeof t.interacoesCliente === 'number' && t.interacoesCliente > 5
-    && !(t.statusHistories || []).some(h => isDevQueueStatus(h.status)) && !devopsStatusLogs(t).length && !/shopee/i.test(t.clientOrg || ''),
+    && !t.taskDevops && !(t.statusHistories || []).some(h => isDevQueueStatus(h.status)) && !devopsStatusLogs(t).length && !/shopee/i.test(t.clientOrg || ''),
   classificacaoIncorreta: t => t._classificacaoIncorreta,
   chatsEmAtendimento: t => t.status === 'Em atendimento' && (t.origin === 24 || !!t.chatGroup),
   chatsAguardando: t => t.status === 'Novo' && (t.origin === 24 || !!t.chatGroup),
