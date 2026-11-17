@@ -1,90 +1,139 @@
 # -*- coding: utf-8 -*-
-"""Monta escala.json com o mes inteiro a partir da aba "Distribuição de Atividades".
-Fonte 1 (atual): texto lido do SharePoint (o conector corta as ultimas linhas da aba).
-Fonte 2 (complemento): copia local da planilha, so' para as linhas que o SharePoint nao devolveu."""
+"""Atualiza escala.json (quadros de escala do Ao Vivo) SOMENTE com dados lidos do SharePoint.
+
+Uso:  python -I gera_escala.py <distribuicao.txt> [<dashboard.txt>]
+  distribuicao.txt = texto da aba "Distribuição de Atividades" (pagina 4) da planilha Atividades_Suporte_EmiteAi,
+                     como o conector Microsoft 365 devolve. O conector corta o fim da aba (por volta do dia 21).
+  dashboard.txt    = (opcional) texto da aba "Dashboard" (pagina 1). Serve para o dia de HOJE quando ele esta
+                     alem do corte: traz so' o Principal de cada atividade, hora a hora. So' e' usado se a data
+                     selecionada na planilha for a de hoje (Brasilia).
+Dias/horas que o SharePoint nao devolveu NAO sao inventados: ficam sem escala publicada.
+Grava o arquivo apenas se o conteudo mudou. Imprime MUDOU, SEM MUDANCA ou ERRO."""
 import datetime
 import json
 import os
 import re
 import sys
 
-import openpyxl
-
-SP_TXT = sys.argv[1]
-LOCAL = r'C:\Users\WellingtonErvinoTesk\Downloads\Atividades_Suporte_EmiteAi_4.xlsx'
-OUT = r'C:\Users\WellingtonErvinoTesk\Documents\Claude\manual_suporte\escala.json'
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'escala.json')
 ATIV = ['Guias Shopee', 'Chat', 'Whatsapp', '55PBX', 'Chamados Novos', 'Chamados priorizados',
         'N2 Tasks (abertura, validação e impedimento)', 'N2 Apoio']
+BRT = datetime.timezone(datetime.timedelta(hours=-3))
+
+
+def idx(hora):
+    """A aba usa a DATA DO CALENDARIO em todas as linhas (00h..23h): a posicao e a propria hora."""
+    return hora
 
 
 def celulas(vals):
-    """24 valores (8 atividades x P,2a,3a) -> lista de 8 strings 'P|2a|3a' (vazio = ninguem; 'fora' = fora da janela)."""
+    """24 valores (8 atividades x P,2a,3a) -> 8 strings 'P|2a|3a' (vazio = ninguem; 'fora' = fora da janela)."""
     v = [(str(x).strip() if x is not None else '') for x in vals]
     v += [''] * (24 - len(v))
     return ['|'.join(v[i * 3:i * 3 + 3]).rstrip('|') for i in range(8)]
 
 
-linhas = {}   # (data ISO, hora) -> [8 strings]
-fonte = {}
-# base: o que ja esta salvo (dias que o SharePoint nao devolver continuam como estavam)
+def le_distribuicao(caminho):
+    linhas = {}
+    for l in open(caminho, encoding='utf-8').read().split('\n'):
+        m = re.match(r'(\d{2})/(\d{2})/(\d{4})\t[^\t]*\t(\d{2}):00\t?(.*)$', l)
+        if m:
+            linhas[('%s-%s-%s' % (m.group(3), m.group(2), m.group(1)), int(m.group(4)))] = celulas(m.group(5).split('\t'))
+    return linhas
+
+
+def le_dashboard(caminho):
+    """-> (data ISO, {indice da atividade: [24 principais na ordem 06h..05h]}) ou (None, {})"""
+    L = open(caminho, encoding='utf-8').read().split('\n')
+    data = None
+    grade = {}
+    for i, l in enumerate(L):
+        if l.startswith('Formulas'):
+            break
+        m = re.match(r'Selecione a data:\t(\d{2})/(\d{2})/(\d{4})', l)
+        if m:
+            data = '%s-%s-%s' % (m.group(3), m.group(2), m.group(1))
+        if l.startswith('Atividade\t06h\t07h'):
+            for k in L[i + 1:i + 9]:
+                c = k.split('\t')
+                nome = c[0].strip()
+                achou = [a for a, n in enumerate(ATIV) if n == nome or n.split(' (')[0] == nome.split(' (')[0]]
+                if achou and len(c) >= 25:
+                    grade[achou[0]] = [('' if x.strip() in ('—', '-') else x.strip()) for x in c[1:25]]
+            break
+    return data, grade
+
+
+if len(sys.argv) < 2:
+    print('ERRO: informe o arquivo de texto da aba Distribuição de Atividades')
+    sys.exit(2)
+sp = le_distribuicao(sys.argv[1])
+if not sp:
+    print('ERRO: nenhuma linha lida do SharePoint; nada foi alterado')
+    sys.exit(2)
+
 try:
-    _ant = json.load(open(OUT, encoding='utf-8'))
+    ant = json.load(open(OUT, encoding='utf-8'))
 except Exception:
-    _ant = {}
-for _d, _horas in (_ant.get('dias') or {}).items():
-    for _i, _v in enumerate(_horas):
-        linhas[(_d, (_i + 6) % 24)] = _v
-        fonte[(_d, (_i + 6) % 24)] = 'salvo'
-n_local = len(linhas)
-if not _ant.get('dias') and os.path.exists(LOCAL):      # primeira carga: completa o fim do mes com a copia local
-    wb = openpyxl.load_workbook(LOCAL, data_only=True)
-    for r in wb.worksheets[3].iter_rows(min_row=3, values_only=True):
-        if isinstance(r[0], datetime.datetime) and isinstance(r[2], datetime.time):
-            linhas[(r[0].date().isoformat(), r[2].hour)] = celulas(r[3:27])
-            fonte[(r[0].date().isoformat(), r[2].hour)] = 'local'
-    n_local = len(linhas)
+    ant = {}
 
-dif = 0
-n_sp = 0
-for l in open(SP_TXT, encoding='utf-8').read().split('\n'):
-    m = re.match(r'(\d{2})/(\d{2})/(\d{4})\t[^\t]*\t(\d{2}):00\t?(.*)$', l)
-    if not m:
-        continue
-    k = ('%s-%s-%s' % (m.group(3), m.group(2), m.group(1)), int(m.group(4)))
-    novo = celulas(m.group(5).split('\t'))
-    if k in linhas and linhas[k] != novo:
-        dif += 1
-    linhas[k] = novo
-    fonte[k] = 'sharepoint'
-    n_sp += 1
-
+corte_d, corte_h = max(sp, key=lambda k: (k[0], idx(k[1])))      # ultima data/hora devolvida pelo conector
 dias = {}
-for (d, h), v in linhas.items():
-    dias.setdefault(d, [None] * 24)[(h - 6) % 24] = v      # ordem do dia operacional: 06h..23h, 00h..05h
-for d in dias:
-    dias[d] = [x or [''] * 8 for x in dias[d]]
+for (d, h), v in sp.items():
+    dias.setdefault(d, [None] * 24)[idx(h)] = v
 
-try:
-    antigo = json.load(open(OUT, encoding='utf-8'))
-except Exception:
-    antigo = {}
-agora = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-3))).strftime('%d/%m/%Y %H:%M')
-ultimo_sp = max(k for k, f in fonte.items() if f == 'sharepoint')
+# dias vindos do Dashboard em execucoes anteriores continuam valendo (sao do SharePoint), se estiverem alem do corte
+so_principal = []
+for d in (ant.get('so_principal') or []):
+    velho = (ant.get('dias') or {}).get(d)
+    if not velho or d < corte_d:
+        continue
+    lst = dias.setdefault(d, [None] * 24)
+    usou = False
+    for h in range(24):
+        if lst[h] is None and velho[h] is not None:
+            lst[h] = velho[h]
+            usou = True
+    if usou:
+        so_principal.append(d)
+
+hoje = datetime.datetime.now(BRT).date().isoformat()
+aviso = ''
+if len(sys.argv) > 2:
+    d_dash, grade = le_dashboard(sys.argv[2])
+    if d_dash != hoje:
+        aviso = 'Dashboard com data %s (hoje e %s): ignorado' % (d_dash, hoje)
+    elif len(grade) == 8:
+        # o Dashboard cobre o dia operacional: 06h..23h de hoje e 00h..05h de amanha (datas do calendario)
+        amanha = (datetime.date.fromisoformat(hoje) + datetime.timedelta(days=1)).isoformat()
+        for pos in range(24):
+            hora = (pos + 6) % 24
+            d = hoje if hora >= 6 else amanha
+            lst = dias.setdefault(d, [None] * 24)
+            if lst[hora] is None:
+                lst[hora] = [grade[a][pos] for a in range(8)]
+                if d not in so_principal:
+                    so_principal.append(d)
+    else:
+        aviso = 'Dashboard sem a grade completa: ignorado'
+
+for d in dias:
+    dias[d] = [x if x is not None else None for x in dias[d]]      # None = hora nao publicada
+
 saida = {
-    'gerado_em': agora + ' (Brasília)',
-    'fonte': 'Planilhas Atividades_Suporte_EmiteAi (aba Distribuição de Atividades) e Programação de Alocação de Sobreaviso (SharePoint, time Operações/Suporte)',
+    'gerado_em': datetime.datetime.now(BRT).strftime('%d/%m/%Y %H:%M') + ' (Brasília)',
+    'fonte': 'Planilhas Atividades_Suporte_EmiteAi e Programação de Alocação de Sobreaviso (SharePoint, time Operações/Suporte)',
     'atividades': ATIV,
     'dias': dict(sorted(dias.items())),
-    'conferido_ate': '%s %02dh' % ultimo_sp,
-    'sobreaviso': antigo.get('sobreaviso', {}),
+    'conferido_ate': '%s %02dh' % (corte_d, corte_h),
+    'so_principal': sorted(so_principal),
+    'sobreaviso': ant.get('sobreaviso', {}),
 }
-igual = bool(_ant) and all(_ant.get(k) == saida[k] for k in ('atividades', 'dias', 'sobreaviso'))
-if n_sp == 0:
-    print('ERRO: nenhuma linha lida do SharePoint; nada foi alterado'); sys.exit(2)
-if igual:
-    print('SEM MUDANCA: escala igual a ja salva; arquivo nao alterado'); sys.exit(0)
-if _ant.get('conferido_ate', '') > saida['conferido_ate']:
-    saida['conferido_ate'] = _ant['conferido_ate']
+chaves = ('atividades', 'dias', 'conferido_ate', 'so_principal', 'sobreaviso')
+if ant and all(ant.get(k) == saida[k] for k in chaves):
+    print('SEM MUDANCA: escala igual a ja salva; arquivo nao alterado.', aviso)
+    sys.exit(0)
+mudou = sum(1 for d, hs in saida['dias'].items() for i, v in enumerate(hs) if ((ant.get('dias') or {}).get(d) or [None] * 24)[i] != v)
 open(OUT, 'w', encoding='utf-8', newline=chr(10)).write(json.dumps(saida, ensure_ascii=False, separators=(',', ':')) + chr(10))
-print('MUDOU: horas alteradas em relacao ao salvo:', dif, '| linhas lidas do SharePoint:', n_sp)
-print('dias', len(dias), min(dias), max(dias), '| sharepoint ate', saida['conferido_ate'])
+print('MUDOU: %d horas diferentes do salvo | dias: %d (%s a %s) | SharePoint devolveu ate %s | dias so com Principal: %s' % (
+    mudou, len(dias), min(dias), max(dias), saida['conferido_ate'], saida['so_principal'] or 'nenhum'), aviso)

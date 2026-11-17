@@ -47,16 +47,13 @@ function escalaPartes(ts) {
 function escalaDiaAnterior(data) { const d = new Date(data + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); }
 // Celula da planilha para a atividade (indice 0..7) na data/hora de Brasilia. null = dia nao publicado.
 function escalaCelula(dados, ai, pt) {
-  const dop = pt.hora >= 6 ? pt.data : escalaDiaAnterior(pt.data), dia = (dados.dias || {})[dop];
+  const dop = pt.data, dia = (dados.dias || {})[dop];      // a planilha usa a data do calendario em todas as horas
   if (!dia) return null;
-  const txt = (dia[(pt.hora - 6 + 24) % 24] || [])[ai] || '';
+  const hora = dia[pt.hora];
+  if (!hora) return null;      // hora que o SharePoint nao devolveu: sem escala publicada
+  const txt = hora[ai] || '';
   if (txt === 'fora' || txt.indexOf('fora') === 0) return {fora: true, nomes: []};
-  return {fora: false, nomes: txt.split('|').map(x => { x = x.trim(); return x === '—' || x === '-' ? '' : x; }), aConfirmar: escalaDepois(dados, dop, pt.hora)};
-}
-function escalaDepois(dados, dop, hora) {
-  const c = dados.conferido_ate; if (!c) return false;
-  const d = c.slice(0, 10), h = Number(c.slice(11, 13));
-  return dop > d || (dop === d && ((hora - 6 + 24) % 24) > ((h - 6 + 24) % 24));
+  return {fora: false, nomes: txt.split('|').map(x => { x = x.trim(); return x === '—' || x === '-' ? '' : x; }), soPrincipal: (dados.so_principal || []).indexOf(dop) !== -1};
 }
 // Cards: no fim de semana/feriado com sobreaviso publicado, vale o sobreaviso; senao, o Principal da planilha.
 function escalaQuem(dados, ai, pt) {
@@ -65,7 +62,7 @@ function escalaQuem(dados, ai, pt) {
   if (pt.fds) return {tipo: 'sob', nomes: null};
   const c = escalaCelula(dados, ai, pt);
   if (!c) return {tipo: 'sem', nomes: null};
-  return {tipo: 'esc', nomes: c.nomes.filter(Boolean).slice(0, 1), reserva: c.nomes.filter(Boolean).slice(1), aConfirmar: c.aConfirmar};
+  return {tipo: 'esc', nomes: c.nomes.filter(Boolean).slice(0, 1), reserva: c.nomes.filter(Boolean).slice(1)};
 }
 function renderEscalaAgora() {
   const dados = escalaDados(); if (!dados || !dados.dias) return '';
@@ -74,7 +71,7 @@ function renderEscalaAgora() {
     const q = escalaQuem(dados, ai, pt);
     const pill = q.tipo === 'sob' ? '<span class="esc-pill sob"><i></i>Sobreaviso</span>' : q.tipo === 'esc' ? '<span class="esc-pill esc"><i></i>Em turno</span>' : '<span class="esc-pill sem"><i></i>Sem escala</span>';
     const nome = q.nomes && q.nomes.length ? '<div class="esc-nome">' + esc(q.nomes.join(' · ')) + '</div>'
-      : '<div class="esc-nome vazio">' + (q.nomes === null ? (q.tipo === 'sob' ? 'Sobreaviso deste dia não publicado' : 'Escala deste dia não publicada') : 'Ninguém escalado nesta hora') + '</div>';
+      : '<div class="esc-nome vazio">' + (q.nomes === null ? (q.tipo === 'sob' ? 'Sobreaviso deste dia não publicado' : 'Escala desta hora não publicada') : 'Ninguém escalado nesta hora') + '</div>';
     const res = q.reserva && q.reserva.length ? '<div class="esc-linha">Na sequência: ' + esc(q.reserva.join(' · ')) + '</div>' : '';
     let prox = '';
     for (let k = 1; k <= 5; k++) {
@@ -85,10 +82,10 @@ function renderEscalaAgora() {
   };
   // tabela com todas as atividades da planilha, na hora atual
   const pn = escalaPartes(agora + 3600000);
-  let algumAConfirmar = false;
+  let soPrincipal = false;
   const linhas = AT.map((nomeAtv, ai) => {
     const c = escalaCelula(dados, ai, pt), n = escalaCelula(dados, ai, pn);
-    if (c && c.aConfirmar) algumAConfirmar = true;
+    if (c && c.soPrincipal) soPrincipal = true;
     const cel = (x, i) => !x ? '<td class="esc-vz">não publicada</td>' : x.fora ? (i === 0 ? '<td class="esc-vz">fora do horário</td>' : '<td class="esc-vz">—</td>') : '<td>' + (x.nomes[i] ? esc(x.nomes[i]) : '<span class="esc-vz">—</span>') + '</td>';
     const sem = c && !c.fora && !c.nomes[0];
     return '<tr class="' + (sem ? 'esc-alerta' : '') + '"><td><b>' + esc(nomeAtv) + '</b></td>' + cel(c, 0) + cel(c, 1) + cel(c, 2) + cel(n, 0) + '</tr>';
@@ -98,7 +95,8 @@ function renderEscalaAgora() {
     + '<table><thead><tr><th>Atividade</th><th>Principal</th><th>Secundária</th><th>Terceira</th><th>Principal às ' + hh(pn.hora) + '</th></tr></thead><tbody>' + linhas + '</tbody></table>' + sobLinha + '</div>';
   return quadro('Chamados Novos', 4) + quadro('Chamados priorizados', 5) + tabela
     + '<div class="esc-rodape">Escala lida da planilha em ' + esc(dados.gerado_em || '-') + ' e conferida uma vez por dia.'
-    + (algumAConfirmar || (dados.conferido_ate && pt.data > dados.conferido_ate.slice(0, 10)) ? ' <b>Atenção:</b> os dias depois de ' + esc(dados.conferido_ate) + ' vieram de uma cópia anterior da planilha e podem ter mudado.' : '')
+    + (soPrincipal ? ' Para hoje a planilha só informou o Principal de cada atividade.' : '')
+    + ' Dias que a planilha ainda não informou aparecem como não publicados.'
     + ' Sábados, domingos e feriados com sobreaviso publicado mostram o sobreaviso nos dois quadros de chamados.</div>';
 }
 function escalaAtualiza() { const g = document.getElementById('gridChatsLive'); if (g) g.innerHTML = renderEscalaAgora(); }

@@ -669,7 +669,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 
   <div class="tab-panel active" id="tabLive">
     <div class="kpi-row" id="kpiRow"></div>
-    <div class="kpi-row" id="kpiRow2" style="grid-template-columns: repeat(4, 1fr); margin-top: -4px;"></div>
+    <div class="kpi-row" id="kpiRow2" style="grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-top: -4px;"></div>
 
     <div class="grid" id="gridChatsLive" style="grid-template-columns: 1fr 1fr; margin-top: 18px;"></div>
 
@@ -2287,7 +2287,8 @@ document.getElementById('kpiRow2').innerHTML =
   kpiTile('neutral', priorizados.length, 'Priorizados (WhatsApp)', 'priorizados', hintPriorizados) +
   kpiTile('neutral', contraturno.length, 'Contraturno em atendimento', 'contraturno') +
   kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Chamados alto impacto', 'cargaParada', hintAltoImpacto) +
-  kpiTile(classificacaoIncorreta.length === 0 ? 'ok' : 'warn', classificacaoIncorreta.length, 'Possivel classificacao incorreta', 'classificacaoIncorreta');
+  kpiTile(classificacaoIncorreta.length === 0 ? 'ok' : 'warn', classificacaoIncorreta.length, 'Possivel classificacao incorreta', 'classificacaoIncorreta') +
+  kpiTile(reuniaoCliente.length === 0 ? 'ok' : 'warn', reuniaoCliente.length, 'Realizar reuniao com cliente', 'reuniaoCliente', 'Em atendimento com mais de 5 interacoes com o cliente e sem solucao');
 
 document.getElementById('gridChatsLive').innerHTML = (typeof renderEscalaAgora === 'function') ? renderEscalaAgora() : '';
 
@@ -2406,12 +2407,6 @@ document.getElementById('gridBottom').innerHTML = `
     <div class="panel-sub">${{cargaParada.length}} chamados abertos com o campo "Motivo de Priorizacao" marcado (Carga parada, Posto fiscal, Impacto financeiro ou Outros) — nao inclui os que so tem Whatsapp marcado</div>
     <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Aberto ha</th></tr></thead>
       <tbody>${{tableHtml(cargaParada.sort((a,b)=>(b._hoursOpen||0)-(a._hoursOpen||0)), 'open', 14)}}</tbody></table>
-  </div>
-  <div class="panel">
-    <h2>Realizar reuniao com cliente${{exportButtonHtml("exportLiveList(reuniaoCliente, 'realizar_reuniao_com_cliente.txt')")}}</h2>
-    <div class="panel-sub">${{reuniaoCliente.length}} chamados em atendimento (N1 ou N2) com mais de 5 interacoes com o cliente e ainda sem solucao — interacao = mensagem publica do cliente ou do agente (a resposta automatica nao conta)</div>
-    <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Interacoes</th><th>Aberto ha</th></tr></thead>
-      <tbody>${{reuniaoCliente.length ? reuniaoCliente.sort((a,b)=>(b.interacoesCliente-a.interacoesCliente) || ((b._hoursOpen||0)-(a._hoursOpen||0))).slice(0, 14).map(t => `<tr><td>${{ticketLink(t.id, t.protocol)}}</td><td>${{esc(t.subject || '')}}</td><td>${{esc(t.ownerName || '')}}</td><td>${{esc(t.status || '')}}</td><td><b>${{t.interacoesCliente}}</b></td><td>${{fmtH(t._hoursOpen)}}</td></tr>`).join('') : '<tr><td colspan="6" class="empty-msg">Nenhum chamado</td></tr>'}}</tbody></table>
   </div>
   <div class="panel">
     <h2>⚠️ Possivel classificacao incorreta${{exportButtonHtml("exportLiveList(classificacaoIncorreta, 'classificacao_incorreta.txt')")}}</h2>
