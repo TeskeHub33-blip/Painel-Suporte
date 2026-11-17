@@ -395,6 +395,25 @@ def fetch_custom_field_values_por_id(ids, chunk_size=20):
     return out
 
 
+def fetch_interacoes_cliente_por_id(ids, chunk_size=20):
+    """Interacoes com o cliente por chamado: acoes PUBLICAS (type 2) que tem autor — mensagens do cliente e
+    respostas do agente. A resposta automatica de abertura (publica, sem autor) nao conta. Usado no card
+    'Realizar reuniao com cliente' do Ao Vivo. So' busca os chamados em atendimento (lotes de 20 ids)."""
+    ids = sorted(set(ids))
+    out = {}
+    for i in range(0, len(ids), chunk_size):
+        chunk = ids[i:i + chunk_size]
+        pagina = fetch({
+            "$select": "id",
+            "$expand": "actions($select=id,type;$expand=createdBy($select=id,profileType))",
+            "$filter": " or ".join(f"id eq {tid}" for tid in chunk),
+            "$top": chunk_size,
+        })
+        for t in pagina:
+            out[t['id']] = sum(1 for a in (t.get('actions') or []) if a.get('type') == 2 and a.get('createdBy'))
+    return out
+
+
 def main():
     now_utc = datetime.utcnow()
     today_str = now_utc.strftime("%Y-%m-%d")
@@ -488,6 +507,17 @@ def main():
                       if any(cf.get('customFieldId') == 248215 and cf.get('items') for cf in v))
     print(f"[info] customFieldValues buscado em lotes por id: {com_motivo} chamados com "
           f"Motivo de Priorizacao marcado", flush=True)
+    # Interacoes com o cliente (card 'Realizar reuniao com cliente'). Falha aqui nunca derruba o painel.
+    try:
+        em_atend = [t['id'] for t in open_tickets if t.get('status') in ('Em atendimento', 'Em atendimento - N2')]
+        interacoes = fetch_interacoes_cliente_por_id(em_atend)
+        for t in open_tickets:
+            if t['id'] in interacoes:
+                t['interacoesCliente'] = interacoes[t['id']]
+        print(f"[info] interacoes com o cliente: {len(interacoes)} chamados em atendimento consultados, "
+              f"{sum(1 for v in interacoes.values() if v > 5)} com mais de 5", flush=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[aviso] contagem de interacoes com o cliente falhou ({exc}) — card fica vazio neste ciclo", flush=True)
     # Ultimo comentario (acao) das Melhorias e Bugs abertos — alimenta as abas de Gestao Semanal.
     # CACHE por chamado (ultimo_comentario.json, commitado no repo): so' busca de novo o chamado cujo
     # lastActionDate mudou desde a ultima vez. Sem isso, cada sincronizacao fazia dezenas de requisicoes

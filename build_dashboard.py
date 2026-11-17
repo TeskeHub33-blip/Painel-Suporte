@@ -188,6 +188,7 @@ for t in raw_tickets:
         'clientOrg': extract_org(t.get('clients')),
         'statusHistories': clean_status_histories(t.get('statusHistories')),
         'motivoPriorizacao': extract_motivo_priorizacao(t.get('customFieldValues')),
+        'interacoesCliente': t.get('interacoesCliente'),
         'lastComment': ({'description': redact_secrets((t['lastComment'].get('description') or '')[:300]),
                          'createdDate': t['lastComment'].get('createdDate'), 'type': t['lastComment'].get('type')}
                         if t.get('lastComment') else None),
@@ -1033,6 +1034,8 @@ const FILTERS = {{
   contraturno: t => t.status === 'Em atendimento' && CONTRATURNO_TECNICOS.indexOf(t.ownerName) !== -1,
   naoAtualizadosHoje: t => (t.status === 'Em atendimento' || t.status === 'Aguardando Cliente' || t.status === N2_HANDOFF_STATUS) && !t._updatedToday,
   cargaParada: t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && !!t.motivoPriorizacao && t.motivoPriorizacao.split('; ').some(m => m !== 'Whatsapp'),
+  // Realizar reuniao com cliente: em atendimento (N1 ou N2) com MAIS de 5 interacoes publicas com o cliente e ainda sem solucao.
+  reuniaoCliente: t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && typeof t.interacoesCliente === 'number' && t.interacoesCliente > 5,
   classificacaoIncorreta: t => t._classificacaoIncorreta,
   chatsEmAtendimento: t => t.status === 'Em atendimento' && (t.origin === 24 || !!t.chatGroup),
   chatsAguardando: t => t.status === 'Novo' && (t.origin === 24 || !!t.chatGroup),
@@ -1189,6 +1192,7 @@ const LABELS = {{
   naoAtualizadosHoje: 'Nao atualizados hoje',
   contraturno: 'Contraturno (Alife e Vinicius) — em atendimento',
   cargaParada: 'Chamados alto impacto',
+  reuniaoCliente: 'Realizar reuniao com cliente',
   classificacaoIncorreta: 'Possivel classificacao incorreta',
   chatsEmAtendimento: 'Chats em atendimento (aproximado)',
   chatsAguardando: 'Chats aguardando atendimento (aproximado)',
@@ -1202,19 +1206,32 @@ function openModalTecnico(name, tecnico) {{
   const items = apply(name).filter(t => t.ownerName === tecnico);
   renderModal((LABELS[name]||name) + ' — ' + tecnico, items, name === 'bouncing' ? 'update' : 'open');
 }}
-// --- Exportacao para Excel (via .txt separado por tabulacao — o sandbox do Artifact so libera .txt/.json/.md) ---
+// --- Exportacao para Excel ---
+// No site (Vercel) baixa um .csv pelo proprio navegador: separador ';' e BOM, que o Excel em portugues abre direto em
+// colunas e com acentos. Dentro de um Artifact do Claude (window.claude.downloads) continua o .txt por tabulacao.
 function exportTxt(filename, headers, rows) {{
-  const escCell = v => String(v === null || v === undefined ? '' : v).replace(/\t/g, ' ').replace(/\r?\n/g, ' ');
-  const lines = [headers.join('\t')].concat(rows.map(r => headers.map(h => escCell(r[h])).join('\t')));
-  const content = '﻿' + lines.join('\r\n');
-  if (!window.claude || !window.claude.downloads) {{
-    alert('Exportacao nao disponivel neste ambiente.');
+  const limpa = v => String(v === null || v === undefined ? '' : v).replace(/\r?\n/g, ' ');
+  if (window.claude && window.claude.downloads) {{
+    const linhas = [headers.join('\t')].concat(rows.map(r => headers.map(h => limpa(r[h]).replace(/\t/g, ' ')).join('\t')));
+    window.claude.downloads.save({{filename, data: '\ufeff' + linhas.join('\r\n')}}).catch(err => {{
+      console.error('export failed', err);
+      if (err && err.code !== 'declined') alert('Nao foi possivel exportar: ' + (err.message || err.code));
+    }});
     return;
   }}
-  window.claude.downloads.save({{filename, data: content}}).catch(err => {{
+  // celula que comeca com = + - @ ganha apostrofo: evita o Excel interpretar texto de chamado como formula
+  const cel = v => {{ let t = limpa(v); if (/^[=+\-@]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; }};
+  const linhas = [headers.map(cel).join(';')].concat(rows.map(r => headers.map(h => cel(r[h])).join(';')));
+  try {{
+    const blob = new Blob(['\ufeff' + linhas.join('\r\n')], {{type: 'text/csv;charset=utf-8'}});
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = String(filename || 'chamados.csv').replace(/\.txt$/i, '.csv');
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }} catch (err) {{
     console.error('export failed', err);
-    if (err && err.code !== 'declined') alert('Nao foi possivel exportar: ' + (err.message || err.code));
-  }});
+    alert('Nao foi possivel exportar: ' + (err.message || err));
+  }}
 }}
 function exportLiveList(items, filename) {{
   const headers = ['Protocolo','Assunto','Tecnico','Status','AbertoHoras'];
@@ -1232,7 +1249,7 @@ function exportHistListToExcel(items, filename) {{
   exportTxt(filename, headers, rows);
 }}
 function exportButtonHtml(onclickExpr, title) {{
-  return `<span class="export-btn" title="${{title || 'Exportar para Excel (.txt)'}}" onclick="${{onclickExpr}}">⬇ Excel</span>`;
+  return `<span class="export-btn" title="${{title || 'Exportar para Excel (.csv)'}}" onclick="${{onclickExpr}}">⬇ Excel</span>`;
 }}
 
 let CURRENT_MODAL_ITEMS = [];
@@ -2228,6 +2245,7 @@ const priorizados = apply('priorizados');
 const naoAtualizadosHoje = apply('naoAtualizadosHoje');
 const contraturno = apply('contraturno');
 const cargaParada = apply('cargaParada');
+const reuniaoCliente = apply('reuniaoCliente');
 const classificacaoIncorreta = apply('classificacaoIncorreta');
 const chatsEmAtendimentoLive = apply('chatsEmAtendimento');
 const chatsAguardandoLive = apply('chatsAguardando');
@@ -2388,6 +2406,12 @@ document.getElementById('gridBottom').innerHTML = `
     <div class="panel-sub">${{cargaParada.length}} chamados abertos com o campo "Motivo de Priorizacao" marcado (Carga parada, Posto fiscal, Impacto financeiro ou Outros) — nao inclui os que so tem Whatsapp marcado</div>
     <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Aberto ha</th></tr></thead>
       <tbody>${{tableHtml(cargaParada.sort((a,b)=>(b._hoursOpen||0)-(a._hoursOpen||0)), 'open', 14)}}</tbody></table>
+  </div>
+  <div class="panel">
+    <h2>Realizar reuniao com cliente${{exportButtonHtml("exportLiveList(reuniaoCliente, 'realizar_reuniao_com_cliente.txt')")}}</h2>
+    <div class="panel-sub">${{reuniaoCliente.length}} chamados em atendimento (N1 ou N2) com mais de 5 interacoes com o cliente e ainda sem solucao — interacao = mensagem publica do cliente ou do agente (a resposta automatica nao conta)</div>
+    <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Tecnico</th><th>Status</th><th>Interacoes</th><th>Aberto ha</th></tr></thead>
+      <tbody>${{reuniaoCliente.length ? reuniaoCliente.sort((a,b)=>(b.interacoesCliente-a.interacoesCliente) || ((b._hoursOpen||0)-(a._hoursOpen||0))).slice(0, 14).map(t => `<tr><td>${{ticketLink(t.id, t.protocol)}}</td><td>${{esc(t.subject || '')}}</td><td>${{esc(t.ownerName || '')}}</td><td>${{esc(t.status || '')}}</td><td><b>${{t.interacoesCliente}}</b></td><td>${{fmtH(t._hoursOpen)}}</td></tr>`).join('') : '<tr><td colspan="6" class="empty-msg">Nenhum chamado</td></tr>'}}</tbody></table>
   </div>
   <div class="panel">
     <h2>⚠️ Possivel classificacao incorreta${{exportButtonHtml("exportLiveList(classificacaoIncorreta, 'classificacao_incorreta.txt')")}}</h2>
