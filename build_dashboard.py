@@ -1035,7 +1035,9 @@ const FILTERS = {{
   naoAtualizadosHoje: t => (t.status === 'Em atendimento' || t.status === 'Aguardando Cliente' || t.status === N2_HANDOFF_STATUS) && !t._updatedToday,
   cargaParada: t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && !!t.motivoPriorizacao && t.motivoPriorizacao.split('; ').some(m => m !== 'Whatsapp'),
   // Realizar reuniao com cliente: em atendimento (N1 ou N2) com MAIS de 5 interacoes publicas com o cliente e ainda sem solucao.
-  reuniaoCliente: t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && typeof t.interacoesCliente === 'number' && t.interacoesCliente > 5,
+  // Fora do card: chamado com task associada (passou pela fila de desenvolvimento ou tem log do devops) e chamados do cliente Shopee.
+  reuniaoCliente: t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && typeof t.interacoesCliente === 'number' && t.interacoesCliente > 5
+    && !(t.statusHistories || []).some(h => isDevQueueStatus(h.status)) && !devopsStatusLogs(t).length && !/shopee/i.test(t.clientOrg || ''),
   classificacaoIncorreta: t => t._classificacaoIncorreta,
   chatsEmAtendimento: t => t.status === 'Em atendimento' && (t.origin === 24 || !!t.chatGroup),
   chatsAguardando: t => t.status === 'Novo' && (t.origin === 24 || !!t.chatGroup),
@@ -2288,7 +2290,7 @@ document.getElementById('kpiRow2').innerHTML =
   kpiTile('neutral', contraturno.length, 'Contraturno em atendimento', 'contraturno') +
   kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Chamados alto impacto', 'cargaParada', hintAltoImpacto) +
   kpiTile(classificacaoIncorreta.length === 0 ? 'ok' : 'warn', classificacaoIncorreta.length, 'Possivel classificacao incorreta', 'classificacaoIncorreta') +
-  kpiTile(reuniaoCliente.length === 0 ? 'ok' : 'warn', reuniaoCliente.length, 'Realizar reuniao com cliente', 'reuniaoCliente', 'Em atendimento com mais de 5 interacoes com o cliente e sem solucao');
+  kpiTile(reuniaoCliente.length === 0 ? 'ok' : 'warn', reuniaoCliente.length, 'Realizar reuniao com cliente', 'reuniaoCliente', 'Em atendimento com mais de 5 interacoes com o cliente e sem solucao — sem task e fora Shopee');
 
 document.getElementById('gridChatsLive').innerHTML = (typeof renderEscalaAgora === 'function') ? renderEscalaAgora() : '';
 
