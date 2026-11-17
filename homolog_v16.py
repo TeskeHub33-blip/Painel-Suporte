@@ -15,30 +15,35 @@ V16_CSS = """
 #gridChatsLive .esc-tab { flex: 1 1 100%; width: 100%; box-sizing: border-box; min-height: 0; }
 #gridChatsLive .esc-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 #gridChatsLive .esc-cab-dir { display: flex; align-items: center; gap: 10px; }
-#gridChatsLive .esc-hora { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); font-variant-numeric: tabular-nums; }
+#gridChatsLive .esc-hora { font-size: clamp(22px, 1.7vw, 32px); font-weight: 700; letter-spacing: -0.5px; color: var(--text); font-variant-numeric: tabular-nums; }
 #gridChatsLive .esc-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 20px; font: 600 12px inherit; font-family: inherit; white-space: nowrap; }
 #gridChatsLive .esc-pill i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: currentColor; }
 #gridChatsLive .esc-pill.esc { background: var(--ok-dim); color: var(--ok); border: .625px solid var(--ok-bord); }
 #gridChatsLive .esc-pill.sob { background: var(--pink-dim); color: var(--pink); border: .625px solid rgba(237,109,162,.4); }
 #gridChatsLive .esc-pill.alerta { background: var(--warn-dim); color: var(--warn); border: .625px solid var(--warn-bord); }
-#gridChatsLive .esc-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 12px; margin-top: 16px; }
-#gridChatsLive .esc-card { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 14px 14px 12px 16px; border-radius: 6px; background: var(--surface2); overflow: hidden; transition: background .15s; }
-#gridChatsLive .esc-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--pink); }
+#gridChatsLive .esc-grupo { margin-top: 18px; }
+#gridChatsLive .esc-g-tit { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--text3); display: flex; align-items: center; gap: 12px; }
+#gridChatsLive .esc-g-tit::after { content: ''; flex: 1; height: .5px; background: var(--panel-border); }
+#gridChatsLive .esc-grade { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 10px; }
+@media (max-width: 1100px) { #gridChatsLive .esc-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { #gridChatsLive .esc-grade { grid-template-columns: minmax(0, 1fr); } }
+#gridChatsLive .esc-card { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 16px 16px 14px 20px; border-radius: 6px; background: var(--surface2); overflow: hidden; transition: background .15s; }
+#gridChatsLive .esc-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--pink); }
 #gridChatsLive .esc-card.off::before { background: var(--text3); opacity: .5; }
 #gridChatsLive .esc-card.alerta { background: var(--warn-dim); }
 #gridChatsLive .esc-card.alerta::before { background: var(--warn-solid, var(--warn)); }
 #gridChatsLive .esc-c-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-#gridChatsLive .esc-c-atv { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; color: var(--text3); }
+#gridChatsLive .esc-c-atv { font-size: clamp(11px, .75vw, 14px); font-weight: 600; text-transform: uppercase; letter-spacing: .6px; color: var(--text3); }
 #gridChatsLive .esc-c-det { font-size: 11px; color: var(--text3); margin-top: -6px; }
 #gridChatsLive .esc-c-pessoa { display: flex; align-items: center; gap: 10px; min-width: 0; }
-#gridChatsLive .esc-c-av { flex: none; width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--pink-dim); color: var(--pink); font-size: 12px; font-weight: 700; }
-#gridChatsLive .esc-c-nome { font-size: 16px; font-weight: 600; color: var(--text); line-height: 1.25; overflow: hidden; text-overflow: ellipsis; }
+#gridChatsLive .esc-c-av { flex: none; width: clamp(34px, 2.5vw, 48px); height: clamp(34px, 2.5vw, 48px); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--pink-dim); color: var(--pink); font-size: clamp(12px, .85vw, 16px); font-weight: 700; }
+#gridChatsLive .esc-c-nome { font-size: clamp(16px, 1.3vw, 25px); font-weight: 600; white-space: nowrap; color: var(--text); line-height: 1.25; overflow: hidden; text-overflow: ellipsis; }
 #gridChatsLive .esc-c-res { display: flex; flex-wrap: wrap; gap: 6px; min-height: 22px; font-size: 12px; }
-#gridChatsLive .esc-c-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 20px; background: var(--panel); color: var(--text-dim); font-size: 12px; }
+#gridChatsLive .esc-c-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 20px; background: var(--panel); color: var(--text-dim); font-size: clamp(12px, .8vw, 15px); }
 #gridChatsLive .esc-c-chip i { font-style: normal; font-size: 10px; font-weight: 700; color: var(--text3); }
 #gridChatsLive .esc-c-vazio { font-size: 14px; color: var(--text3); min-height: 64px; display: flex; align-items: center; gap: 5px; }
 #gridChatsLive .esc-card.alerta .esc-c-vazio { color: var(--warn); }
-#gridChatsLive .esc-c-prox { margin-top: auto; padding-top: 8px; border-top: .5px solid var(--panel-border); font-size: 12px; color: var(--text-dim); display: flex; gap: 8px; align-items: baseline; }
+#gridChatsLive .esc-c-prox { margin-top: auto; padding-top: 8px; border-top: .5px solid var(--panel-border); font-size: clamp(12px, .8vw, 15px); color: var(--text-dim); display: flex; gap: 8px; align-items: baseline; }
 #gridChatsLive .esc-c-prox span { font-size: 11px; font-weight: 600; color: var(--text3); font-variant-numeric: tabular-nums; }
 #gridChatsLive .esc-vz { color: var(--text3); }
 #gridChatsLive .esc-rodape { font-size: 11.5px; color: var(--text3); line-height: 1.5; margin-top: 14px; }
@@ -94,11 +99,12 @@ function renderEscalaAgora() {
     const reserva = nomes.slice(1).map((x, i) => '<span class="esc-c-chip"><i>' + (i + 2) + 'º</i>' + esc(x) + '</span>').join('');
     return '<div class="esc-card">' + cab + '<div class="esc-c-pessoa"><span class="esc-c-av">' + esc(escIniciais(nomes[0])) + '</span><span class="esc-c-nome">' + esc(nomes[0]) + '</span></div>'
       + '<div class="esc-c-res">' + (reserva || '<span class="esc-vz">sem reserva</span>') + '</div>' + rodape + '</div>';
-  }).join('');
+  });
+  const grupo = (titulo, de, ate) => '<div class="esc-grupo"><div class="esc-g-tit">' + titulo + '</div><div class="esc-grade">' + cartoes.slice(de, ate).join('') + '</div></div>';
   const resumo = semResp ? '<span class="esc-pill alerta"><i></i>' + semResp + ' sem responsável</span>' : '<span class="esc-pill esc"><i></i>Todas cobertas</span>';
   return '<div class="panel esc-tab"><div class="esc-cab"><div><h2>Escala agora</h2><div class="panel-sub">Quem está em cada atividade nesta hora, pela planilha de atividades.</div></div>'
     + '<div class="esc-cab-dir"><span class="esc-hora">' + hh(pt.hora) + '</span>' + resumo + '</div></div>'
-    + '<div class="esc-grade">' + cartoes + '</div>'
+    + grupo('Canais de atendimento', 0, 4) + grupo('Chamados e N2', 4, 8)
     + '<div class="esc-rodape">Escala lida da planilha em ' + esc(dados.gerado_em || '-') + ' e conferida uma vez por dia.'
     + (soPrincipal ? ' Para hoje a planilha só informou o Principal de cada atividade.' : '')
     + ' Em sábados, domingos e feriados, Chamados Novos e priorizados mostram o sobreaviso.</div></div>';
