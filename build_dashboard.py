@@ -1005,6 +1005,7 @@ function isDevQueueStatus(status) {{
 // Status criado para o repasse N1 -> N2: quando o N1 (ou CS/Implantacao) muda o chamado pra este
 // status, o N2 passa a monitorar a fila; o chamado so muda de dono quando o N2 efetivamente assume.
 const N2_HANDOFF_STATUS = 'Em atendimento - N2';
+const DEVOPS_STATUS_RE = /Usuario:\s*([^\n\r]+?)\s*[\r\n]+\s*Status:\s*([^\n\r]+?)\s*[\r\n]+\s*Comentario:\s*([\s\S]*?)\s*$/;
 // A partir desta troca de status, o SLA fica pausado enquanto o chamado depende de orgao governamental
 // (SEFAZ, ANTT, Portal Nacional da GNRE) — conforme contrato com o cliente.
 function isGovWaitStatus(status) {{
@@ -3805,7 +3806,6 @@ function avgTimeInStatus(items, status) {{
 // getFullActions busca o historico completo de acoes do chamado, priorizando o que ja vier junto no
 // proprio registro (campo actions) e caindo pro GOV_ACTIONS_BY_ID/ACTIONS_BY_ID (que ja cobrem, hoje,
 // todo chamado aberto + os tecnicos resolvidos no mes corrente).
-const DEVOPS_STATUS_RE = /Usuario:\s*([^\n\r]+?)\s*[\r\n]+\s*Status:\s*([^\n\r]+?)\s*[\r\n]+\s*Comentario:\s*([\s\S]*?)\s*$/;
 function getFullActions(ticket) {{
   if (ticket.actions && ticket.actions.length) return ticket.actions;
   const key = String(ticket.id);
