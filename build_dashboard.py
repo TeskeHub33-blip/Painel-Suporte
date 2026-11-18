@@ -853,8 +853,8 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
         <div class="panel-sub" id="melSub">Categorias com algum indicador abaixo do que é preciso para os clientes ficarem 95% felizes. Marque os indicadores que quer olhar.</div>
         <div style="display:flex; gap:18px; flex-wrap:wrap; margin:8px 0 10px 0; font-size:13px;">
           <label style="cursor:pointer;"><input type="checkbox" id="melF" checked onchange="setMelFiltro()"> 😊 Felicidade abaixo de 95%</label>
-          <label style="cursor:pointer;"><input type="checkbox" id="melS" checked onchange="setMelFiltro()"> SLA abaixo do necessário</label>
-          <label style="cursor:pointer;"><input type="checkbox" id="melT" checked onchange="setMelFiltro()"> ⏱ Tempo acima do necessário</label>
+          <label style="cursor:pointer;"><input type="checkbox" id="melS" checked onchange="setMelFiltro()"> SLA abaixo do necessário ou da meta de 95%</label>
+          <label style="cursor:pointer;"><input type="checkbox" id="melT" checked onchange="setMelFiltro()"> ⏱ Tempo acima do necessário ou da meta</label>
           <label style="cursor:pointer;"><input type="checkbox" id="melTodas" onchange="setMelFiltro()"> Mostrar também as categorias que estão dentro</label>
         </div>
         <div id="tabelaMelhorar"></div>
@@ -3434,6 +3434,20 @@ function metaFelicidadeMes(itensMes, metaCat) {{
 // com satisfacao >= 95% (hi) e a dos < 95% (lo) formam uma reta; o valor para 95% e' o ponto da reta em 95%:
 //   x95 = xLo + (95 - satLo) * (xHi - xLo) / (satHi - satLo).   Sem mes >= 95% (ou sem < 95%), usa a reta de minimos quadrados dos meses.
 // SLA so' faz sentido se mais SLA = mais satisfacao (reta crescente); tempo, se menos tempo = mais satisfacao (reta decrescente).
+// Conta proporcional (pedido da gestao): se com SLA de 36% a satisfacao e' 60%, para chegar a 95% o SLA teria de ser 36 x 95 / 60 = 57%.
+// O tempo segue a mesma proporcao ao contrario: tempo x satisfacao / 95. Satisfacao ja >= 95%: o valor atual ja basta.
+function felizProp(sat, sla, h) {{
+  const out = {{ t: null, s: null, why: {{ t: '', s: '' }} }};
+  if (sat === null || sat === undefined || sat <= 0) {{ out.why.t = out.why.s = 'sem satisfacao no mes'; return out; }}
+  if (sla !== null && sla !== undefined) {{
+    const v = sat >= FEL_META ? sla : Math.ceil(sla * FEL_META / sat);
+    if (v > 100) out.why.s = 'so\' o SLA nao chega (daria ' + v + '%)';
+    else out.s = {{ pct: v, det: sat >= FEL_META ? 'satisfacao ja >= ' + FEL_META + '%' : sla + '% x ' + FEL_META + ' / ' + Math.round(sat) + '%' }};
+  }} else out.why.s = 'sem SLA no mes';
+  if (h !== null && h !== undefined) out.t = {{ h: sat >= FEL_META ? h : h * sat / FEL_META, det: sat >= FEL_META ? 'satisfacao ja >= ' + FEL_META + '%' : fmtH(h) + ' x ' + Math.round(sat) + '% / ' + FEL_META }};
+  else out.why.t = 'sem tempo no mes';
+  return out;
+}}
 function metaPorMedias(pts, k) {{
   const v = pts.filter(p => p[k] !== null && p[k] !== undefined && p.sat !== null);
   if (v.length < 2) return {{ erro: 'poucos meses com pesquisa' }};
@@ -3907,6 +3921,12 @@ function initReuniaoMensal() {{
   }});
   const felMeta = {{ __geral: metaMediasFelicidade(ptsFel('__geral'), pesquisaGeral.itens), __outros: metaMediasFelicidade(ptsFel('__outros'), pesqGeralOutros.itens) }};
   REUNIAO_MENSAL_CATEGORIAS.forEach(c => {{ felMeta[c] = metaMediasFelicidade(ptsFel(c), pesqGeralPorCategoria[c].itens); }});
+  // Meta de tempo de atendimento (a mesma regra do painel: 10% melhor que a media dos 3 meses anteriores), por categoria e mes.
+  const tempoMetaMes = (id, idx) => {{
+    const ant = ptsFel(id).slice(Math.max(0, idx - 3), idx).map(p => p.h).filter(h => h !== null);
+    return ant.length ? avg(ant) * 0.9 : null;
+  }};
+  const felRow = (id, idx) => Object.assign({{}}, felMeta[id], {{ metaH: tempoMetaMes(id, idx) }});
   const tempoGeralOutros = mttrDoRecorte(todosItensPeriodo.filter(r => REUNIAO_MENSAL_CATEGORIAS.indexOf(r.category || 'Sem categoria') === -1));
 
   // Meta de duvidas: os 20pp de reducao sao CUMULATIVOS ao longo do ano (YTD) — o progresso e' a
@@ -3954,18 +3974,17 @@ function initReuniaoMensal() {{
       const falta = felNecessarias(pesq.positivas, pesq.n);
       const cor = pesq.pct >= FEL_META ? 'var(--ok)' : (pesq.pct >= 85 ? 'var(--warn)' : 'var(--danger)');
       const sub = falta === 0 ? '✓ meta' : `+${{falta}} p/ meta`;
-      const mF = metaFelicidadeMes(pesq.itens || [], metaF), metaT = mF.t, metaS = mF.s;
       const atualH = tempo && tempo.mttrH !== null ? tempo.mttrH : null;
-      const corT = atualH !== null && metaT ? (atualH <= metaT.h ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
       const atualS = sla && sla.pct !== null && sla.pct !== undefined ? sla.pct : null;
-      const corS = atualS !== null && metaS && metaS.pct !== null ? (atualS >= metaS.pct ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
+      const prop = felizProp(pesq.pct, atualS, atualH), metaT = prop.t, metaS = prop.s, mF = {{ why: prop.why }};
+      const corT = atualH !== null && metaT ? (atualH <= metaT.h ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
+      const corS = atualS !== null && metaS ? (atualS >= metaS.pct ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
       const txtS = metaS ? '≥ ' + metaS.pct + '%' : ((mF.why && mF.why.s) || '–');
-      const fe = mF.fe;
-      const corFT = atualH !== null && fe ? (atualH <= fe.h * 1.1 ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
-      const txtMetaT = metaT ? '≤ ' + fmtH(metaT.h) : ((mF.why && mF.why.t) || '–');
-      const linhaT = `<br><span style="font-weight:600; font-size:11px; color:${{corFT}};">⏱ hoje ${{atualH !== null ? fmtH(atualH) : '–'}} · felizes ${{fe ? fmtH(fe.h) : '–'}}</span><br><span style="font-weight:600; font-size:11px; color:${{corT}};">p/ 95%: ${{txtMetaT}}</span><br><span style="font-weight:600; font-size:11px; color:${{corS}};">SLA hoje ${{atualS !== null ? atualS + '%' : '–'}} · felizes ${{fe && fe.sla !== null ? fe.sla + '%' : '–'}}</span><br><span style="font-weight:600; font-size:11px; color:${{corS}};">p/ 95%: ${{txtS}}</span>`;
+      const metaTemp = metaF && metaF.metaH !== null && metaF.metaH !== undefined ? metaF.metaH : null;
+      const txtFelizT = metaT ? '≤ ' + fmtH(metaT.h) : ((mF.why && mF.why.t) || '–');
+      const linhaT = `<br><span style="font-weight:600; font-size:11px; color:${{corT}};">⏱ hoje ${{atualH !== null ? fmtH(atualH) : '–'}} · p/ feliz ${{txtFelizT}} · meta ${{metaTemp !== null ? '≤ ' + fmtH(metaTemp) : '–'}}</span><br><span style="font-weight:600; font-size:11px; color:${{corS}};">SLA hoje ${{atualS !== null ? atualS + '%' : '–'}} · p/ feliz ${{txtS}} · meta ≥ 95%</span>`;
       const tip = `Felicidade ${{pesq.pct.toFixed(1).replace('.', ',')}}% (${{pesq.positivas}} positivas de ${{pesq.n}} respostas). Meta ${{FEL_META}}%: ` + (falta === 0 ? 'meta batida' : `faltam ${{falta}} resposta(s) positiva(s) a mais (sem nenhuma negativa nova) — ${{(FEL_META - pesq.pct).toFixed(1).replace('.', ',')}}pp abaixo da meta`) + ' — clique para ver os chamados';
-      return tdClick(onclickExpr, `${{Math.round(pesq.pct)}}%<br><span style="font-weight:400; font-size:11px; color:var(--text3);">${{sub}} · ${{pesq.positivas}}/${{pesq.n}}</span>${{linhaT}}`, ` font-weight:700; color:${{cor}};`, tip + ` | Tempo medio atual ${{atualH !== null ? fmtH(atualH) : '–'}}; para ${{FEL_META}}%: ` + (metaT ? `ate ${{fmtH(metaT.h)}} (${{metaT.det}})` : ((mF.why && mF.why.t) || '–')) + `. SLA atual ${{atualS !== null ? atualS + '%' : '–'}}; para ${{FEL_META}}%: ` + (metaS ? `${{metaS.pct}}% no prazo (${{metaS.det}})` : ((mF.why && mF.why.s) || '–')));
+      return tdClick(onclickExpr, `${{Math.round(pesq.pct)}}%<br><span style="font-weight:400; font-size:11px; color:var(--text3);">${{sub}} · ${{pesq.positivas}}/${{pesq.n}}</span>${{linhaT}}`, ` font-weight:700; color:${{cor}};`, tip + ` | Tempo: hoje ${{atualH !== null ? fmtH(atualH) : '–'}}; meta de tempo de atendimento ${{metaTemp !== null ? fmtH(metaTemp) + ' (10% melhor que a media dos 3 meses anteriores)' : '–'}}; para o cliente ficar ${{FEL_META}}% feliz: ` + (metaT ? `ate ${{fmtH(metaT.h)}} (${{metaT.det}})` : ((mF.why && mF.why.t) || '–')) + `. SLA: hoje ${{atualS !== null ? atualS + '%' : '–'}}; meta de SLA 95%; para o cliente ficar ${{FEL_META}}% feliz: ` + (metaS ? `${{metaS.pct}}% no prazo (${{metaS.det}})` : ((mF.why && mF.why.s) || '–')));
     }}
     if (reuniaoMensalModo === 'satisfacao') {{
       // % de respostas positivas da pesquisa de satisfacao (Movidesk) entre os chamados da categoria que foram avaliados
@@ -3989,14 +4008,14 @@ function initReuniaoMensal() {{
     return tdClick(onclickExpr, txt, cor, tip);
   }};
   function renderTabela() {{
-  const bodyRows = linhas.map(l => {{
-    const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(l.porCategoria[c] || 0, l.slaPorCategoria[c], l.tempoPorCategoria[c], l.pesqPorCategoria[c], `openModalReuniaoMensalCategoria(${{jsStr(l.mesKey)}}, ${{jsStr(c)}})`, felMeta[c])).join('');
+  const bodyRows = linhas.map((l, li) => {{
+    const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(l.porCategoria[c] || 0, l.slaPorCategoria[c], l.tempoPorCategoria[c], l.pesqPorCategoria[c], `openModalReuniaoMensalCategoria(${{jsStr(l.mesKey)}}, ${{jsStr(c)}})`, felRow(c, li))).join('');
     const corReducao = l.reducaoDuvidas > 0 ? 'var(--ok)' : (l.reducaoDuvidas === 0 ? 'var(--warn)' : 'var(--danger)');
     const reducaoTexto = l.reducaoDuvidas > 0 ? `✓ ${{l.reducaoDuvidas}}pp de reducao` : (l.reducaoDuvidas === 0 ? '– sem variacao' : `✗ ${{Math.abs(l.reducaoDuvidas)}}pp de aumento`);
     return `<tr>
       <td style="font-weight:600; cursor:pointer;" title="Ver detalhamento" onclick="openModalReuniaoMensalTotal(${{jsStr(l.mesKey)}})">${{esc(l.label)}}</td>
       ${{cols}}
-      ${{celulaCategoria(l.outros, l.slaOutros, l.tempoOutros, l.pesqOutros, `openModalReuniaoMensalOutros(${{jsStr(l.mesKey)}})`, felMeta.__outros)}}
+      ${{celulaCategoria(l.outros, l.slaOutros, l.tempoOutros, l.pesqOutros, `openModalReuniaoMensalOutros(${{jsStr(l.mesKey)}})`, felRow('__outros', li))}}
       ${{tdClick(`openModalReuniaoMensalTotal(${{jsStr(l.mesKey)}})`, l.atendidosSuporte, ' font-weight:700;')}}
       ${{tdClick(`openModalReuniaoMensalTotal(${{jsStr(l.mesKey)}})`, l.mttrH !== null ? fmtH(l.mttrH) : '-')}}
       ${{tdClick(`openModalReuniaoMensalPrimeiraResposta(${{jsStr(l.mesKey)}})`, l.pctPrimeira+'%')}}
@@ -4013,8 +4032,8 @@ function initReuniaoMensal() {{
   const corReducaoTotal = metaBatida ? 'var(--ok)' : (ytdReducaoDuvidas >= 0 ? 'var(--warn)' : 'var(--danger)');
   const totalRow = `<tr style="border-top:2px solid var(--panel-border); font-weight:700;">
     <td style="cursor:pointer;" title="Ver detalhamento" onclick="openModalReuniaoMensalTotal('total')">YTD (acumulado do ano)</td>
-    ${{REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(totalGeral[c], slaGeralPorCategoria[c], tempoGeralPorCategoria[c], pesqGeralPorCategoria[c], `openModalReuniaoMensalCategoria('total', ${{jsStr(c)}})`, felMeta[c])).join('')}}
-    ${{celulaCategoria(totalGeralOutros, slaGeralOutros, tempoGeralOutros, pesqGeralOutros, `openModalReuniaoMensalOutros('total')`, felMeta.__outros)}}
+    ${{REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(totalGeral[c], slaGeralPorCategoria[c], tempoGeralPorCategoria[c], pesqGeralPorCategoria[c], `openModalReuniaoMensalCategoria('total', ${{jsStr(c)}})`, felRow(c, linhas.length))).join('')}}
+    ${{celulaCategoria(totalGeralOutros, slaGeralOutros, tempoGeralOutros, pesqGeralOutros, `openModalReuniaoMensalOutros('total')`, felRow('__outros', linhas.length))}}
     ${{tdClick(`openModalReuniaoMensalTotal('total')`, totalGeralFechados)}}
     ${{tdClick(`openModalReuniaoMensalTotal('total')`, statsGeralTempo.mttrH !== null ? fmtH(statsGeralTempo.mttrH) : '-')}}
     ${{tdClick(`openModalReuniaoMensalPrimeiraResposta('total')`, statsGeral.pctPrimeira+'%')}}
@@ -4098,15 +4117,15 @@ function initReuniaoMensal() {{
       r += `<br><b>Ultimo mes com resposta (${{esc(com[com.length - 1].p.lab)}}):</b> ${{ult.pct.toFixed(1).replace('.', ',')}}% — ` + (f2 === 0 ? 'meta batida' : `faltam ${{f2}} positiva(s) para ${{FEL_META}}%`) + '.';
     }}
     // Grafico de tempo: tempo medio de atendimento de cada mes (barras) x tempo para sustentar a meta de felicidade (linha tracejada)
-    const metaF = felMeta[felCat], metaT = metaF && metaF.t, metaS = metaF && metaF.s;
-    const tpts = linhas.map(l => {{
+    const metaF = null, metaT = null, metaS = null;
+    const tpts = linhas.map((l, ix) => {{
       const t = felCat === '__geral' ? {{ mttrH: l.mttrH }} : (felCat === '__outros' ? l.tempoOutros : l.tempoPorCategoria[felCat]);
       const sl = felCat === '__geral' ? {{ pct: l.pctSla }} : (felCat === '__outros' ? l.slaOutros : l.slaPorCategoria[felCat]);
       const pqm = felCat === '__geral' ? l.pesquisa : (felCat === '__outros' ? l.pesqOutros : l.pesqPorCategoria[felCat]);
       const fz = felizesDoRecorte(pqm ? pqm.itens : []);
-      return {{ lab: l.label.split('/')[0].slice(0, 3), h: t && t.mttrH !== null && t.mttrH !== undefined ? t.mttrH : null, sla: sl && sl.pct !== null && sl.pct !== undefined ? sl.pct : null, fh: fz ? fz.h : null, fsla: fz ? fz.sla : null }};
+      return {{ lab: l.label.split('/')[0].slice(0, 3), h: t && t.mttrH !== null && t.mttrH !== undefined ? t.mttrH : null, sla: sl && sl.pct !== null && sl.pct !== undefined ? sl.pct : null, fh: tempoMetaMes(felCat, ix), fsla: null, fp: felizProp(pqm && pqm.n ? pqm.pct : null, sl && sl.pct !== null && sl.pct !== undefined ? sl.pct : null, t && t.mttrH !== null && t.mttrH !== undefined ? t.mttrH : null) }};
     }});
-    const maxH = Math.max(1, ...tpts.map(p => Math.max(p.h || 0, p.fh || 0)), metaT ? metaT.h : 0) * 1.15;
+    const maxH = Math.max(1, ...tpts.map(p => Math.max(p.h || 0, p.fh || 0, p.fp && p.fp.t ? p.fp.t.h : 0))) * 1.15;
     const yT = v => T + (1 - v / maxH) * ph;
     let s2 = `<svg viewBox="0 0 ${{W}} ${{H}}" style="width:100%; max-width:${{W}}px; height:auto; display:block; margin:0 auto;" role="img" aria-label="Tempo medio de atendimento x tempo necessario para a meta">`;
     [0, 0.25, 0.5, 0.75, 1].forEach(f => {{
@@ -4117,22 +4136,26 @@ function initReuniaoMensal() {{
       const cx = L + band * i + band / 2;
       s2 += `<text x="${{cx}}" y="${{H - Bt + 18}}" text-anchor="middle" font-size="11.5" fill="var(--text2, var(--text3))">${{esc(p.lab)}}</text>`;
       if (p.h === null) return;
-      const ok = metaT ? p.h <= metaT.h : true;
-      const cor = metaT ? (ok ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
+      const ptf = p.fp && p.fp.t ? p.fp.t.h : null;
+      const ok = ptf !== null ? p.h <= ptf : true;
+      const cor = ptf !== null ? (ok ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
+      if (ptf !== null) s2 += `<line x1="${{cx - bw / 2 - 5}}" x2="${{cx + bw / 2 + 5}}" y1="${{yT(ptf)}}" y2="${{yT(ptf)}}" stroke="var(--ok)" stroke-width="3" stroke-dasharray="4 2"><title>Tempo para o cliente ficar ${{FEL_META}}% feliz: ${{fmtH(ptf)}} (${{p.fp.t.det}})</title></line>`;
       s2 += `<rect x="${{cx - bw / 2}}" y="${{yT(p.h)}}" width="${{bw}}" height="${{T + ph - yT(p.h)}}" rx="3" fill="${{cor}}" opacity=".55"><title>Tempo medio ${{fmtH(p.h)}}${{p.sla !== null ? ' · SLA ' + p.sla + '%' : ''}}</title></rect>`;
       s2 += `<text x="${{cx}}" y="${{yT(p.h) - 5}}" text-anchor="middle" font-size="11.5" font-weight="700" fill="${{cor}}">${{fmtH(p.h)}}</text>`;
-      if (p.fh !== null) s2 += `<line x1="${{cx - bw / 2 - 5}}" x2="${{cx + bw / 2 + 5}}" y1="${{yT(p.fh)}}" y2="${{yT(p.fh)}}" stroke="var(--warn)" stroke-width="3"><title>Tempo medio dos chamados em que o cliente ficou feliz: ${{fmtH(p.fh)}}${{p.fsla !== null ? ' · ' + p.fsla + '% no prazo' : ''}}</title></line>`;
+      if (p.fh !== null) s2 += `<line x1="${{cx - bw / 2 - 5}}" x2="${{cx + bw / 2 + 5}}" y1="${{yT(p.fh)}}" y2="${{yT(p.fh)}}" stroke="var(--warn)" stroke-width="3"><title>Meta de tempo de atendimento do mes: ${{fmtH(p.fh)}}</title></line>`;
       if (p.sla !== null) s2 += `<text x="${{cx}}" y="${{T + ph - 6}}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text)">SLA ${{p.sla}}%</text>`;
     }});
     if (metaT) s2 += `<line x1="${{L}}" x2="${{W - R}}" y1="${{yT(metaT.h)}}" y2="${{yT(metaT.h)}}" stroke="var(--ok)" stroke-width="2" stroke-dasharray="7 5"/><text x="${{W - R - 4}}" y="${{yT(metaT.h) - 6}}" text-anchor="end" font-size="11.5" font-weight="700" fill="var(--ok)">Tempo p/ ${{FEL_META}}%: ≤ ${{fmtH(metaT.h)}}</text>`;
     s2 += `</svg>`;
     document.getElementById('graficoFelTempo').innerHTML = s2;
-    document.getElementById('felSubTempo').innerHTML = `<b>⏱ Tempo medio de atendimento</b> de cada mes (barras; verde = dentro do tempo necessario, vermelho = acima; o SLA do mes aparece dentro da barra; o traco amarelo e' o tempo medio dos chamados em que o cliente ficou feliz) x <span style="color:var(--ok);">- - -</span> tempo necessario para sustentar ${{FEL_META}}% de felicidade — ${{esc(nomeCat)}}. Tempo e SLA necessarios: reta entre a media dos meses com satisfacao >= ${{FEL_META}}% e a media dos meses abaixo disso (sem mes acima, reta de minimos quadrados dos meses).`;
+    document.getElementById('felSubTempo').innerHTML = `<b>⏱ Tempo medio de atendimento</b> de cada mes (barras; verde = dentro do tempo necessario, vermelho = acima; o SLA do mes aparece dentro da barra; o traco amarelo e' a meta de tempo de atendimento do mes: 10% melhor que a media dos 3 meses anteriores; o traco verde tracejado e' o tempo para o cliente ficar ${{FEL_META}}% feliz = tempo do mes x satisfacao / ${{FEL_META}}) x <span style="color:var(--ok);">- - -</span> tempo para o cliente ficar ${{FEL_META}}% feliz — ${{esc(nomeCat)}}. Tempo e SLA necessarios: reta entre a media dos meses com satisfacao >= ${{FEL_META}}% e a media dos meses abaixo disso (sem mes acima, reta de minimos quadrados dos meses).`;
     const tAtual = tpts.filter(p => p.h !== null);
     if (tAtual.length) {{
       const u = tAtual[tAtual.length - 1];
-      r += `<br><b>Tempo:</b> atual (${{esc(u.lab)}}) ${{fmtH(u.h)}} · ` + (metaT ? `necessario ≤ ${{fmtH(metaT.h)}} (${{metaT.det}}) — ` + (u.h <= metaT.h ? '<b style="color:var(--ok);">dentro do tempo necessario</b>' : `<b style="color:var(--danger);">precisa reduzir ${{fmtH(u.h - metaT.h)}}</b>`) : ((metaF && metaF.why && metaF.why.t) || '–'));
-      r += `<br><b>SLA:</b> atual (${{esc(u.lab)}}) ${{u.sla !== null ? u.sla + '%' : '–'}} · ` + (metaS ? `necessario ≥ ${{metaS.pct}}% no prazo (${{metaS.det}})` + (u.sla !== null ? (u.sla >= metaS.pct ? ' — <b style="color:var(--ok);">dentro</b>' : ` — <b style="color:var(--danger);">faltam ${{metaS.pct - u.sla}}pp</b>`) : '') : ((metaF && metaF.why && metaF.why.s) || '–'));
+      const pu = felizProp(pts[pts.length - 1].pct, u.sla, u.h), metaT = pu.t, metaS = pu.s, metaF = {{ why: pu.why }};
+      const mtU = tempoMetaMes(felCat, linhas.length - 1);
+      r += `<br><b>Tempo:</b> atual (${{esc(u.lab)}}) ${{fmtH(u.h)}} · meta de atendimento ${{mtU !== null ? '≤ ' + fmtH(mtU) : '–'}}${{mtU !== null ? (u.h <= mtU ? ' (<b style="color:var(--ok);">dentro</b>)' : ' (<b style="color:var(--danger);">acima ' + fmtH(u.h - mtU) + '</b>)') : ''}} · para o cliente ficar feliz: ` + (metaT ? `≤ ${{fmtH(metaT.h)}} (${{metaT.det}}) — ` + (u.h <= metaT.h ? '<b style="color:var(--ok);">dentro do tempo necessario</b>' : `<b style="color:var(--danger);">precisa reduzir ${{fmtH(u.h - metaT.h)}}</b>`) : ((metaF && metaF.why && metaF.why.t) || '–'));
+      r += `<br><b>SLA:</b> atual (${{esc(u.lab)}}) ${{u.sla !== null ? u.sla + '%' : '–'}} · meta de SLA 95%${{u.sla !== null ? (u.sla >= 95 ? ' (<b style="color:var(--ok);">dentro</b>)' : ' (<b style="color:var(--danger);">faltam ' + (95 - u.sla) + 'pp</b>)') : ''}} · para o cliente ficar feliz: ` + (metaS ? `≥ ${{metaS.pct}}% no prazo (${{metaS.det}})` + (u.sla !== null ? (u.sla >= metaS.pct ? ' — <b style="color:var(--ok);">dentro</b>' : ` — <b style="color:var(--danger);">faltam ${{metaS.pct - u.sla}}pp</b>`) : '') : ((metaF && metaF.why && metaF.why.s) || '–'));
     }}
     document.getElementById('resumoFelicidade').innerHTML = r || 'Sem respostas de pesquisa para esta categoria.';
   }}
@@ -4151,14 +4174,17 @@ function initReuniaoMensal() {{
       const sla = geral ? {{ pct: l.pctSla }} : (outros ? l.slaOutros : l.slaPorCategoria[id]);
       const tempo = geral ? {{ mttrH: l.mttrH }} : (outros ? l.tempoOutros : l.tempoPorCategoria[id]);
       const qtd = geral ? l.total : (outros ? l.outros : (l.porCategoria[id] || 0));
-      const m = metaFelicidadeMes(pq ? pq.itens : [], felMeta[id]);
+      const m = felizProp(pq && pq.n ? pq.pct : null, sla && sla.pct !== undefined ? sla.pct : null, tempo && tempo.mttrH !== undefined ? tempo.mttrH : null);
+      const metaTemp = tempoMetaMes(id, linhas.findIndex(z => z.mesKey === l.mesKey));
       const acoes = [];
       let abF = false, abS = false, abT = false;
       if (pq && pq.n && pq.pct < FEL_META) {{ abF = true; acoes.push(`+${{felNecessarias(pq.positivas, pq.n)}} respostas positivas (felicidade ${{Math.round(pq.pct)}}% → ${{FEL_META}}%)`); }}
       if (m.s && m.s.pct !== null && sla && sla.pct !== null && sla.pct !== undefined && sla.pct < m.s.pct) {{ abS = true; acoes.push(`SLA +${{m.s.pct - sla.pct}}pp (${{sla.pct}}% → ≥ ${{m.s.pct}}%)`); }}
       if (m.t && tempo && tempo.mttrH !== null && tempo.mttrH !== undefined && tempo.mttrH > m.t.h) {{ abT = true; acoes.push(`reduzir ${{fmtH(tempo.mttrH - m.t.h)}} no tempo (${{fmtH(tempo.mttrH)}} → ≤ ${{fmtH(m.t.h)}})`); }}
+      if (sla && sla.pct !== null && sla.pct !== undefined && sla.pct < 95) {{ abS = true; acoes.push(`SLA +${{95 - sla.pct}}pp para a meta de 95% (${{sla.pct}}% → 95%)`); }}
+      if (metaTemp !== null && tempo && tempo.mttrH !== null && tempo.mttrH !== undefined && tempo.mttrH > metaTemp) {{ abT = true; acoes.push(`tempo ${{fmtH(tempo.mttrH - metaTemp)}} acima da meta (${{fmtH(tempo.mttrH)}} → ≤ ${{fmtH(metaTemp)}})`); }}
       const abaixo = (usaF && abF) || (usaS && abS) || (usaT && abT);
-      return {{ id, nome: geral ? 'Geral (todas)' : (outros ? 'Outros' : id), qtd, pq, sla, tempo, m, abF, abS, abT, abaixo, acoes }};
+      return {{ id, metaTemp, nome: geral ? 'Geral (todas)' : (outros ? 'Outros' : id), qtd, pq, sla, tempo, m, abF, abS, abT, abaixo, acoes }};
     }};
     let itens = ['__geral'].concat(nomes).map(linhaDe);
     if (!todas) itens = itens.filter(x => x.abaixo);
@@ -4168,8 +4194,8 @@ function initReuniaoMensal() {{
       return `<tr>
         <td style="font-weight:600; cursor:pointer;" title="Ver os chamados" onclick="${{aberto}}">${{esc(x.nome)}} <span style="font-weight:400; color:var(--text3); font-size:11px;">(${{x.qtd}})</span></td>
         ${{sinal(x.abF, x.pq && x.pq.n, x.pq && x.pq.n ? Math.round(x.pq.pct) + '% <span style="font-weight:400; font-size:11px;">(' + x.pq.positivas + '/' + x.pq.n + ')</span>' : '–')}}
-        ${{sinal(x.abS, x.sla && x.sla.pct !== null && x.sla.pct !== undefined, (x.sla && x.sla.pct !== null && x.sla.pct !== undefined ? x.sla.pct + '%' : '–') + ' <span style="font-weight:400; font-size:11px;">→ ' + (x.m.s ? '≥ ' + x.m.s.pct + '%' : ((x.m.why && x.m.why.s) || '–')) + '</span>')}}
-        ${{sinal(x.abT, x.tempo && x.tempo.mttrH !== null && x.tempo.mttrH !== undefined, (x.tempo && x.tempo.mttrH !== null && x.tempo.mttrH !== undefined ? fmtH(x.tempo.mttrH) : '–') + ' <span style="font-weight:400; font-size:11px;">→ ' + (x.m.t ? '≤ ' + fmtH(x.m.t.h) : ((x.m.why && x.m.why.t) || '–')) + '</span>')}}
+        ${{sinal(x.abS, x.sla && x.sla.pct !== null && x.sla.pct !== undefined, (x.sla && x.sla.pct !== null && x.sla.pct !== undefined ? x.sla.pct + '%' : '–') + ' <span style="font-weight:400; font-size:11px;">→ p/ feliz ' + (x.m.s ? '≥ ' + x.m.s.pct + '%' : ((x.m.why && x.m.why.s) || '–')) + ' · meta ≥ 95%</span>')}}
+        ${{sinal(x.abT, x.tempo && x.tempo.mttrH !== null && x.tempo.mttrH !== undefined, (x.tempo && x.tempo.mttrH !== null && x.tempo.mttrH !== undefined ? fmtH(x.tempo.mttrH) : '–') + ' <span style="font-weight:400; font-size:11px;">→ p/ feliz ' + (x.m.t ? '≤ ' + fmtH(x.m.t.h) : ((x.m.why && x.m.why.t) || '–')) + (x.metaTemp !== null ? ' · meta ≤ ' + fmtH(x.metaTemp) : '') + '</span>')}}
         <td style="font-size:12.5px;">${{x.acoes.length ? x.acoes.map(a => esc(a)).join('<br>') : '<span style="color:var(--ok);">✓ dentro do necessário</span>'}}</td>
       </tr>`;
     }}).join('');
