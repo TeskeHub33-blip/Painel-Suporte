@@ -807,10 +807,19 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
             <button type="button" data-modo="sla" onclick="setReuniaoMensalModo('sla')">% SLA</button>
             <button type="button" data-modo="tempo" onclick="setReuniaoMensalModo('tempo')">Tempo</button>
             <button type="button" data-modo="satisfacao" onclick="setReuniaoMensalModo('satisfacao')">Satisfação</button>
+            <button type="button" data-modo="felicidade" onclick="setReuniaoMensalModo('felicidade')" title="Felicidade do cliente x meta de 95%: quantas respostas positivas faltam por categoria">😊 Felicidade</button>
           </span>
         </h2>
         <div class="panel-sub" id="reuniaoMensalSub">Todos os meses desde jan/2026 — time Suporte</div>
         <div id="tabelaReuniaoMensal"></div>
+      </div>
+      <div class="panel" style="margin-top: 18px;">
+        <h2>😊 Felicidade do cliente x meta (95%) x chamados abertos
+          <select id="felCatSel" class="itil-select" style="margin-left:12px; font-size:12px;" onchange="setFelCat(this.value)"></select>
+        </h2>
+        <div class="panel-sub" id="felSub"></div>
+        <div id="graficoFelicidade"></div>
+        <div id="resumoFelicidade" style="margin-top:10px; font-size:13px;"></div>
       </div>
       <div class="panel" style="margin-top: 18px;">
         <h2>📈 Emissoes x Chamados — comparativo com o ano anterior
@@ -3266,6 +3275,12 @@ function respostaPositiva(tipo, valor) {{
   if (tipo === 3) return valor >= 9;
   return null;
 }}
+// Meta de felicidade: 95% de respostas positivas na pesquisa de satisfacao. Quantas respostas positivas a mais
+// (sem nenhuma negativa nova) levam p/n a 95%: (p+x)/(n+x) >= 0,95  =>  x >= 19n - 20p.
+const FEL_META = 95;
+let felCat = '__geral';
+function setFelCat(v) {{ felCat = v; if (window._renderGrafFel) window._renderGrafFel(); }}
+function felNecessarias(p, n) {{ return Math.max(0, 19 * n - 20 * p); }}
 function pesquisaDoRecorte(items) {{
   const comResposta = items.filter(r => pesquisaPorChamado(r.id));
   const avaliadas = comResposta.filter(r => respostaPositiva(pesquisaPorChamado(r.id)[1], pesquisaPorChamado(r.id)[2]) !== null);
@@ -3725,6 +3740,14 @@ function initReuniaoMensal() {{
   // Celula de categoria (e 'Outros'): quantidade de chamados fechados ou, no modo '% SLA', o % no prazo
   // daquela categoria no mes (vermelho abaixo de 70%, mesmo limite do KPI de SLA do painel).
   const celulaCategoria = (qtd, sla, tempo, pesq, onclickExpr) => {{
+    if (reuniaoMensalModo === 'felicidade') {{
+      if (!pesq || !pesq.n) return tdClick(onclickExpr, '–', ' color:var(--text3);', `Nenhum dos ${{qtd}} chamados fechados teve resposta na pesquisa de satisfacao — clique para ver os chamados`);
+      const falta = felNecessarias(pesq.positivas, pesq.n);
+      const cor = pesq.pct >= FEL_META ? 'var(--ok)' : (pesq.pct >= 85 ? 'var(--warn)' : 'var(--danger)');
+      const sub = falta === 0 ? '✓ meta' : `+${{falta}} p/ meta`;
+      const tip = `Felicidade ${{pesq.pct.toFixed(1).replace('.', ',')}}% (${{pesq.positivas}} positivas de ${{pesq.n}} respostas). Meta ${{FEL_META}}%: ` + (falta === 0 ? 'meta batida' : `faltam ${{falta}} resposta(s) positiva(s) a mais (sem nenhuma negativa nova) — ${{(FEL_META - pesq.pct).toFixed(1).replace('.', ',')}}pp abaixo da meta`) + ' — clique para ver os chamados';
+      return tdClick(onclickExpr, `${{Math.round(pesq.pct)}}%<br><span style="font-weight:400; font-size:11px; color:var(--text3);">${{sub}} · ${{pesq.positivas}}/${{pesq.n}}</span>`, ` font-weight:700; color:${{cor}};`, tip);
+    }}
     if (reuniaoMensalModo === 'satisfacao') {{
       // % de respostas positivas da pesquisa de satisfacao (Movidesk) entre os chamados da categoria que foram avaliados
       if (!pesq || !pesq.n) return tdClick(onclickExpr, '–', ' color:var(--text3);', `Nenhum dos ${{qtd}} chamados fechados teve resposta na pesquisa de satisfacao — clique para ver os chamados`);
@@ -3793,12 +3816,73 @@ function initReuniaoMensal() {{
     ? "Todos os meses desde jan/2026 — time Suporte · colunas de categoria em % de chamados dentro do SLA ('–' = nenhum chamado com SLA definido)"
     : reuniaoMensalModo === 'satisfacao'
     ? "Todos os meses desde jan/2026 — time Suporte · colunas de categoria em % de respostas positivas da pesquisa de satisfacao do Movidesk (entre parenteses: respostas; '–' = nenhuma resposta)"
+    : reuniaoMensalModo === 'felicidade'
+    ? "Todos os meses desde jan/2026 — time Suporte · felicidade = % de respostas positivas na pesquisa de satisfacao (meta 95%). Abaixo do %: quantas respostas positivas a mais faltam para chegar na meta e positivas/respostas"
     : reuniaoMensalModo === 'tempo'
     ? "Todos os meses desde jan/2026 — time Suporte · colunas de categoria em tempo medio de atendimento (criacao ate resolucao; '–' = nenhum chamado fechado)"
     : 'Todos os meses desde jan/2026 — time Suporte · colunas de categoria em quantidade de chamados fechados';
   }}
   window._renderTabelaReuniaoMensal = renderTabela;
+  function renderGrafFel() {{
+    const sel = document.getElementById('felCatSel');
+    if (sel && !sel.options.length) {{
+      sel.innerHTML = `<option value="__geral">Geral (todas as categorias)</option>` + REUNIAO_MENSAL_CATEGORIAS.map(c => `<option value="${{esc(c)}}">${{esc(c)}}</option>`).join('') + `<option value="__outros">Outros</option>`;
+    }}
+    if (sel) sel.value = felCat;
+    const pegaPq = (pq) => felCat === '__geral' ? pq.g : (felCat === '__outros' ? pq.o : pq.c[felCat]);
+    const pts = linhas.map(l => {{
+      const pq = felCat === '__geral' ? l.pesquisa : (felCat === '__outros' ? l.pesqOutros : l.pesqPorCategoria[felCat]);
+      return {{ lab: l.label.split('/')[0].slice(0, 3), pct: pq && pq.n ? pq.pct : null, n: pq ? pq.n : 0, pos: pq ? pq.positivas : 0, ab: CHAMADOS_ABERTOS[MONTH_YM[l.mesKey]] || 0 }};
+    }});
+    const W = 920, H = 330, L = 48, R = 56, T = 24, Bt = 44, pw = W - L - R, ph = H - T - Bt;
+    const maxAb = Math.max(1, ...pts.map(p => p.ab)) * 1.15;
+    const yP = v => T + (1 - (Math.min(100, Math.max(50, v)) - 50) / 50) * ph;
+    const yA = v => T + (1 - v / maxAb) * ph;
+    const band = pw / pts.length, bw = Math.min(46, band * 0.55);
+    let svg = `<svg viewBox="0 0 ${{W}} ${{H}}" style="width:100%; max-width:${{W}}px; height:auto; display:block; margin:0 auto;" role="img" aria-label="Felicidade do cliente x meta x chamados abertos por mes">`;
+    [50, 60, 70, 80, 90, 100].forEach(v => {{
+      svg += `<line x1="${{L}}" x2="${{W - R}}" y1="${{yP(v)}}" y2="${{yP(v)}}" stroke="var(--panel-border)" stroke-width="1"/><text x="${{L - 6}}" y="${{yP(v) + 4}}" text-anchor="end" font-size="11" fill="var(--text3)">${{v}}%</text>`;
+    }});
+    [0, 0.5, 1].forEach(f => {{
+      const v = Math.round(maxAb / 1.15 * f * 1.15 / 100) * 100;
+      svg += `<text x="${{W - R + 6}}" y="${{yA(v) + 4}}" font-size="11" fill="var(--text3)">${{v}}</text>`;
+    }});
+    pts.forEach((p, i) => {{
+      const cx = L + band * i + band / 2;
+      svg += `<rect x="${{cx - bw / 2}}" y="${{yA(p.ab)}}" width="${{bw}}" height="${{T + ph - yA(p.ab)}}" rx="3" fill="var(--text3)" opacity=".28"><title>${{p.ab}} chamados abertos</title></rect>`;
+      svg += `<text x="${{cx}}" y="${{yA(p.ab) - 5}}" text-anchor="middle" font-size="10.5" fill="var(--text3)">${{p.ab}}</text>`;
+      svg += `<text x="${{cx}}" y="${{H - Bt + 18}}" text-anchor="middle" font-size="11.5" fill="var(--text2, var(--text3))">${{esc(p.lab)}}</text>`;
+    }});
+    svg += `<line x1="${{L}}" x2="${{W - R}}" y1="${{yP(FEL_META)}}" y2="${{yP(FEL_META)}}" stroke="var(--ok)" stroke-width="2" stroke-dasharray="7 5"/><text x="${{W - R - 4}}" y="${{yP(FEL_META) - 6}}" text-anchor="end" font-size="11.5" font-weight="700" fill="var(--ok)">Meta ${{FEL_META}}%</text>`;
+    const com = pts.map((p, i) => ({{ p, i }})).filter(o => o.p.pct !== null);
+    const xy = o => [L + band * o.i + band / 2, yP(o.p.pct)];
+    if (com.length > 1) svg += `<polyline fill="none" stroke="var(--accent, #ff4d8d)" stroke-width="3" stroke-linejoin="round" points="${{com.map(o => xy(o).join(',')).join(' ')}}"/>`;
+    com.forEach(o => {{
+      const [x, y] = xy(o);
+      const cor = o.p.pct >= FEL_META ? 'var(--ok)' : (o.p.pct >= 85 ? 'var(--warn)' : 'var(--danger)');
+      svg += `<circle cx="${{x}}" cy="${{y}}" r="5.5" fill="${{cor}}" stroke="var(--panel-bg, #1b1b30)" stroke-width="2"><title>${{o.p.pct.toFixed(1).replace('.', ',')}}% (${{o.p.pos}} positivas de ${{o.p.n}} respostas)</title></circle>`;
+      svg += `<text x="${{x}}" y="${{y - 11}}" text-anchor="middle" font-size="12" font-weight="700" fill="${{cor}}">${{Math.round(o.p.pct)}}%</text>`;
+    }});
+    svg += `</svg>`;
+    document.getElementById('graficoFelicidade').innerHTML = svg;
+    const nomeCat = felCat === '__geral' ? 'todas as categorias' : (felCat === '__outros' ? 'Outros' : felCat);
+    document.getElementById('felSub').innerHTML = `<b style="color:var(--accent, #ff4d8d);">●</b> Felicidade (% de respostas positivas na pesquisa de satisfacao) · <span style="color:var(--ok);">- - -</span> meta ${{FEL_META}}% · <span style="opacity:.6;">▮</span> chamados abertos no mes (eixo da direita, Suporte) — ${{esc(nomeCat)}}`;
+    const acum = felCat === '__geral' ? pesquisaGeral : (felCat === '__outros' ? pesqGeralOutros : pesqGeralPorCategoria[felCat]);
+    const ult = com.length ? com[com.length - 1].p : null;
+    let r = '';
+    if (acum && acum.n) {{
+      const f = felNecessarias(acum.positivas, acum.n);
+      r += `<b>Acumulado do ano (${{esc(nomeCat)}}):</b> ${{acum.pct.toFixed(1).replace('.', ',')}}% de felicidade (${{acum.positivas}} positivas de ${{acum.n}} respostas) · meta ${{FEL_META}}% — ` + (f === 0 ? `<b style="color:var(--ok);">meta batida</b>` : `faltam <b style="color:var(--danger);">${{(FEL_META - acum.pct).toFixed(1).replace('.', ',')}}pp</b>, ou <b>${{f}}</b> resposta(s) positiva(s) a mais sem nenhuma negativa nova.`);
+    }}
+    if (ult) {{
+      const f2 = felNecessarias(ult.pos, ult.n);
+      r += `<br><b>Ultimo mes com resposta (${{esc(com[com.length - 1].p.lab)}}):</b> ${{ult.pct.toFixed(1).replace('.', ',')}}% — ` + (f2 === 0 ? 'meta batida' : `faltam ${{f2}} positiva(s) para ${{FEL_META}}%`) + '.';
+    }}
+    document.getElementById('resumoFelicidade').innerHTML = r || 'Sem respostas de pesquisa para esta categoria.';
+  }}
+  window._renderGrafFel = renderGrafFel;
   renderTabela();
+  renderGrafFel();
   renderEmissoes();
 }}
 // Sessao ja desbloqueada (ex.: recarga automatica da pagina): o gate some, mas a tabela precisa ser montada.
