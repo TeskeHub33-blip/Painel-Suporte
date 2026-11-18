@@ -3828,9 +3828,18 @@ function tetoTempoFelicidade(items) {
 function metaFelicidadeMes(itensMes, metaAno) {
   const mm = metaFelicidade(itensMes), a = metaAno || {};
   const t = mm.t || a.t, s = (mm.s && mm.s.pct !== null) ? mm.s : (a.s || mm.s);
-  return { t: t, s: s, tt: t ? null : (mm.tt || a.tt), doMes: !!(mm.t || (mm.s && mm.s.pct !== null)) };
+  return { t: t, s: s, tt: t ? null : (mm.tt || a.tt), fe: mm.fe || a.fe, doMes: !!(mm.t || (mm.s && mm.s.pct !== null)) };
 }
-function metaFelicidade(items) { const t = tempoMetaFelicidade(items); return { t: t, s: slaMetaFelicidade(items), tt: t ? null : tetoTempoFelicidade(items) }; }
+// Base de comparacao: os chamados em que o cliente FICOU FELIZ (resposta positiva) — tempo medio de atendimento deles e % que saiu no prazo.
+function felizesDoRecorte(items) {
+  const av = items.filter(r => r.createdDate && r.resolvedIn && !reaberturaIndevidaAzure(r) && pesquisaPorChamado(r.id) && respostaPositiva(pesquisaPorChamado(r.id)[1], pesquisaPorChamado(r.id)[2]) === true);
+  if (!av.length) return null;
+  const hs = av.map(r => (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000);
+  const comSla = av.filter(r => r.slaSolutionDate && !aguardouOrgaoGovernamental(r));
+  const no = comSla.filter(r => parseDt(r.resolvedIn) <= parseDt(r.slaSolutionDate)).length;
+  return { h: avg(hs), n: av.length, sla: comSla.length ? Math.round(no / comSla.length * 100) : null };
+}
+function metaFelicidade(items) { const t = tempoMetaFelicidade(items); return { t: t, s: slaMetaFelicidade(items), tt: t ? null : tetoTempoFelicidade(items), fe: felizesDoRecorte(items) }; }
 function pesquisaDoRecorte(items) {
   const comResposta = items.filter(r => pesquisaPorChamado(r.id));
   const avaliadas = comResposta.filter(r => respostaPositiva(pesquisaPorChamado(r.id)[1], pesquisaPorChamado(r.id)[2]) !== null);
@@ -4303,7 +4312,10 @@ function initReuniaoMensal() {
       const atualS = sla && sla.pct !== null && sla.pct !== undefined ? sla.pct : null;
       const corS = atualS !== null && metaS && metaS.pct !== null ? (atualS >= metaS.pct ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
       const txtS = metaS ? (metaS.pct === null ? 'no prazo só ' + Math.round(metaS.x) + '% felizes' : (metaS.pct === 0 ? 'prazo já basta (' + Math.round(metaS.x) + '% felizes)' : '≥ ' + metaS.pct + '%')) : '–';
-      const linhaT = `<br><span style="font-weight:600; font-size:11px; color:${corT};">⏱ ${atualH !== null ? fmtH(atualH) : '–'} → ${metaT ? '≤ ' + fmtH(metaT.h) : (mF.tt ? 'teto ' + Math.round(mF.tt.pct) + '% (≤ ' + fmtH(mF.tt.h) + ')' : '–')}</span><br><span style="font-weight:600; font-size:11px; color:${corS};">SLA ${atualS !== null ? atualS + '%' : '–'} → ${txtS}</span>`;
+      const fe = mF.fe;
+      const corFT = atualH !== null && fe ? (atualH <= fe.h * 1.1 ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
+      const txtMetaT = metaT ? '≤ ' + fmtH(metaT.h) : (mF.tt ? 'teto ' + Math.round(mF.tt.pct) + '% (≤ ' + fmtH(mF.tt.h) + ')' : '–');
+      const linhaT = `<br><span style="font-weight:600; font-size:11px; color:${corFT};">⏱ hoje ${atualH !== null ? fmtH(atualH) : '–'} · felizes ${fe ? fmtH(fe.h) : '–'}</span><br><span style="font-weight:600; font-size:11px; color:${corT};">p/ 95%: ${txtMetaT}</span><br><span style="font-weight:600; font-size:11px; color:${corS};">SLA hoje ${atualS !== null ? atualS + '%' : '–'} · felizes ${fe && fe.sla !== null ? fe.sla + '%' : '–'}</span><br><span style="font-weight:600; font-size:11px; color:${corS};">p/ 95%: ${txtS}</span>`;
       const tip = `Felicidade ${pesq.pct.toFixed(1).replace('.', ',')}% (${pesq.positivas} positivas de ${pesq.n} respostas). Meta ${FEL_META}%: ` + (falta === 0 ? 'meta batida' : `faltam ${falta} resposta(s) positiva(s) a mais (sem nenhuma negativa nova) — ${(FEL_META - pesq.pct).toFixed(1).replace('.', ',')}pp abaixo da meta`) + ' — clique para ver os chamados';
       return tdClick(onclickExpr, `${Math.round(pesq.pct)}%<br><span style="font-weight:400; font-size:11px; color:var(--text3);">${sub} · ${pesq.positivas}/${pesq.n}</span>${linhaT}`, ` font-weight:700; color:${cor};`, tip + ` | Tempo medio atual ${atualH !== null ? fmtH(atualH) : '–'}; tempo para sustentar ${FEL_META}% (estimado pelo historico do ano): ${metaT ? 'ate ' + fmtH(metaT.h) + ' (' + metaT.n + ' chamados avaliados)' : 'sem corte de tempo que chegue a ' + FEL_META + '%'}. SLA atual ${atualS !== null ? atualS + '%' : '–'}; SLA para ${FEL_META}% de felicidade: ` + (metaS ? (metaS.pct === null ? `o prazo sozinho nao basta (no prazo, so ${metaS.x.toFixed(0)}% ficam felizes)` : `${metaS.pct}% no prazo (no prazo ${metaS.x.toFixed(0)}% felizes; fora ${metaS.y !== null ? metaS.y.toFixed(0) + '%' : 's/ dados'})`) : 'sem dados suficientes'));
     }
@@ -4442,9 +4454,11 @@ function initReuniaoMensal() {
     const tpts = linhas.map(l => {
       const t = felCat === '__geral' ? { mttrH: l.mttrH } : (felCat === '__outros' ? l.tempoOutros : l.tempoPorCategoria[felCat]);
       const sl = felCat === '__geral' ? { pct: l.pctSla } : (felCat === '__outros' ? l.slaOutros : l.slaPorCategoria[felCat]);
-      return { lab: l.label.split('/')[0].slice(0, 3), h: t && t.mttrH !== null && t.mttrH !== undefined ? t.mttrH : null, sla: sl && sl.pct !== null && sl.pct !== undefined ? sl.pct : null };
+      const pqm = felCat === '__geral' ? l.pesquisa : (felCat === '__outros' ? l.pesqOutros : l.pesqPorCategoria[felCat]);
+      const fz = felizesDoRecorte(pqm ? pqm.itens : []);
+      return { lab: l.label.split('/')[0].slice(0, 3), h: t && t.mttrH !== null && t.mttrH !== undefined ? t.mttrH : null, sla: sl && sl.pct !== null && sl.pct !== undefined ? sl.pct : null, fh: fz ? fz.h : null, fsla: fz ? fz.sla : null };
     });
-    const maxH = Math.max(1, ...tpts.map(p => p.h || 0), metaT ? metaT.h : 0) * 1.15;
+    const maxH = Math.max(1, ...tpts.map(p => Math.max(p.h || 0, p.fh || 0)), metaT ? metaT.h : 0) * 1.15;
     const yT = v => T + (1 - v / maxH) * ph;
     let s2 = `<svg viewBox="0 0 ${W} ${H}" style="width:100%; max-width:${W}px; height:auto; display:block; margin:0 auto;" role="img" aria-label="Tempo medio de atendimento x tempo necessario para a meta">`;
     [0, 0.25, 0.5, 0.75, 1].forEach(f => {
@@ -4459,12 +4473,13 @@ function initReuniaoMensal() {
       const cor = metaT ? (ok ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
       s2 += `<rect x="${cx - bw / 2}" y="${yT(p.h)}" width="${bw}" height="${T + ph - yT(p.h)}" rx="3" fill="${cor}" opacity=".55"><title>Tempo medio ${fmtH(p.h)}${p.sla !== null ? ' · SLA ' + p.sla + '%' : ''}</title></rect>`;
       s2 += `<text x="${cx}" y="${yT(p.h) - 5}" text-anchor="middle" font-size="11.5" font-weight="700" fill="${cor}">${fmtH(p.h)}</text>`;
+      if (p.fh !== null) s2 += `<line x1="${cx - bw / 2 - 5}" x2="${cx + bw / 2 + 5}" y1="${yT(p.fh)}" y2="${yT(p.fh)}" stroke="var(--warn)" stroke-width="3"><title>Tempo medio dos chamados em que o cliente ficou feliz: ${fmtH(p.fh)}${p.fsla !== null ? ' · ' + p.fsla + '% no prazo' : ''}</title></line>`;
       if (p.sla !== null) s2 += `<text x="${cx}" y="${T + ph - 6}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text)">SLA ${p.sla}%</text>`;
     });
     if (metaT) s2 += `<line x1="${L}" x2="${W - R}" y1="${yT(metaT.h)}" y2="${yT(metaT.h)}" stroke="var(--ok)" stroke-width="2" stroke-dasharray="7 5"/><text x="${W - R - 4}" y="${yT(metaT.h) - 6}" text-anchor="end" font-size="11.5" font-weight="700" fill="var(--ok)">Tempo p/ ${FEL_META}%: ≤ ${fmtH(metaT.h)}</text>`;
     s2 += `</svg>`;
     document.getElementById('graficoFelTempo').innerHTML = s2;
-    document.getElementById('felSubTempo').innerHTML = `<b>⏱ Tempo medio de atendimento</b> de cada mes (barras; verde = dentro do tempo necessario, vermelho = acima; o SLA do mes aparece dentro da barra) x <span style="color:var(--ok);">- - -</span> tempo necessario para sustentar ${FEL_META}% de felicidade — ${esc(nomeCat)}. Tempo e SLA necessarios sao estimativas do historico do ano: ate que tempo, e com que % de chamados no prazo, os chamados avaliados ainda chegaram a ${FEL_META}% de respostas positivas.`;
+    document.getElementById('felSubTempo').innerHTML = `<b>⏱ Tempo medio de atendimento</b> de cada mes (barras; verde = dentro do tempo necessario, vermelho = acima; o SLA do mes aparece dentro da barra; o traco amarelo e' o tempo medio dos chamados em que o cliente ficou feliz) x <span style="color:var(--ok);">- - -</span> tempo necessario para sustentar ${FEL_META}% de felicidade — ${esc(nomeCat)}. Tempo e SLA necessarios sao estimativas do historico do ano: ate que tempo, e com que % de chamados no prazo, os chamados avaliados ainda chegaram a ${FEL_META}% de respostas positivas.`;
     const tAtual = tpts.filter(p => p.h !== null);
     if (tAtual.length) {
       const u = tAtual[tAtual.length - 1];
