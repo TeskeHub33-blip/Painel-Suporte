@@ -33,3 +33,6 @@ dashboard_suporte.html
 
 !analises_horus.json
 !escala.json
+
+# configuracao da Vercel (nao faz deploy da branch "dados")
+!vercel.json

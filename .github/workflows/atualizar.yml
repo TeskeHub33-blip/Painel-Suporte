@@ -34,6 +34,27 @@ jobs:
       - name: Gerar dashboard
         run: python build_dashboard.py
 
+      # Os dados da homologacao (/homolog/) ficam fora do HTML: o robo publica so' o dados.json na branch "dados"
+      # (commit unico, sobrescrito a cada rodada, entao o repositorio nao cresce) e a pagina busca esse arquivo.
+      # A Vercel nao faz deploy dessa branch (vercel.json). Se falhar, o resto da atualizacao segue normalmente.
+      - name: Publicar dados (branch dados)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          HOMOLOG=1 python build_dashboard.py
+          ls -la dados.json
+          rm -rf /tmp/dadosrepo && mkdir /tmp/dadosrepo
+          cp dados.json /tmp/dadosrepo/
+          echo '{"git":{"deploymentEnabled":{"dados":false}},"ignoreCommand":"exit 0"}' > /tmp/dadosrepo/vercel.json
+          cd /tmp/dadosrepo
+          git init -q -b dados
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Dados $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" dados
+
       - name: Publicar index.html
         run: |
           git config user.name "github-actions[bot]"

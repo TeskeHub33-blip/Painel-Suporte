@@ -13,6 +13,12 @@ LOGO_B64_PATH = os.path.join(BASE_DIR, "ref_assets", "logo_b64.txt")
 # sem a variavel, o comportamento e a saida sao exatamente os do painel atual.
 HOMOLOG = os.environ.get("HOMOLOG") == "1"
 OUT_PATH = os.path.join(BASE_DIR, "dashboard_homolog.html" if HOMOLOG else "dashboard_suporte.html")
+# DADOS_EXTERNOS=1: a pagina sai SEM dados (so' codigo) e busca dados.json ao abrir; os dados vao para DADOS_PATH.
+# Assim o HTML so' muda quando o codigo muda (e a Vercel so' faz deploy nesse caso). Por enquanto so' na homologacao
+# (DADOS_EXTERNOS=auto liga junto com HOMOLOG=1); producao continua embutindo os dados ate a validacao.
+_DE = os.environ.get("DADOS_EXTERNOS", "auto")
+DADOS_EXTERNOS = HOMOLOG if _DE == "auto" else _DE == "1"
+DADOS_PATH = os.path.join(BASE_DIR, "dados.json")
 
 with open(LOGO_B64_PATH, encoding='ascii') as f:
     LOGO_B64 = f.read().strip()
@@ -323,6 +329,20 @@ resolved_months_json = json.dumps(resolved_months_clean, ensure_ascii=False)
 month_labels_json = json.dumps(month_labels, ensure_ascii=False)
 actions_by_id_json = json.dumps(actions_by_id, ensure_ascii=False)
 gov_actions_by_id_json = json.dumps(gov_actions_by_id, ensure_ascii=False)
+
+# Referencias de dados dentro do template: embutidas (JSON literal) ou lidas de __DADOS (carregado do dados.json).
+_DADOS_VALS = {
+    'tickets': tickets_json, 'emissoes': emissoes_json, 'chamados_abertos': chamados_abertos_json,
+    'sensedata_nps': sensedata_nps_json, 'pesquisa_movidesk': pesquisa_movidesk_json, 'month_ym': month_ym_json,
+    'resolved': resolved_json, 'resolved_month': resolved_month_json, 'resolved_months': resolved_months_json,
+    'month_labels': month_labels_json, 'actions_by_id': actions_by_id_json, 'gov_actions_by_id': gov_actions_by_id_json,
+    'now_br': now_brasilia.strftime('%d/%m/%Y %H:%M'), 'now_iso': json.dumps(now_iso + 'Z'),
+}
+if DADOS_EXTERNOS:
+    DATA_REF = {k: '__DADOS.' + k for k in _DADOS_VALS}
+    DATA_REF['now_br'] = '<span id="dadosEm">--/--/---- --:--</span>'
+else:
+    DATA_REF = dict(_DADOS_VALS)
 
 html = rf"""<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -663,7 +683,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
     </div>
     <div class="header-right">
       <div class="clock" id="clock">--:--:--</div>
-      <div>Dados de {now_brasilia.strftime('%d/%m/%Y %H:%M')} (Brasilia)</div>
+      <div>Dados de {DATA_REF['now_br']} (Brasilia)</div>
     </div>
   </div>
 
@@ -915,33 +935,33 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
 
 <script>
 const MOVIDESK_BASE = 'https://emiteai.movidesk.com/Ticket/Edit/';
-const TICKETS = {tickets_json};
+const TICKETS = {DATA_REF['tickets']};
 // Emissoes mensais (planilha de faturamento -> emissoes_mensal.json, via build_emissoes.py) e chamados
 // ABERTOS por mes (Suporte, sem Cancelados — chamados_abertos_mensal.json, mantido pelo fetch_data.py).
-const EMISSOES = {emissoes_json};
-const CHAMADOS_ABERTOS = {chamados_abertos_json};
+const EMISSOES = {DATA_REF['emissoes']};
+const CHAMADOS_ABERTOS = {DATA_REF['chamados_abertos']};
 // NPS do Sensedata (sensedata_nps.json: so' mes da pesquisa + nota 0-10) e AAAA-MM de cada offset de mes.
-const SENSEDATA_NPS = {sensedata_nps_json};
+const SENSEDATA_NPS = {DATA_REF['sensedata_nps']};
 // Respostas da pesquisa de satisfacao nativa do Movidesk: [id do chamado, tipo (1 satisfeito/insatisfeito, 2 faces, 3 NPS, 4 sim/nao), valor].
-const PESQUISA_MOVIDESK = {pesquisa_movidesk_json};
-const MONTH_YM = {month_ym_json};
+const PESQUISA_MOVIDESK = {DATA_REF['pesquisa_movidesk']};
+const MONTH_YM = {DATA_REF['month_ym']};
 // Historico (resolvidos por tecnico, SLA, indicadores) considera somente o time de Suporte
-const RESOLVED_TODAY = ({resolved_json}).filter(r => r.ownerTeam === 'Suporte');
-const RESOLVED_MONTH_ALL = ({resolved_month_json}).filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r));
+const RESOLVED_TODAY = ({DATA_REF['resolved']}).filter(r => r.ownerTeam === 'Suporte');
+const RESOLVED_MONTH_ALL = ({DATA_REF['resolved_month']}).filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r));
 // RESOLVED_MONTH e chatsMes ficam mutaveis (let) porque a aba Historico pode filtrar por cliente
 // e reatribui-los em renderHistoricoMes() — assim os modais de drill-down (openModalHist*) sempre
 // refletem o filtro de cliente atualmente selecionado.
 let RESOLVED_MONTH = RESOLVED_MONTH_ALL;
 let chatsMes = [];
-const RESOLVED_MONTHS_RAW = {resolved_months_json};
-const MONTH_LABELS = {month_labels_json};
+const RESOLVED_MONTHS_RAW = {DATA_REF['resolved_months']};
+const MONTH_LABELS = {DATA_REF['month_labels']};
 // Notas/acoes dos chamados tecnicos (Bug/Melhoria/Servicos) resolvidos no mes corrente, indexadas por
 // id do chamado — usadas so' pra achar, no log do DevOps/Azure, o comentario que marca a task em
 // validacao/impedimento (o Movidesk nao tem status proprio pra isso).
-const ACTIONS_BY_ID = {actions_by_id_json};
+const ACTIONS_BY_ID = {DATA_REF['actions_by_id']};
 // Notas/acoes completas dos chamados candidatos a expurgo retroativo de SLA por indisponibilidade de
 // orgao governamental (resolvidos em 2026 e fora do prazo, ou ainda abertos) — ver fetch_data.py.
-const GOV_ACTIONS_BY_ID = {gov_actions_by_id_json};
+const GOV_ACTIONS_BY_ID = {DATA_REF['gov_actions_by_id']};
 // Todos os meses desde janeiro/2026 (offset 0 = corrente, crescendo mes a mes — ver fetch_data.py),
 // ja restritos ao time de Suporte, sem chamados Cancelados, e sem chamados reabertos INDEVIDAMENTE
 // pelo Azure (reaberturas legitimas continuam contando normalmente). Esse filtro fica aqui na
@@ -955,7 +975,7 @@ Object.keys(RESOLVED_MONTHS_RAW).forEach(k => {{
 // meta "media dos ultimos 3 meses" (One-on-One/Gamificacao antigo), que devem continuar sendo
 // literalmente 3 meses mesmo com o historico completo (desde jan/2026) crescendo em RESOLVED_MONTHS.
 const ULTIMOS_3_KEYS = Object.keys(MONTH_LABELS).sort((a,b) => Number(a) - Number(b)).slice(0, 3);
-const NOW = new Date("{now_iso}Z");
+const NOW = new Date({DATA_REF['now_iso']});
 // Timestamps do Movidesk vem em UTC, mas o time trabalha no horario de Brasilia (UTC-3) — "hoje"
 // precisa ser o dia de calendario em Brasilia, senao chamados com vencimento tarde da noite (ex.:
 // 22h-23h59 Brasilia = 01h-02h59 UTC do dia seguinte) ficam incorretamente marcados como "amanha".
@@ -4338,7 +4358,16 @@ try:
 except Exception as e:
     print(f"[aviso] visual v2 nao aplicado: {e}", flush=True)
 
-with open(OUT_PATH, 'w', encoding='utf-8') as f:
+if DADOS_EXTERNOS:
+    from dados_externos import externalizar, montar_dados
+    html = externalizar(html)
+    with open(DADOS_PATH, 'w', encoding='utf-8', newline=chr(10)) as f:
+        json.dump(montar_dados({k: json.loads(v) for k, v in _DADOS_VALS.items() if k not in ('now_br', 'now_iso')},
+                               now_brasilia.strftime('%d/%m/%Y %H:%M'), now_iso + 'Z', BASE_DIR),
+                  f, ensure_ascii=False, separators=(',', ':'))
+    print("Dados salvos em:", DADOS_PATH)
+
+with open(OUT_PATH, 'w', encoding='utf-8', newline=chr(10)) as f:
     f.write(html)
 
 print("Dashboard salvo em:", OUT_PATH)
