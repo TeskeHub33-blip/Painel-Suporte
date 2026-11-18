@@ -44,7 +44,30 @@ V20_JS = r"""
 // entao ele e' pedido de novo a cada carga, ao voltar para a aba e a cada 2 minutos enquanto o modo TV estiver ligado.
 let _tvWake = null;
 function tvEmModoTv() { return document.documentElement.classList.contains('tv'); }
+// Segundo metodo, para navegadores sem Wake Lock (ex.: TV LG webOS): um video mudo e quase invisivel, gerado de um canvas, fica
+// tocando; em TVs e celulares, video em reproducao impede a tela de descanso/economia de energia.
+let _tvVideo = null, _tvCanvas = null, _tvQuadro = 0;
+function tvVideoAcesa() {
+  try {
+    if (!tvEmModoTv()) { if (_tvVideo) { _tvVideo.pause(); _tvVideo.remove(); _tvVideo = null; } return; }
+    if (!_tvVideo) {
+      _tvCanvas = document.createElement('canvas'); _tvCanvas.width = 16; _tvCanvas.height = 16;
+      if (!_tvCanvas.captureStream) return;
+      const v = document.createElement('video');
+      v.muted = true; v.defaultMuted = true; v.loop = true;
+      v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
+      v.style.cssText = 'position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:.01;pointer-events:none;z-index:-1';
+      v.srcObject = _tvCanvas.captureStream(5);
+      document.body.appendChild(v); _tvVideo = v;
+    }
+    const c = _tvCanvas.getContext('2d'); _tvQuadro++;
+    c.fillStyle = (_tvQuadro % 2) ? '#000' : '#020202'; c.fillRect(0, 0, 16, 16);   // muda o quadro para o video nao "congelar"
+    if (_tvVideo.paused) { const p = _tvVideo.play(); if (p && p.catch) p.catch(() => {}); }
+  } catch (e) {}
+}
+setInterval(tvVideoAcesa, 2000);
 async function tvMantemAcesa() {
+  tvVideoAcesa();
   try {
     if (!tvEmModoTv()) { if (_tvWake) { await _tvWake.release(); _tvWake = null; } return; }
     if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
