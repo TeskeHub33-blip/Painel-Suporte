@@ -1,3 +1,46 @@
+<style>
+#carregandoDados{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:radial-gradient(ellipse at 50% 40%,#25376a 0%,#141f3f 70%);color:#fff;font-family:Inter,Arial,sans-serif;text-align:center;padding:24px;transition:opacity .45s ease}
+#carregandoDados.some{opacity:0;pointer-events:none}
+html.sem-caminhao #carregandoDados{display:none}
+#carregandoDados .cd-cena{position:relative;width:min(460px,86vw);height:150px;overflow:hidden}
+#carregandoDados .cd-estrada{position:absolute;left:0;right:0;bottom:14px;height:4px;border-radius:2px;background:rgba(255,255,255,.18)}
+#carregandoDados .cd-faixa{position:absolute;left:0;bottom:15px;width:200%;height:2px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.75) 0 26px,transparent 26px 58px);animation:cdFaixa .7s linear infinite}
+#carregandoDados .cd-caminhao{position:absolute;left:50%;bottom:18px;width:230px;margin-left:-115px;animation:cdBalanca .5s ease-in-out infinite}
+#carregandoDados .cd-roda{transform-box:fill-box;transform-origin:center;animation:cdRoda .55s linear infinite}
+#carregandoDados .cd-vento{animation:cdVento 1s linear infinite}
+#carregandoDados h2{margin:0;font-size:clamp(18px,2.4vw,26px);font-weight:700;letter-spacing:-.2px}
+#carregandoDados p{margin:0;font-size:clamp(13px,1.5vw,16px);opacity:.75}
+#carregandoDados .cd-pontos span{display:inline-block;animation:cdPonto 1.2s infinite both}
+#carregandoDados .cd-pontos span:nth-child(2){animation-delay:.2s}
+#carregandoDados .cd-pontos span:nth-child(3){animation-delay:.4s}
+#carregandoDados.erro h2{color:#ffb4ab}
+@keyframes cdFaixa{from{transform:translateX(0)}to{transform:translateX(-58px)}}
+@keyframes cdBalanca{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
+@keyframes cdRoda{to{transform:rotate(360deg)}}
+@keyframes cdVento{0%{transform:translateX(18px);opacity:0}30%{opacity:.9}100%{transform:translateX(-26px);opacity:0}}
+@keyframes cdPonto{0%,80%,100%{opacity:.2}40%{opacity:1}}
+@media (prefers-reduced-motion:reduce){#carregandoDados *{animation-duration:3s!important}}
+</style>
+<script>if(location.search.indexOf('t=')>-1)document.documentElement.classList.add('sem-caminhao');</script>
+<div id="carregandoDados" role="status" aria-live="polite">
+  <div class="cd-cena" aria-hidden="true">
+    <div class="cd-estrada"></div><div class="cd-faixa"></div>
+    <svg class="cd-caminhao" viewBox="0 0 230 110" xmlns="http://www.w3.org/2000/svg">
+      <g class="cd-vento" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".6"><line x1="6" y1="34" x2="30" y2="34"/><line x1="0" y1="50" x2="22" y2="50"/><line x1="10" y1="66" x2="34" y2="66"/></g>
+      <rect x="36" y="10" width="124" height="68" rx="6" fill="#fff"/>
+      <rect x="36" y="58" width="124" height="9" fill="#ed6da2"/>
+      <text x="98" y="42" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-weight="800" font-size="19" fill="#1d2b4f">emitea&iacute;</text>
+      <path d="M164 28h28q8 0 13 8l15 20q3 4 3 9v13h-59z" fill="#ed6da2"/>
+      <path d="M172 36h17q4 0 6 3l10 14h-33z" fill="#cfe3ff"/>
+      <rect x="36" y="78" width="184" height="8" rx="3" fill="#1d2b4f" stroke="#fff" stroke-opacity=".25"/>
+      <g><circle class="cd-roda" cx="70" cy="90" r="13" fill="#10182f" stroke="#fff" stroke-width="3"/><line class="cd-roda" x1="70" y1="80" x2="70" y2="100" stroke="#fff" stroke-width="2.5"/></g>
+      <g><circle class="cd-roda" cx="120" cy="90" r="13" fill="#10182f" stroke="#fff" stroke-width="3"/><line class="cd-roda" x1="120" y1="80" x2="120" y2="100" stroke="#fff" stroke-width="2.5"/></g>
+      <g><circle class="cd-roda" cx="196" cy="90" r="13" fill="#10182f" stroke="#fff" stroke-width="3"/><line class="cd-roda" x1="196" y1="80" x2="196" y2="100" stroke="#fff" stroke-width="2.5"/></g>
+    </svg>
+  </div>
+  <h2 id="cdTitulo">Estamos trazendo novas informa&ccedil;&otilde;es para a sua tela<span class="cd-pontos"><span>.</span><span>.</span><span>.</span></span></h2>
+  <p id="cdTexto">Um instante, o painel j&aacute; vai aparecer.</p>
+</div>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -69,6 +112,20 @@ body, .dashboard-root {
 .tab-panel.active { display: block; }
 
 .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+
+#alertaIncidente { position: sticky; top: 8px; z-index: 29; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 0 0 14px; padding: 12px 18px; border-radius: 8px; background: #b3261e; color: #fff; box-shadow: 0 4px 16px rgba(179,38,30,.45); animation: incPulsa 1.4s ease-in-out infinite; }
+#alertaIncidente .inc-tit { font-size: 18px; font-weight: 800; letter-spacing: .3px; }
+#alertaIncidente .inc-det { font-size: 14px; font-weight: 500; flex: 1 1 280px; line-height: 1.4; }
+#alertaIncidente .inc-det small { opacity: .85; font-size: 12px; }
+#alertaIncidente button { cursor: pointer; border: 1px solid rgba(255,255,255,.7); background: rgba(255,255,255,.14); color: #fff; font: 600 13px inherit; font-family: inherit; padding: 6px 12px; border-radius: 6px; }
+#alertaIncidente button:hover { background: rgba(255,255,255,.28); }
+html.tv #alertaIncidente { padding: clamp(8px, .7vw, 16px) clamp(16px, 1.4vw, 30px); margin-bottom: 10px; }
+html.tv #alertaIncidente .inc-tit { font-size: clamp(20px, 1.9vw, 38px); }
+html.tv #alertaIncidente .inc-det { font-size: clamp(13px, 1.1vw, 22px); }
+html.tv #alertaIncidente button { font-size: clamp(12px, 1vw, 20px); }
+@keyframes incPulsa { 0%, 100% { background: #b3261e; } 50% { background: #e5392f; } }
+@media (prefers-reduced-motion: reduce) { #alertaIncidente { animation: none; } }
+
 .kpi { background: var(--panel); border: none; border-radius: 6px; padding: 16px 18px; cursor: pointer; transition: box-shadow .15s ease; box-shadow: var(--shadow); position: relative; overflow: hidden; }
 .kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--text3); }
 .kpi:hover { box-shadow: var(--shadow2); }
@@ -1000,6 +1057,26 @@ html.tv #gridChatsLive .esc-c-prox span { font-size: clamp(11px, .9vw, 18px); }
 html.tv #gridChatsLive .esc-c-vazio { font-size: clamp(14px, 1.2vw, 24px); }
 html.tv #gridChatsLive .esc-rodape { display: none; }
 html.tv .footer-note { display: none; }
+/* modo TV: sem botao de tema; botao do modo TV so' na aba Painel Diario (Ao Vivo) */
+html.tv #hmlTema { display: none !important; }
+html:not(.aba-live) #hmlTv { display: none !important; }
+/* cards: tudo centralizado, sem as linhas de contagem sob o nome, e distribuidos pela largura (e pela altura da tela) */
+html.tv #tabLive .kpi .hint { display: none !important; }
+html.tv #tabLive .kpi { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: clamp(4px, .5vw, 10px); }
+html.tv #tabLive .kpi .value { font-size: clamp(34px, 3.6vw, 76px); line-height: 1; text-align: center; }
+html.tv #tabLive .kpi .kpi-label, html.tv #tabLive .kpi .label, html.tv #tabLive .kpi > *:not(.value):not(.hint) { font-size: clamp(14px, 1.25vw, 26px); text-align: center; }
+html.tv #kpiRow, html.tv #kpiRow2 { grid-template-columns: repeat(5, 1fr) !important; gap: clamp(10px, 1vw, 20px); margin-top: 0 !important; }
+html.tv #tabLive .kpi { padding: clamp(14px, 1.6vh, 30px) clamp(10px, 1vw, 24px); min-height: clamp(90px, 14vh, 180px); }
+html.tv.inc-on #tabLive .kpi { padding: clamp(8px, 1vh, 16px) clamp(8px, .8vw, 18px); min-height: clamp(60px, 8vh, 96px); }
+html.tv.inc-on #tabLive .kpi .value { font-size: clamp(28px, 2.8vw, 58px); }
+html.tv.inc-on #tabLive { min-height: 0; }
+html.tv.inc-on #gridChatsLive .esc-tab { padding: 8px 16px; }
+html.tv.inc-on #gridChatsLive .esc-card { padding-top: 7px; padding-bottom: 6px; gap: 3px; }
+html.tv.inc-on #gridChatsLive .esc-grupo { margin-top: 6px; }
+html.tv.inc-on #gridChatsLive .esc-c-prox { padding-top: 3px; }
+html.tv.inc-on #gridChatsLive .esc-grade { margin-top: 8px; gap: 8px; }
+html.tv #tabLive { display: flex; flex-direction: column; min-height: calc(100vh - 78px - 14px - var(--inc-h, 0px)); }
+html.tv #tabLive #gridChatsLive { flex: 1 1 auto; }
 </style>
 
 <div class="dashboard-root">
@@ -1030,7 +1107,7 @@ html.tv .footer-note { display: none; }
   <div class="hml-busca-global" id="hmlBuscaGlobal"><div class="hml-busca"><input id="glInput" placeholder="Buscar chamado pelo número" onkeydown="if(event.key==='Enter')hmlBuscaGlobal()"><button type="button" onclick="hmlBuscaGlobal()">Buscar chamado</button><span class="hml-aba-atual" id="glAba"></span></div><div id="glRes"></div></div>
 
   <div class="tab-panel active" id="tabLive">
-    <div class="kpi-row" id="kpiRow"></div>
+    <div class="kpi-row" id="kpiRow" style="grid-template-columns: repeat(5, 1fr);"></div>
     <div class="kpi-row" id="kpiRow2" style="grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-top: -4px;"></div>
 
     <div class="grid" id="gridChatsLive" style="grid-template-columns: 1fr 1fr; margin-top: 18px;"></div>
@@ -1427,6 +1504,7 @@ const FILTERS = {
   cargaParada: t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && !!t.motivoPriorizacao && t.motivoPriorizacao.split('; ').some(m => m !== 'Whatsapp'),
   // Realizar reuniao com cliente: em atendimento (N1 ou N2) com MAIS de 5 interacoes publicas com o cliente e ainda sem solucao.
   // Fora do card: chamado com task associada (campo "Task Devops" preenchido, passou pela fila de desenvolvimento ou tem log do devops) e chamados do cliente Shopee.
+  incidenteGeral: t => INC_STATUS.includes(t.status) && (t._incR1 || t._incPico),
   reuniaoCliente: t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && typeof t.interacoesCliente === 'number' && t.interacoesCliente > 5
     && !t.taskDevops && !(t.statusHistories || []).some(h => isDevQueueStatus(h.status)) && !devopsStatusLogs(t).length && !/shopee/i.test(t.clientOrg || ''),
   classificacaoIncorreta: t => t._classificacaoIncorreta,
@@ -1460,6 +1538,42 @@ ATIVOS.forEach(t => { t._tier = priorityTier(t); });
 const filaPriorizada = ATIVOS.filter(t => t._tier !== null).slice().sort((a,b) => {
   if (a._tier !== b._tier) return a._tier - b._tier;
   return (b._hoursOpen||0) - (a._hoursOpen||0);
+});
+
+
+// ===== Possivel incidente geral =====
+// Regra 1: chamado Novo/Em atendimento (aberto nas ultimas 12 h) cujo assunto ou primeira mensagem cita sistema inoperante,
+//          fora do ar, instabilidade no sistema/portal, lentidao no sistema, "todas as cargas/LTs", "nenhuma carga".
+// Regra 2: pico - em 60 min, 3+ clientes diferentes com chamados de instabilidade/lentidao (termos estreitos) OU
+//          5+ clientes diferentes com "travada"/nao emite/nao carrega (termos amplos). Calibrado com novembro/2026.
+const INC_STATUS = ['Novo', 'Em atendimento', 'Em atendimento - N2'];
+const INC_R1_HORAS = 12, INC_JANELA_MIN = 60, INC_MIN_ESTREITO = 3, INC_MIN_AMPLO = 5;
+const INC_FORTE = /inoperan|fora do ar|sistema\s+(esta\s+|estao\s+)?(parado|caiu|lento|fora)|instabilidade\s+(no|do|na|de)\s+(sistema|portal|emite)|lentidao\s+(no\s+sistema|no\s+portal|emite)|todas\s+(as\s+)?(cargas|lts?)\b|nenhuma\s+carga|travamento\s+geral/;
+const INC_PICO_ESTREITO = /instabilidade|lentidao|fora do ar|inoperan|sistema\s+(esta\s+|estao\s+)?(parado|caiu|lento)|indisponibilidade|todas\s+(as\s+)?(cargas|lts)/;
+const INC_PICO_AMPLO = /travad|trava\b|travou|instabilidade|lentidao|fora do ar|inoperan|parado|indisponi|nao emit|nao carrega/;
+function incNorm(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+const INC_EVENTOS = (() => {
+  const fim = NOW.getTime(), lim = fim - INC_JANELA_MIN * 60000, vistos = new Set(), out = [];
+  const add = t => {
+    const c = t._created || parseDt(t.createdDate); if (!c) return;
+    const ms = c.getTime(); if (ms < lim || ms > fim + 60000) return;
+    if (vistos.has(t.protocol)) return; vistos.add(t.protocol);
+    out.push({ t: t, cli: t.clientOrg || '?', txt: incNorm((t.subject || '') + ' ' + String(t.description || '').slice(0, 400)) });
+  };
+  TICKETS.forEach(add); RESOLVED_MONTH_ALL.forEach(add);
+  return out;
+})();
+function incPico(re, minimo) {
+  const ev = INC_EVENTOS.filter(e => re.test(e.txt)), clientes = new Set(ev.map(e => e.cli));
+  return clientes.size >= minimo ? { ev: ev, clientes: clientes } : null;
+}
+const INC_P1 = incPico(INC_PICO_ESTREITO, INC_MIN_ESTREITO), INC_P2 = incPico(INC_PICO_AMPLO, INC_MIN_AMPLO);
+const INC_PICO_PROTOCOLOS = new Set([].concat(INC_P1 ? INC_P1.ev : [], INC_P2 ? INC_P2.ev : []).map(e => e.t.protocol));
+const INC_PICO_CLIENTES = new Set([].concat(INC_P1 ? Array.from(INC_P1.clientes) : [], INC_P2 ? Array.from(INC_P2.clientes) : []));
+TICKETS.forEach(t => {
+  const recente = t._created && (NOW - t._created) <= INC_R1_HORAS * 3600000;
+  t._incR1 = !!recente && INC_FORTE.test(incNorm((t.subject || '') + ' ' + String(t.description || '').slice(0, 600)));
+  t._incPico = INC_PICO_PROTOCOLOS.has(t.protocol);
 });
 
 function apply(name) { return TICKETS.filter(FILTERS[name]); }
@@ -1585,6 +1699,7 @@ const LABELS = {
   naoAtualizadosHoje: 'Nao atualizados hoje',
   contraturno: 'Contraturno (Alife e Vinicius) — em atendimento',
   cargaParada: 'Chamados alto impacto',
+  incidenteGeral: 'Possivel incidente geral',
   reuniaoCliente: 'Realizar reuniao com cliente',
   classificacaoIncorreta: 'Possivel classificacao incorreta',
   chatsEmAtendimento: 'Chats em atendimento (aproximado)',
@@ -2650,11 +2765,84 @@ function corPorFaixa(valor, okAte, warnAte) {
   return 'danger';
 }
 
+const incidenteGeral = apply('incidenteGeral');
 document.getElementById('kpiRow').innerHTML =
   kpiTile('neutral', novos.length, 'Novos (aguard. atend.)', 'novos') +
   kpiTile(corPorFaixa(venceEm1Hora.length, 0, 5), venceEm1Hora.length, 'Vencem em 1 hora', 'venceEm1Hora') +
   kpiTile(corPorFaixa(venceHoje.length, 5, 20), venceHoje.length, 'Vencem hoje', 'venceHoje') +
-  kpiTile(corPorFaixa(bouncing.length, 0, 10), bouncing.length, 'Aging (&gt;2 dias)', 'bouncing');
+  kpiTile(corPorFaixa(bouncing.length, 0, 10), bouncing.length, 'Aging (&gt;2 dias)', 'bouncing') +
+  kpiTile(incidenteGeral.length === 0 ? 'ok' : 'danger', incidenteGeral.length, 'Possivel incidente geral', 'incidenteGeral', 'Novos/em atendimento com sistema inoperante, instabilidade ou travamento geral; ou pico de clientes (3+ em 60 min)');
+
+
+// ===== Alerta de possivel incidente geral (faixa vermelha + som) =====
+const INC_TESTE = /[?&]incteste=1/.test(location.search);   // ?incteste=1 mostra um alerta de teste
+let _incCtx = null;
+function incMudo() { try { return localStorage.getItem('incMudo') === '1'; } catch (e) { return false; } }
+function incAudio() {
+  try {
+    if (!_incCtx) { const C = window.AudioContext || window.webkitAudioContext; if (C) _incCtx = new C(); }
+    return _incCtx;
+  } catch (e) { return null; }
+}
+function incBeep(c) {
+  const t0 = c.currentTime + 0.05;
+  [0, 0.45, 0.9, 1.6, 2.05, 2.5].forEach((d, i) => {
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = 'square'; o.frequency.value = (i % 3 === 1) ? 660 : 880;
+    g.gain.setValueAtTime(0.0001, t0 + d);
+    g.gain.exponentialRampToValueAtTime(0.28, t0 + d + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.38);
+    o.connect(g); g.connect(c.destination); o.start(t0 + d); o.stop(t0 + d + 0.42);
+  });
+}
+function incLidos() { try { return JSON.parse(localStorage.getItem('incAlertados') || '{}'); } catch (e) { return {}; } }
+function incChavesAtuais() {
+  const set = new Set(INC_PICO_PROTOCOLOS); incidenteGeral.forEach(t => set.add(t.protocol));
+  return Array.from(set);
+}
+function incDica(txt) { const d = document.getElementById('incSomDica'); if (d) d.textContent = txt; }
+function incAtivo() { return INC_TESTE || incidenteGeral.length > 0 || !!INC_P1 || !!INC_P2; }
+function incTentaSom(forcar) {
+  if (!incAtivo()) return;
+  if (incMudo() && !forcar) { incDica('Som silenciado'); return; }
+  const lidos = incLidos(), agora = Date.now();
+  Object.keys(lidos).forEach(k => { if (agora - lidos[k] > 6 * 3600000) delete lidos[k]; });
+  const novos = INC_TESTE ? ['teste'] : incChavesAtuais().filter(p => !lidos[p]);
+  if (!novos.length && !forcar) { incDica(''); return; }
+  const c = incAudio();
+  if (c && c.state === 'suspended') c.resume().catch(() => {});
+  if (!c || c.state !== 'running') { incDica('Som bloqueado pelo navegador: clique uma vez na pagina para ativar'); return; }
+  incBeep(c); incDica('');
+  if (!INC_TESTE) { novos.forEach(p => { lidos[p] = agora; }); try { localStorage.setItem('incAlertados', JSON.stringify(lidos)); } catch (e) {} }
+}
+function incDesbloqueia() { const c = incAudio(); if (c && c.state === 'suspended') c.resume().then(() => incTentaSom()).catch(() => {}); else incTentaSom(); }
+function incAlternaMudo() { try { localStorage.setItem('incMudo', incMudo() ? '0' : '1'); } catch (e) {} renderAlertaIncidente(); }
+function renderAlertaIncidente() {
+  let el = document.getElementById('alertaIncidente');
+  document.documentElement.classList.toggle('inc-on', incAtivo());
+  if (!incAtivo()) { document.documentElement.style.setProperty('--inc-h', '0px'); if (el) el.remove(); return; }
+  const partes = [];
+  if (INC_TESTE) partes.push('TESTE do alerta: nenhum incidente real foi detectado');
+  if (INC_PICO_CLIENTES.size) partes.push(INC_PICO_CLIENTES.size + ' clientes diferentes abriram chamados de instabilidade/travamento na ultima hora');
+  const r1 = incidenteGeral.filter(t => t._incR1);
+  if (r1.length) partes.push(r1.length + ' chamado(s) novo(s)/em atendimento citam sistema inoperante ou instabilidade');
+  const html = '<span class="inc-tit">&#9888; ATENCAO: possivel instabilidade geral</span>'
+    + '<span class="inc-det">' + partes.join(' &middot; ') + '<br><small id="incSomDica"></small></span>'
+    + (incidenteGeral.length ? '<button type="button" onclick="openModal(\'incidenteGeral\')">Ver chamados (' + incidenteGeral.length + ')</button>' : '')
+    + '<button type="button" onclick="incAlternaMudo()">' + (incMudo() ? 'Ativar som' : 'Silenciar som') + '</button>'
+    + '<button type="button" onclick="incTentaSom(true)">Testar som</button>';
+  if (!el) {
+    el = document.createElement('div'); el.id = 'alertaIncidente'; el.setAttribute('role', 'alert');
+    const h = document.querySelector('.dashboard-root > .header') || document.querySelector('.header');
+    if (h && h.parentNode) h.parentNode.insertBefore(el, h.nextSibling); else document.body.insertBefore(el, document.body.firstChild);
+  }
+  el.innerHTML = html;
+  document.documentElement.style.setProperty('--inc-h', (el.offsetHeight + 10) + 'px');   // altura que a faixa toma (o modo TV desconta)
+}
+['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, incDesbloqueia, { passive: true }));
+renderAlertaIncidente();
+incTentaSom();
+setInterval(incTentaSom, 15000);
 
 // Tempo medio de resolucao: priorizados vs nao-priorizados (chamados resolvidos no mes, time Suporte)
 const resolvidosComTag = RESOLVED_MONTH_ALL.map(r => ({
@@ -6500,7 +6688,13 @@ function tvAlterna() {
   if (salvo) tvAplica(true);
   // no modo TV o painel fica sempre no Ao Vivo, mesmo se algo tentar trocar de aba
   const _s4 = showTab;
-  showTab = function(name, skip) { _s4(document.documentElement.classList.contains('tv') ? 'live' : name, skip); };
+  showTab = function(name, skip) {
+    const alvo = document.documentElement.classList.contains('tv') ? 'live' : name;
+    _s4(alvo, skip);
+    document.documentElement.classList.toggle('aba-live', alvo === 'live');
+  };
+  document.documentElement.classList.add('aba-live');    // a pagina abre no Painel Diario (Ao Vivo)
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.documentElement.classList.contains('tv')) tvAlterna(); });
 }
 
 renderGestaoMelhorias();
@@ -6523,13 +6717,24 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 </script>
 
-<style>#carregandoDados{position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:99999;padding:10px 18px;border-radius:8px;background:#1d2b4f;color:#fff;font:600 14px Inter,Arial,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.3)}#carregandoDados.erro{background:#b3261e}</style>
-<div id="carregandoDados">Carregando dados do painel...</div>
 <script>
 (function () {
   var URL_DADOS = 'https://raw.githubusercontent.com/TeskeHub33-blip/Painel-Suporte/dados/dados.json';
   var aviso = document.getElementById('carregandoDados');
-  function mostra(txt, erro) { if (!aviso) return; aviso.textContent = txt; aviso.className = erro ? 'erro' : ''; aviso.style.display = ''; }
+  var inicio = Date.now();
+  var MIN_MS = document.documentElement.classList.contains('sem-caminhao') ? 0 : 1400;   // deixa o caminhao andar um pouco
+  function mostra(txt) {
+    if (!aviso) return;
+    aviso.className = 'erro'; aviso.style.display = '';
+    var t = document.getElementById('cdTitulo'), x = document.getElementById('cdTexto');
+    if (t) t.textContent = 'Não foi possível carregar os dados';
+    if (x) x.textContent = txt;
+  }
+  function escondeAviso() {
+    if (!aviso) return;
+    aviso.className = 'some';
+    setTimeout(function () { aviso.style.display = 'none'; }, 500);
+  }
   function inicia(d) {
     window.__DADOS = d;
     var e = document.createElement('script');
@@ -6537,20 +6742,20 @@ setInterval(() => {
     e.textContent = JSON.stringify(d.escala || {}).replace(/<\//g, '<\/');
     document.body.appendChild(e);
     var el = document.getElementById('dadosEm'); if (el) el.textContent = d.now_br || '-';
-    if (aviso) aviso.style.display = 'none';
     var nos = document.querySelectorAll('script[data-app]');
     for (var i = 0; i < nos.length; i++) {          // mesma ordem e mesmo escopo global de antes
       var s = document.createElement('script');
       s.text = nos[i].textContent;
       document.head.appendChild(s);
     }
+    setTimeout(escondeAviso, Math.max(0, MIN_MS - (Date.now() - inicio)));
   }
   function carrega(tentativa) {
     fetch(URL_DADOS + '?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(inicia)
       .catch(function (err) {
-        mostra('Nao foi possivel carregar os dados (' + err.message + '). Tentando de novo em 30 s...', true);
+        mostra('Tentando de novo em 30 segundos (' + err.message + ').');
         setTimeout(function () { carrega(tentativa + 1); }, 30000);
       });
   }
