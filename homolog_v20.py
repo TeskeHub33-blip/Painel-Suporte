@@ -36,6 +36,26 @@ html.tv #gridChatsLive .esc-c-prox span { font-size: clamp(11px, .9vw, 18px); }
 html.tv #gridChatsLive .esc-c-vazio { font-size: clamp(14px, 1.2vw, 24px); }
 html.tv #gridChatsLive .esc-rodape { display: none; }
 html.tv .footer-note { display: none; }
+/* modo TV: sem botao de tema; botao do modo TV so' na aba Painel Diario (Ao Vivo) */
+html.tv #hmlTema { display: none !important; }
+html:not(.aba-live) #hmlTv { display: none !important; }
+/* cards: tudo centralizado, sem as linhas de contagem sob o nome, e distribuidos pela largura (e pela altura da tela) */
+html.tv #tabLive .kpi .hint { display: none !important; }
+html.tv #tabLive .kpi { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: clamp(4px, .5vw, 10px); }
+html.tv #tabLive .kpi .value { font-size: clamp(34px, 3.6vw, 76px); line-height: 1; text-align: center; }
+html.tv #tabLive .kpi .kpi-label, html.tv #tabLive .kpi .label, html.tv #tabLive .kpi > *:not(.value):not(.hint) { font-size: clamp(14px, 1.25vw, 26px); text-align: center; }
+html.tv #kpiRow, html.tv #kpiRow2 { grid-template-columns: repeat(5, 1fr) !important; gap: clamp(10px, 1vw, 20px); margin-top: 0 !important; }
+html.tv #tabLive .kpi { padding: clamp(14px, 1.6vh, 30px) clamp(10px, 1vw, 24px); min-height: clamp(90px, 14vh, 180px); }
+html.tv.inc-on #tabLive .kpi { padding: clamp(8px, 1vh, 16px) clamp(8px, .8vw, 18px); min-height: clamp(60px, 8vh, 96px); }
+html.tv.inc-on #tabLive .kpi .value { font-size: clamp(28px, 2.8vw, 58px); }
+html.tv.inc-on #tabLive { min-height: 0; }
+html.tv.inc-on #gridChatsLive .esc-tab { padding: 8px 16px; }
+html.tv.inc-on #gridChatsLive .esc-card { padding-top: 7px; padding-bottom: 6px; gap: 3px; }
+html.tv.inc-on #gridChatsLive .esc-grupo { margin-top: 6px; }
+html.tv.inc-on #gridChatsLive .esc-c-prox { padding-top: 3px; }
+html.tv.inc-on #gridChatsLive .esc-grade { margin-top: 8px; gap: 8px; }
+html.tv #tabLive { display: flex; flex-direction: column; min-height: calc(100vh - 78px - 14px - var(--inc-h, 0px)); }
+html.tv #tabLive #gridChatsLive { flex: 1 1 auto; }
 """
 
 V20_JS = r"""
@@ -102,7 +122,13 @@ function tvAlterna() {
   if (salvo) tvAplica(true);
   // no modo TV o painel fica sempre no Ao Vivo, mesmo se algo tentar trocar de aba
   const _s4 = showTab;
-  showTab = function(name, skip) { _s4(document.documentElement.classList.contains('tv') ? 'live' : name, skip); };
+  showTab = function(name, skip) {
+    const alvo = document.documentElement.classList.contains('tv') ? 'live' : name;
+    _s4(alvo, skip);
+    document.documentElement.classList.toggle('aba-live', alvo === 'live');
+  };
+  document.documentElement.classList.add('aba-live');    // a pagina abre no Painel Diario (Ao Vivo)
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.documentElement.classList.contains('tv')) tvAlterna(); });
 }
 """
 

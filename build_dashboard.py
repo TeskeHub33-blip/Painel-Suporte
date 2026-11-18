@@ -415,6 +415,20 @@ body, .dashboard-root {{
 .tab-panel.active {{ display: block; }}
 
 .kpi-row {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }}
+
+#alertaIncidente {{ position: sticky; top: 8px; z-index: 29; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 0 0 14px; padding: 12px 18px; border-radius: 8px; background: #b3261e; color: #fff; box-shadow: 0 4px 16px rgba(179,38,30,.45); animation: incPulsa 1.4s ease-in-out infinite; }}
+#alertaIncidente .inc-tit {{ font-size: 18px; font-weight: 800; letter-spacing: .3px; }}
+#alertaIncidente .inc-det {{ font-size: 14px; font-weight: 500; flex: 1 1 280px; line-height: 1.4; }}
+#alertaIncidente .inc-det small {{ opacity: .85; font-size: 12px; }}
+#alertaIncidente button {{ cursor: pointer; border: 1px solid rgba(255,255,255,.7); background: rgba(255,255,255,.14); color: #fff; font: 600 13px inherit; font-family: inherit; padding: 6px 12px; border-radius: 6px; }}
+#alertaIncidente button:hover {{ background: rgba(255,255,255,.28); }}
+html.tv #alertaIncidente {{ padding: clamp(8px, .7vw, 16px) clamp(16px, 1.4vw, 30px); margin-bottom: 10px; }}
+html.tv #alertaIncidente .inc-tit {{ font-size: clamp(20px, 1.9vw, 38px); }}
+html.tv #alertaIncidente .inc-det {{ font-size: clamp(13px, 1.1vw, 22px); }}
+html.tv #alertaIncidente button {{ font-size: clamp(12px, 1vw, 20px); }}
+@keyframes incPulsa {{ 0%, 100% {{ background: #b3261e; }} 50% {{ background: #e5392f; }} }}
+@media (prefers-reduced-motion: reduce) {{ #alertaIncidente {{ animation: none; }} }}
+
 .kpi {{ background: var(--panel); border: none; border-radius: 6px; padding: 16px 18px; cursor: pointer; transition: box-shadow .15s ease; box-shadow: var(--shadow); position: relative; overflow: hidden; }}
 .kpi::before {{ content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--text3); }}
 .kpi:hover {{ box-shadow: var(--shadow2); }}
@@ -699,7 +713,7 @@ tr.clickable-row:hover td {{ background: rgba(255,255,255,0.03); }}
   </div>
 
   <div class="tab-panel active" id="tabLive">
-    <div class="kpi-row" id="kpiRow"></div>
+    <div class="kpi-row" id="kpiRow" style="grid-template-columns: repeat(5, 1fr);"></div>
     <div class="kpi-row" id="kpiRow2" style="grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-top: -4px;"></div>
 
     <div class="grid" id="gridChatsLive" style="grid-template-columns: 1fr 1fr; margin-top: 18px;"></div>
@@ -1068,6 +1082,7 @@ const FILTERS = {{
   cargaParada: t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && !!t.motivoPriorizacao && t.motivoPriorizacao.split('; ').some(m => m !== 'Whatsapp'),
   // Realizar reuniao com cliente: em atendimento (N1 ou N2) com MAIS de 5 interacoes publicas com o cliente e ainda sem solucao.
   // Fora do card: chamado com task associada (campo "Task Devops" preenchido, passou pela fila de desenvolvimento ou tem log do devops) e chamados do cliente Shopee.
+  incidenteGeral: t => INC_STATUS.includes(t.status) && (t._incR1 || t._incPico),
   reuniaoCliente: t => (t.status === 'Em atendimento' || t.status === N2_HANDOFF_STATUS) && typeof t.interacoesCliente === 'number' && t.interacoesCliente > 5
     && !t.taskDevops && !(t.statusHistories || []).some(h => isDevQueueStatus(h.status)) && !devopsStatusLogs(t).length && !/shopee/i.test(t.clientOrg || ''),
   classificacaoIncorreta: t => t._classificacaoIncorreta,
@@ -1101,6 +1116,42 @@ ATIVOS.forEach(t => {{ t._tier = priorityTier(t); }});
 const filaPriorizada = ATIVOS.filter(t => t._tier !== null).slice().sort((a,b) => {{
   if (a._tier !== b._tier) return a._tier - b._tier;
   return (b._hoursOpen||0) - (a._hoursOpen||0);
+}});
+
+
+// ===== Possivel incidente geral =====
+// Regra 1: chamado Novo/Em atendimento (aberto nas ultimas 12 h) cujo assunto ou primeira mensagem cita sistema inoperante,
+//          fora do ar, instabilidade no sistema/portal, lentidao no sistema, "todas as cargas/LTs", "nenhuma carga".
+// Regra 2: pico - em 60 min, 3+ clientes diferentes com chamados de instabilidade/lentidao (termos estreitos) OU
+//          5+ clientes diferentes com "travada"/nao emite/nao carrega (termos amplos). Calibrado com novembro/2026.
+const INC_STATUS = ['Novo', 'Em atendimento', 'Em atendimento - N2'];
+const INC_R1_HORAS = 12, INC_JANELA_MIN = 60, INC_MIN_ESTREITO = 3, INC_MIN_AMPLO = 5;
+const INC_FORTE = /inoperan|fora do ar|sistema\s+(esta\s+|estao\s+)?(parado|caiu|lento|fora)|instabilidade\s+(no|do|na|de)\s+(sistema|portal|emite)|lentidao\s+(no\s+sistema|no\s+portal|emite)|todas\s+(as\s+)?(cargas|lts?)\b|nenhuma\s+carga|travamento\s+geral/;
+const INC_PICO_ESTREITO = /instabilidade|lentidao|fora do ar|inoperan|sistema\s+(esta\s+|estao\s+)?(parado|caiu|lento)|indisponibilidade|todas\s+(as\s+)?(cargas|lts)/;
+const INC_PICO_AMPLO = /travad|trava\b|travou|instabilidade|lentidao|fora do ar|inoperan|parado|indisponi|nao emit|nao carrega/;
+function incNorm(s) {{ return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }}
+const INC_EVENTOS = (() => {{
+  const fim = NOW.getTime(), lim = fim - INC_JANELA_MIN * 60000, vistos = new Set(), out = [];
+  const add = t => {{
+    const c = t._created || parseDt(t.createdDate); if (!c) return;
+    const ms = c.getTime(); if (ms < lim || ms > fim + 60000) return;
+    if (vistos.has(t.protocol)) return; vistos.add(t.protocol);
+    out.push({{ t: t, cli: t.clientOrg || '?', txt: incNorm((t.subject || '') + ' ' + String(t.description || '').slice(0, 400)) }});
+  }};
+  TICKETS.forEach(add); RESOLVED_MONTH_ALL.forEach(add);
+  return out;
+}})();
+function incPico(re, minimo) {{
+  const ev = INC_EVENTOS.filter(e => re.test(e.txt)), clientes = new Set(ev.map(e => e.cli));
+  return clientes.size >= minimo ? {{ ev: ev, clientes: clientes }} : null;
+}}
+const INC_P1 = incPico(INC_PICO_ESTREITO, INC_MIN_ESTREITO), INC_P2 = incPico(INC_PICO_AMPLO, INC_MIN_AMPLO);
+const INC_PICO_PROTOCOLOS = new Set([].concat(INC_P1 ? INC_P1.ev : [], INC_P2 ? INC_P2.ev : []).map(e => e.t.protocol));
+const INC_PICO_CLIENTES = new Set([].concat(INC_P1 ? Array.from(INC_P1.clientes) : [], INC_P2 ? Array.from(INC_P2.clientes) : []));
+TICKETS.forEach(t => {{
+  const recente = t._created && (NOW - t._created) <= INC_R1_HORAS * 3600000;
+  t._incR1 = !!recente && INC_FORTE.test(incNorm((t.subject || '') + ' ' + String(t.description || '').slice(0, 600)));
+  t._incPico = INC_PICO_PROTOCOLOS.has(t.protocol);
 }});
 
 function apply(name) {{ return TICKETS.filter(FILTERS[name]); }}
@@ -1226,6 +1277,7 @@ const LABELS = {{
   naoAtualizadosHoje: 'Nao atualizados hoje',
   contraturno: 'Contraturno (Alife e Vinicius) — em atendimento',
   cargaParada: 'Chamados alto impacto',
+  incidenteGeral: 'Possivel incidente geral',
   reuniaoCliente: 'Realizar reuniao com cliente',
   classificacaoIncorreta: 'Possivel classificacao incorreta',
   chatsEmAtendimento: 'Chats em atendimento (aproximado)',
@@ -2291,11 +2343,84 @@ function corPorFaixa(valor, okAte, warnAte) {{
   return 'danger';
 }}
 
+const incidenteGeral = apply('incidenteGeral');
 document.getElementById('kpiRow').innerHTML =
   kpiTile('neutral', novos.length, 'Novos (aguard. atend.)', 'novos') +
   kpiTile(corPorFaixa(venceEm1Hora.length, 0, 5), venceEm1Hora.length, 'Vencem em 1 hora', 'venceEm1Hora') +
   kpiTile(corPorFaixa(venceHoje.length, 5, 20), venceHoje.length, 'Vencem hoje', 'venceHoje') +
-  kpiTile(corPorFaixa(bouncing.length, 0, 10), bouncing.length, 'Aging (&gt;2 dias)', 'bouncing');
+  kpiTile(corPorFaixa(bouncing.length, 0, 10), bouncing.length, 'Aging (&gt;2 dias)', 'bouncing') +
+  kpiTile(incidenteGeral.length === 0 ? 'ok' : 'danger', incidenteGeral.length, 'Possivel incidente geral', 'incidenteGeral', 'Novos/em atendimento com sistema inoperante, instabilidade ou travamento geral; ou pico de clientes (3+ em 60 min)');
+
+
+// ===== Alerta de possivel incidente geral (faixa vermelha + som) =====
+const INC_TESTE = /[?&]incteste=1/.test(location.search);   // ?incteste=1 mostra um alerta de teste
+let _incCtx = null;
+function incMudo() {{ try {{ return localStorage.getItem('incMudo') === '1'; }} catch (e) {{ return false; }} }}
+function incAudio() {{
+  try {{
+    if (!_incCtx) {{ const C = window.AudioContext || window.webkitAudioContext; if (C) _incCtx = new C(); }}
+    return _incCtx;
+  }} catch (e) {{ return null; }}
+}}
+function incBeep(c) {{
+  const t0 = c.currentTime + 0.05;
+  [0, 0.45, 0.9, 1.6, 2.05, 2.5].forEach((d, i) => {{
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = 'square'; o.frequency.value = (i % 3 === 1) ? 660 : 880;
+    g.gain.setValueAtTime(0.0001, t0 + d);
+    g.gain.exponentialRampToValueAtTime(0.28, t0 + d + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.38);
+    o.connect(g); g.connect(c.destination); o.start(t0 + d); o.stop(t0 + d + 0.42);
+  }});
+}}
+function incLidos() {{ try {{ return JSON.parse(localStorage.getItem('incAlertados') || '{{}}'); }} catch (e) {{ return {{}}; }} }}
+function incChavesAtuais() {{
+  const set = new Set(INC_PICO_PROTOCOLOS); incidenteGeral.forEach(t => set.add(t.protocol));
+  return Array.from(set);
+}}
+function incDica(txt) {{ const d = document.getElementById('incSomDica'); if (d) d.textContent = txt; }}
+function incAtivo() {{ return INC_TESTE || incidenteGeral.length > 0 || !!INC_P1 || !!INC_P2; }}
+function incTentaSom(forcar) {{
+  if (!incAtivo()) return;
+  if (incMudo() && !forcar) {{ incDica('Som silenciado'); return; }}
+  const lidos = incLidos(), agora = Date.now();
+  Object.keys(lidos).forEach(k => {{ if (agora - lidos[k] > 6 * 3600000) delete lidos[k]; }});
+  const novos = INC_TESTE ? ['teste'] : incChavesAtuais().filter(p => !lidos[p]);
+  if (!novos.length && !forcar) {{ incDica(''); return; }}
+  const c = incAudio();
+  if (c && c.state === 'suspended') c.resume().catch(() => {{}});
+  if (!c || c.state !== 'running') {{ incDica('Som bloqueado pelo navegador: clique uma vez na pagina para ativar'); return; }}
+  incBeep(c); incDica('');
+  if (!INC_TESTE) {{ novos.forEach(p => {{ lidos[p] = agora; }}); try {{ localStorage.setItem('incAlertados', JSON.stringify(lidos)); }} catch (e) {{}} }}
+}}
+function incDesbloqueia() {{ const c = incAudio(); if (c && c.state === 'suspended') c.resume().then(() => incTentaSom()).catch(() => {{}}); else incTentaSom(); }}
+function incAlternaMudo() {{ try {{ localStorage.setItem('incMudo', incMudo() ? '0' : '1'); }} catch (e) {{}} renderAlertaIncidente(); }}
+function renderAlertaIncidente() {{
+  let el = document.getElementById('alertaIncidente');
+  document.documentElement.classList.toggle('inc-on', incAtivo());
+  if (!incAtivo()) {{ document.documentElement.style.setProperty('--inc-h', '0px'); if (el) el.remove(); return; }}
+  const partes = [];
+  if (INC_TESTE) partes.push('TESTE do alerta: nenhum incidente real foi detectado');
+  if (INC_PICO_CLIENTES.size) partes.push(INC_PICO_CLIENTES.size + ' clientes diferentes abriram chamados de instabilidade/travamento na ultima hora');
+  const r1 = incidenteGeral.filter(t => t._incR1);
+  if (r1.length) partes.push(r1.length + ' chamado(s) novo(s)/em atendimento citam sistema inoperante ou instabilidade');
+  const html = '<span class="inc-tit">&#9888; ATENCAO: possivel instabilidade geral</span>'
+    + '<span class="inc-det">' + partes.join(' &middot; ') + '<br><small id="incSomDica"></small></span>'
+    + (incidenteGeral.length ? '<button type="button" onclick="openModal(\'incidenteGeral\')">Ver chamados (' + incidenteGeral.length + ')</button>' : '')
+    + '<button type="button" onclick="incAlternaMudo()">' + (incMudo() ? 'Ativar som' : 'Silenciar som') + '</button>'
+    + '<button type="button" onclick="incTentaSom(true)">Testar som</button>';
+  if (!el) {{
+    el = document.createElement('div'); el.id = 'alertaIncidente'; el.setAttribute('role', 'alert');
+    const h = document.querySelector('.dashboard-root > .header') || document.querySelector('.header');
+    if (h && h.parentNode) h.parentNode.insertBefore(el, h.nextSibling); else document.body.insertBefore(el, document.body.firstChild);
+  }}
+  el.innerHTML = html;
+  document.documentElement.style.setProperty('--inc-h', (el.offsetHeight + 10) + 'px');   // altura que a faixa toma (o modo TV desconta)
+}}
+['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, incDesbloqueia, {{ passive: true }}));
+renderAlertaIncidente();
+incTentaSom();
+setInterval(incTentaSom, 15000);
 
 // Tempo medio de resolucao: priorizados vs nao-priorizados (chamados resolvidos no mes, time Suporte)
 const resolvidosComTag = RESOLVED_MONTH_ALL.map(r => ({{
