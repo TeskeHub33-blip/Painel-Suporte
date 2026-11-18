@@ -1547,8 +1547,9 @@ const FILTERS = {
   aguardandoCliente: t => t.status === 'Aguardando Cliente',
   // KPIs do topo trocaram de "status atual" pra "urgencia de SLA": vence em 1h (ainda nao vencido,
   // mas faltam <=60min) e vence hoje (data-limite do SLA cai no dia de hoje, vencido ou nao).
-  venceEm1Hora: t => t._slaHoursLeft !== null && t._slaHoursLeft > 0 && t._slaHoursLeft <= 1,
-  venceHoje: t => t._sla !== null && brasiliaDateStr(t._sla) === TODAY_STR,
+  // Somente chamados com a equipe de Suporte (Suporte e fila do N2): Implantacao, CS e demais equipes nao entram.
+  venceEm1Hora: t => AGING_EQUIPES.indexOf(t.ownerTeam) !== -1 && t._slaHoursLeft !== null && t._slaHoursLeft > 0 && t._slaHoursLeft <= 1,
+  venceHoje: t => AGING_EQUIPES.indexOf(t.ownerTeam) !== -1 && t._sla !== null && brasiliaDateStr(t._sla) === TODAY_STR,
   // Aging (22/10/2026): alem do Suporte, inclui a fila do N2 (equipe 'Suporte N2') e os chamados 'Aguardando Terceiros'.
   bouncing: t => AGING_EQUIPES.indexOf(t.ownerTeam) !== -1 && AGING_STATUS.indexOf(t.status) !== -1 && t._hoursSinceUpdate !== null && t._hoursSinceUpdate >= 48,
   priorizados: t => t.ownerTeam === 'Suporte' && t._isPriorizado
