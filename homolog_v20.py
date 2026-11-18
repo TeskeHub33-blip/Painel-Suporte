@@ -40,8 +40,25 @@ html.tv .footer-note { display: none; }
 
 V20_JS = r"""
 // ===== Modo TV =====
+// Mantem a tela da TV acesa: Screen Wake Lock (Chrome/Edge). A pagina recarrega sozinha a cada 5 min e isso solta o bloqueio,
+// entao ele e' pedido de novo a cada carga, ao voltar para a aba e a cada 2 minutos enquanto o modo TV estiver ligado.
+let _tvWake = null;
+function tvEmModoTv() { return document.documentElement.classList.contains('tv'); }
+async function tvMantemAcesa() {
+  try {
+    if (!tvEmModoTv()) { if (_tvWake) { await _tvWake.release(); _tvWake = null; } return; }
+    if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+    if (_tvWake && !_tvWake.released) return;
+    _tvWake = await navigator.wakeLock.request('screen');
+    _tvWake.addEventListener('release', () => { _tvWake = null; });
+  } catch (e) { _tvWake = null; }
+}
+setInterval(tvMantemAcesa, 2 * 60 * 1000);
+document.addEventListener('visibilitychange', tvMantemAcesa);
+document.addEventListener('fullscreenchange', tvMantemAcesa);
 function tvAplica(liga) {
   document.documentElement.classList.toggle('tv', liga);
+  tvMantemAcesa();
   const b = document.getElementById('hmlTv'), t = document.getElementById('hmlTvTxt');
   if (b) b.setAttribute('aria-pressed', liga ? 'true' : 'false');
   if (t) t.textContent = liga ? 'Sair do modo TV' : 'Modo TV';

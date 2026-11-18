@@ -120,6 +120,29 @@ if len(sys.argv) > 2:
 for d in dias:
     dias[d] = [x if x is not None else None for x in dias[d]]      # None = hora nao publicada
 
+# horas alem do corte de hoje que uma leitura anterior do SharePoint ja trouxe continuam valendo (o corte da aba varia de leitura para leitura)
+for d, velho in (ant.get('dias') or {}).items():
+    if d < corte_d:
+        continue
+    lst = dias.setdefault(d, [None] * 24)
+    for h in range(24):
+        if lst[h] is None and velho[h] is not None and (d, h) > (corte_d, corte_h):
+            lst[h] = list(velho[h])
+
+# REGRA DA OPERACAO (pedida em 18/11/2026): em dia util, na janela do 55PBX, quando o Vitor nao esta na escala daquela hora,
+# o 55PBX fica com Augusto Geisler (principal) e Gustavo Lange (2o). O Whatsapp nao muda: continua com outro N1, como na planilha.
+# So' vale onde a planilha ja tem a hora publicada e o 55PBX nao esta "fora"; fins de semana e feriados seguem a planilha.
+REGRA_55PBX = 'Augusto Geisler|Gustavo Lange'
+for d, lst in dias.items():
+    if datetime.date.fromisoformat(d).weekday() >= 5:
+        continue
+    for h, cel in enumerate(lst):
+        if not cel or cel[3].split('|')[0].strip().lower() == 'fora':
+            continue
+        if any('vitor' in n.lower() for c in cel for n in c.split('|')):
+            continue
+        cel[3] = REGRA_55PBX
+
 saida = {
     'gerado_em': datetime.datetime.now(BRT).strftime('%d/%m/%Y %H:%M') + ' (Brasília)',
     'fonte': 'Planilhas Atividades_Suporte_EmiteAi e Programação de Alocação de Sobreaviso (SharePoint, time Operações/Suporte)',
