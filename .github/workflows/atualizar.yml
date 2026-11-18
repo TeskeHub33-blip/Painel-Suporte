@@ -25,6 +25,20 @@ jobs:
       - name: Instalar dependencias
         run: pip install requests
 
+      # Estado do robo (cache dos chamados por mes etc.) mora na branch "dados", fora da main: assim a main so'
+      # recebe commit quando o CODIGO muda e a Vercel nao faz deploy a cada rodada. Na primeira vez a branch ainda nao
+      # tem esses arquivos e vale a copia que esta na main.
+      - name: Restaurar estado (branch dados)
+        continue-on-error: true
+        run: |
+          rm -rf /tmp/dadosrepo_in
+          git clone -q --depth 1 --branch dados "https://github.com/${GITHUB_REPOSITORY}.git" /tmp/dadosrepo_in
+          cd /tmp/dadosrepo_in
+          for f in created_raw_*.json chamados_abertos_mensal.json pesquisa_satisfacao.json sensedata_nps.json ultimo_comentario.json; do
+            [ -f "$f" ] && cp -f "$f" "$GITHUB_WORKSPACE/" && echo "restaurado $f"
+          done
+          true
+
       - name: Buscar dados do Movidesk
         env:
           MOVIDESK_TOKEN: ${{ secrets.MOVIDESK_TOKEN }}
@@ -34,7 +48,7 @@ jobs:
       - name: Gerar dashboard
         run: python build_dashboard.py
 
-      # Os dados da homologacao (/homolog/) ficam fora do HTML: o robo publica so' o dados.json na branch "dados"
+      # Os dados (producao e homologacao) ficam fora do HTML: o robo publica so' o dados.json na branch "dados"
       # (commit unico, sobrescrito a cada rodada, entao o repositorio nao cresce) e a pagina busca esse arquivo.
       # A Vercel nao faz deploy dessa branch (vercel.json). Se falhar, o resto da atualizacao segue normalmente.
       - name: Publicar dados (branch dados)
@@ -42,10 +56,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          HOMOLOG=1 python build_dashboard.py
+          python build_dashboard.py
           ls -la dados.json
           rm -rf /tmp/dadosrepo && mkdir /tmp/dadosrepo
-          cp dados.json /tmp/dadosrepo/
+          cp dados.json created_raw_*.json chamados_abertos_mensal.json pesquisa_satisfacao.json sensedata_nps.json ultimo_comentario.json /tmp/dadosrepo/
           echo '{"git":{"deploymentEnabled":{"dados":false}},"ignoreCommand":"exit 0"}' > /tmp/dadosrepo/vercel.json
           cd /tmp/dadosrepo
           git init -q -b dados
@@ -55,7 +69,7 @@ jobs:
           git commit -q -m "Dados $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" dados
 
-      - name: Publicar index.html
+      - name: Publicar paginas (so' se o codigo mudou)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -86,11 +100,6 @@ jobs:
             else
               echo "[aviso] build de homologacao falhou — painel atual publicado normalmente."
             fi
-            git add created_raw_*.json 2>/dev/null || true
-            git add chamados_abertos_mensal.json 2>/dev/null || true
-            git add pesquisa_satisfacao.json 2>/dev/null || true
-            git add sensedata_nps.json 2>/dev/null || true
-            git add ultimo_comentario.json 2>/dev/null || true
             if git diff --staged --quiet; then
               echo "Nada para publicar (sem mudancas)."
               exit 0

@@ -15,9 +15,9 @@ HOMOLOG = os.environ.get("HOMOLOG") == "1"
 OUT_PATH = os.path.join(BASE_DIR, "dashboard_homolog.html" if HOMOLOG else "dashboard_suporte.html")
 # DADOS_EXTERNOS=1: a pagina sai SEM dados (so' codigo) e busca dados.json ao abrir; os dados vao para DADOS_PATH.
 # Assim o HTML so' muda quando o codigo muda (e a Vercel so' faz deploy nesse caso). Por enquanto so' na homologacao
-# (DADOS_EXTERNOS=auto liga junto com HOMOLOG=1); producao continua embutindo os dados ate a validacao.
+# (padrao: ligado em producao e homologacao; DADOS_EXTERNOS=0 gera a pagina antiga, com os dados dentro do HTML).
 _DE = os.environ.get("DADOS_EXTERNOS", "auto")
-DADOS_EXTERNOS = HOMOLOG if _DE == "auto" else _DE == "1"
+DADOS_EXTERNOS = True if _DE == "auto" else _DE == "1"
 DADOS_PATH = os.path.join(BASE_DIR, "dados.json")
 
 with open(LOGO_B64_PATH, encoding='ascii') as f:
