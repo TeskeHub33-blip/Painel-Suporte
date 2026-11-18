@@ -568,7 +568,7 @@ def main():
     # 2. Resolvidos hoje
     resolved_today = fetch({
         "$select": "id,protocol,subject,category,status,resolvedIn,resolvedInFirstCall,actionCount,createdDate,origin,ownerTeam",
-        "$expand": "owner($select=businessName)",
+        "$expand": "owner($select=businessName),clients($expand=organization)",
         "$filter": f"resolvedIn ge {today_str}T00:00:00Z",
         "$top": 200,
     })
