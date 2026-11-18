@@ -1110,6 +1110,8 @@ html.tv #tabLive #gridChatsLive { flex: 1 1 auto; }
     <div class="kpi-row" id="kpiRow" style="grid-template-columns: repeat(5, 1fr);"></div>
     <div class="kpi-row" id="kpiRow2" style="grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-top: -4px;"></div>
 
+    <div class="panel" id="painelTms" style="display:none; margin-top: 18px;"></div>
+
     <div class="grid" id="gridChatsLive" style="grid-template-columns: 1fr 1fr; margin-top: 18px;"></div>
 
     <div class="grid" id="gridTop"></div>
@@ -1216,7 +1218,22 @@ html.tv #tabLive #gridChatsLive { flex: 1 1 auto; }
         </h2>
         <div class="panel-sub" id="felSub"></div>
         <div id="graficoFelicidade"></div>
+        <div class="panel-sub" id="felSubTempo" style="margin-top:14px;"></div>
+        <div id="graficoFelTempo"></div>
         <div id="resumoFelicidade" style="margin-top:10px; font-size:13px;"></div>
+      </div>
+      <div class="panel" style="margin-top: 18px;">
+        <h2>O que melhorar no mês
+          <select id="melMes" class="itil-select" style="margin-left:12px; font-size:12px;" onchange="setMelFiltro()"></select>
+        </h2>
+        <div class="panel-sub" id="melSub">Categorias com algum indicador abaixo do que é preciso para os clientes ficarem 95% felizes. Marque os indicadores que quer olhar.</div>
+        <div style="display:flex; gap:18px; flex-wrap:wrap; margin:8px 0 10px 0; font-size:13px;">
+          <label style="cursor:pointer;"><input type="checkbox" id="melF" checked onchange="setMelFiltro()"> 😊 Felicidade abaixo de 95%</label>
+          <label style="cursor:pointer;"><input type="checkbox" id="melS" checked onchange="setMelFiltro()"> SLA abaixo do necessário</label>
+          <label style="cursor:pointer;"><input type="checkbox" id="melT" checked onchange="setMelFiltro()"> ⏱ Tempo acima do necessário</label>
+          <label style="cursor:pointer;"><input type="checkbox" id="melTodas" onchange="setMelFiltro()"> Mostrar também as categorias que estão dentro</label>
+        </div>
+        <div id="tabelaMelhorar"></div>
       </div>
       <div class="panel" style="margin-top: 18px;">
         <h2>Emissoes x Chamados — comparativo com o ano anterior
@@ -1380,19 +1397,47 @@ html.tv #tabLive #gridChatsLive { flex: 1 1 auto; }
 
 <script type="text/plain" data-app>
 const MOVIDESK_BASE = 'https://emiteai.movidesk.com/Ticket/Edit/';
-const TICKETS = __DADOS.tickets;
+// ===== TMS Admin: clientes tratados a parte =====
+// A lista e as abas vem de painel_config.json (branch "config" do GitHub, lido pelo carregador em window.__CFG).
+// 'abertos' = Ao Vivo, Gestao de Melhorias e Fluxograma (chamados em aberto e resolvidos de hoje);
+// 'historico' = Historico, Clientes, One-on-One, Gamificacao, Reuniao Mensal (resolvidos por mes e abertos por mes).
+// Os clientes da lista sempre aparecem no card "TMS Admin" (Ao Vivo), com todos os indicadores so' deles.
+const TMS = (function () {
+  const c = (window.__CFG && window.__CFG.tms_admin) || {};
+  const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const set = new Set((c.clientes || []).map(norm).filter(Boolean));
+  const ex = c.excluir || { abertos: true, historico: true };
+  const eh = org => set.size > 0 && set.has(norm(org));
+  return { cfg: c, set: set, norm: norm, eh: eh, abertosOn: set.size > 0 && ex.abertos !== false, histOn: set.size > 0 && ex.historico !== false,
+           foraAbertos: org => set.size > 0 && ex.abertos !== false && eh(org), foraHist: org => set.size > 0 && ex.historico !== false && eh(org) };
+})();
+const TICKETS_TODOS = __DADOS.tickets;
+const TICKETS = TICKETS_TODOS.filter(t => !TMS.foraAbertos(t.clientOrg));
 // Emissoes mensais (planilha de faturamento -> emissoes_mensal.json, via build_emissoes.py) e chamados
 // ABERTOS por mes (Suporte, sem Cancelados — chamados_abertos_mensal.json, mantido pelo fetch_data.py).
 const EMISSOES = __DADOS.emissoes;
-const CHAMADOS_ABERTOS = __DADOS.chamados_abertos;
+const CHAMADOS_ABERTOS = (function () {
+  const base = __DADOS.chamados_abertos;
+  if (!TMS.histOn) return base;
+  const cli = __DADOS.chamados_abertos_cli;
+  const o = Object.assign({}, base);
+  Object.keys(cli).forEach(k => {
+    if (o[k] === undefined) return;
+    let sub = 0;
+    Object.keys(cli[k]).forEach(n => { if (TMS.eh(n)) sub += cli[k][n]; });
+    o[k] = Math.max(0, o[k] - sub);
+  });
+  return o;
+})();
 // NPS do Sensedata (sensedata_nps.json: so' mes da pesquisa + nota 0-10) e AAAA-MM de cada offset de mes.
 const SENSEDATA_NPS = __DADOS.sensedata_nps;
 // Respostas da pesquisa de satisfacao nativa do Movidesk: [id do chamado, tipo (1 satisfeito/insatisfeito, 2 faces, 3 NPS, 4 sim/nao), valor].
 const PESQUISA_MOVIDESK = __DADOS.pesquisa_movidesk;
 const MONTH_YM = __DADOS.month_ym;
 // Historico (resolvidos por tecnico, SLA, indicadores) considera somente o time de Suporte
-const RESOLVED_TODAY = (__DADOS.resolved).filter(r => r.ownerTeam === 'Suporte');
-const RESOLVED_MONTH_ALL = (__DADOS.resolved_month).filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r));
+const RESOLVED_TODAY_TODOS = (__DADOS.resolved).filter(r => r.ownerTeam === 'Suporte');
+const RESOLVED_TODAY = RESOLVED_TODAY_TODOS.filter(r => !TMS.foraAbertos(r.clientOrg));
+const RESOLVED_MONTH_ALL = (__DADOS.resolved_month).filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r) && !TMS.foraHist(r.clientOrg));
 // RESOLVED_MONTH e chatsMes ficam mutaveis (let) porque a aba Historico pode filtrar por cliente
 // e reatribui-los em renderHistoricoMes() — assim os modais de drill-down (openModalHist*) sempre
 // refletem o filtro de cliente atualmente selecionado.
@@ -1414,7 +1459,7 @@ const GOV_ACTIONS_BY_ID = __DADOS.gov_actions_by_id;
 // Mensal) partem de RESOLVED_MONTHS — um unico lugar garante consistencia.
 const RESOLVED_MONTHS = {};
 Object.keys(RESOLVED_MONTHS_RAW).forEach(k => {
-  RESOLVED_MONTHS[k] = RESOLVED_MONTHS_RAW[k].filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r));
+  RESOLVED_MONTHS[k] = RESOLVED_MONTHS_RAW[k].filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r) && !TMS.foraHist(r.clientOrg));
 });
 // Chaves dos 3 meses mais recentes (menor offset = mais recente) — usado so' pelas baselines de
 // meta "media dos ultimos 3 meses" (One-on-One/Gamificacao antigo), que devem continuar sendo
@@ -2848,6 +2893,39 @@ function renderAlertaIncidente() {
   el.innerHTML = html;
   document.documentElement.style.setProperty('--inc-h', (el.offsetHeight + 10) + 'px');   // altura que a faixa toma (o modo TV desconta)
 }
+// Card "TMS Admin": so' os indicadores dos clientes da lista (aparece quando ha ao menos um cliente configurado).
+function renderPainelTms() {
+  const el = document.getElementById('painelTms'); if (!el) return;
+  if (!TMS.set.size) { el.style.display = 'none'; return; }
+  const ab = TICKETS_TODOS.filter(t => TMS.eh(t.clientOrg));
+  const hojeRes = RESOLVED_TODAY_TODOS.filter(r => TMS.eh(r.clientOrg));
+  const mesRes = (RESOLVED_MONTHS_RAW['0'] || []).filter(r => r.ownerTeam === 'Suporte' && r.status !== 'Cancelado' && !reaberturaIndevidaAzure(r) && TMS.eh(r.clientOrg));
+  const novos = ab.filter(t => t.status === 'Novo').length;
+  const emAt = ab.filter(t => /^Em atendimento/.test(t.status || '')).length;
+  const aguard = ab.filter(t => t.status === 'Aguardando Cliente').length;
+  const atras = ab.filter(t => t.slaSolutionDate && parseDt(t.slaSolutionDate) < NOW).length;
+  const venceHoje = ab.filter(t => t.slaSolutionDate && parseDt(t.slaSolutionDate) >= NOW && brasiliaDateStr(parseDt(t.slaSolutionDate)) === TODAY_STR).length;
+  const st = statsForMonth(mesRes), sla = slaDoRecorte(mesRes), tt = mttrDoRecorte(mesRes);
+  const por = {};
+  ab.forEach(t => { const n = t.clientOrg || 'Sem cliente'; por[n] = por[n] || { ab: 0, res: 0 }; por[n].ab++; });
+  mesRes.forEach(r => { const n = r.clientOrg || 'Sem cliente'; por[n] = por[n] || { ab: 0, res: 0 }; por[n].res++; });
+  const linhasCli = Object.keys(por).sort((a, b) => (por[b].ab + por[b].res) - (por[a].ab + por[a].res)).map(n =>
+    `<tr><td>${esc(n)}</td><td style="text-align:center;">${por[n].ab}</td><td style="text-align:center;">${por[n].res}</td></tr>`).join('');
+  const onde = [TMS.abertosOn ? 'Ao Vivo' : '', TMS.histOn ? 'Histórico, Clientes, One-on-One, Gamificação e Reunião Mensal' : ''].filter(Boolean).join(' e ');
+  el.style.display = '';
+  el.innerHTML = `<h2>TMS Admin <span style="font-weight:400; font-size:12px; color:var(--text3);">— ${TMS.set.size} cliente(s) tratados à parte</span></h2>
+    <div class="panel-sub">Indicadores só dos clientes TMS Admin. ${onde ? 'Eles não entram nos demais números de: ' + esc(onde) + '.' : 'Hoje eles continuam entrando nos demais números do painel.'}</div>
+    <div class="kpi-row" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top:8px;">
+      ${kpiTileStatic('', ab.length, 'Abertos agora', `${novos} novos · ${emAt} em atendimento · ${aguard} aguardando cliente`)}
+      ${kpiTileStatic(atras ? 'danger' : 'ok', atras, 'Fora do prazo (SLA)', `${venceHoje} vencem hoje`)}
+      ${kpiTileStatic('', hojeRes.length, 'Resolvidos hoje', '')}
+      ${kpiTileStatic('', mesRes.length, 'Resolvidos no mês', `${st.pctPrimeira}% na 1ª resposta`)}
+      ${kpiTileStatic(sla.pct !== null && sla.pct < 70 ? 'danger' : 'ok', sla.pct !== null ? sla.pct + '%' : '–', 'SLA no prazo (mês)', sla.comSla ? `${sla.noPrazo} de ${sla.comSla} com SLA` : 'sem chamados com SLA')}
+      ${kpiTileStatic('', tt.mttrH !== null ? fmtH(tt.mttrH) : '–', 'Tempo médio de atendimento', 'chamados resolvidos no mês')}
+    </div>
+    <table style="margin-top:12px;"><thead><tr><th>Cliente</th><th style="text-align:center;">Abertos agora</th><th style="text-align:center;">Resolvidos no mês</th></tr></thead><tbody>${linhasCli || '<tr><td colspan="3" style="color:var(--text3);">Nenhum chamado destes clientes no período.</td></tr>'}</tbody></table>`;
+}
+renderPainelTms();
 ['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, incDesbloqueia, { passive: true }));
 renderAlertaIncidente();
 incTentaSom();
@@ -3702,7 +3780,37 @@ function respostaPositiva(tipo, valor) {
 const FEL_META = 95;
 let felCat = '__geral';
 function setFelCat(v) { felCat = v; if (window._renderGrafFel) window._renderGrafFel(); }
+function setMelFiltro() { if (window._renderMelhorar) window._renderMelhorar(); }
 function felNecessarias(p, n) { return Math.max(0, 19 * n - 20 * p); }
+// Tempo de atendimento (criacao -> resolucao, em horas) ate o qual os chamados avaliados JA chegaram a 95% de respostas positivas:
+// ordena os chamados avaliados do mais rapido ao mais lento e acha o maior corte em que o acumulado ainda e' >= 95% (minimo de 5
+// respostas). E' uma estimativa com os dados do ano. Sem corte = null.
+function tempoMetaFelicidade(items) {
+  const pares = items.filter(r => r.createdDate && r.resolvedIn && !reaberturaIndevidaAzure(r) && pesquisaPorChamado(r.id) && respostaPositiva(pesquisaPorChamado(r.id)[1], pesquisaPorChamado(r.id)[2]) !== null)
+    .map(r => ({ h: (parseDt(r.resolvedIn) - parseDt(r.createdDate)) / 3600000, p: respostaPositiva(pesquisaPorChamado(r.id)[1], pesquisaPorChamado(r.id)[2]) }))
+    .sort((a, b) => a.h - b.h);
+  // cortes de tempo em horas (1h ... 30 dias): vale o MAIOR corte com pelo menos 8 chamados avaliados ate ele e >= 95% de positivas
+  let melhor = null;
+  [1, 2, 4, 8, 12, 24, 36, 48, 72, 96, 120, 168, 240, 360, 720].forEach(c => {
+    const ate = pares.filter(x => x.h <= c);
+    if (ate.length >= 8 && ate.filter(x => x.p).length / ate.length >= FEL_META / 100) melhor = { h: c, n: ate.length };
+  });
+  return melhor;
+}
+// SLA necessario: entre os chamados avaliados com SLA, x = % de positivas dos que sairam NO prazo e y = % dos que sairam FORA.
+// Misturando p no prazo: p*x + (1-p)*y = 95%  =>  p = (95 - y) / (x - y). So' existe se x >= 95 (no prazo o cliente fica feliz);
+// senao o prazo, sozinho, nao leva a 95%. Minimo de 3 chamados em cada grupo.
+function slaMetaFelicidade(items) {
+  const av = items.filter(r => r.slaSolutionDate && r.resolvedIn && !reaberturaIndevidaAzure(r) && !aguardouOrgaoGovernamental(r) && pesquisaPorChamado(r.id) && respostaPositiva(pesquisaPorChamado(r.id)[1], pesquisaPorChamado(r.id)[2]) !== null);
+  const dentro = av.filter(r => parseDt(r.resolvedIn) <= parseDt(r.slaSolutionDate)), fora = av.filter(r => parseDt(r.resolvedIn) > parseDt(r.slaSolutionDate));
+  const taxa = arr => arr.filter(r => respostaPositiva(pesquisaPorChamado(r.id)[1], pesquisaPorChamado(r.id)[2])).length / arr.length * 100;
+  if (dentro.length < 3) return null;
+  const x = taxa(dentro), y = fora.length >= 3 ? taxa(fora) : null;
+  if (x < FEL_META) return { pct: null, x: x, y: y, nIn: dentro.length, nOut: fora.length };
+  if (y === null || y >= FEL_META) return { pct: 0, x: x, y: y, nIn: dentro.length, nOut: fora.length };
+  return { pct: Math.min(100, Math.max(0, Math.ceil((FEL_META - y) / (x - y) * 100))), x: x, y: y, nIn: dentro.length, nOut: fora.length };
+}
+function metaFelicidade(items) { return { t: tempoMetaFelicidade(items), s: slaMetaFelicidade(items) }; }
 function pesquisaDoRecorte(items) {
   const comResposta = items.filter(r => pesquisaPorChamado(r.id));
   const avaliadas = comResposta.filter(r => respostaPositiva(pesquisaPorChamado(r.id)[1], pesquisaPorChamado(r.id)[2]) !== null);
@@ -4120,6 +4228,8 @@ function initReuniaoMensal() {
   const pesqGeralPorCategoria = {};
   REUNIAO_MENSAL_CATEGORIAS.forEach(c => { pesqGeralPorCategoria[c] = pesquisaDoRecorte(todosItensPeriodo.filter(r => (r.category || 'Sem categoria') === c)); });
   const pesqGeralOutros = pesquisaDoRecorte(todosItensPeriodo.filter(r => REUNIAO_MENSAL_CATEGORIAS.indexOf(r.category || 'Sem categoria') === -1));
+  const felMeta = { __geral: metaFelicidade(pesquisaGeral.itens), __outros: metaFelicidade(pesqGeralOutros.itens) };
+  REUNIAO_MENSAL_CATEGORIAS.forEach(c => { felMeta[c] = metaFelicidade(pesqGeralPorCategoria[c].itens); });
   const tempoGeralOutros = mttrDoRecorte(todosItensPeriodo.filter(r => REUNIAO_MENSAL_CATEGORIAS.indexOf(r.category || 'Sem categoria') === -1));
 
   // Meta de duvidas: os 20pp de reducao sao CUMULATIVOS ao longo do ano (YTD) — o progresso e' a
@@ -4161,14 +4271,21 @@ function initReuniaoMensal() {
   };
   // Celula de categoria (e 'Outros'): quantidade de chamados fechados ou, no modo '% SLA', o % no prazo
   // daquela categoria no mes (vermelho abaixo de 70%, mesmo limite do KPI de SLA do painel).
-  const celulaCategoria = (qtd, sla, tempo, pesq, onclickExpr) => {
+  const celulaCategoria = (qtd, sla, tempo, pesq, onclickExpr, metaF) => {
     if (reuniaoMensalModo === 'felicidade') {
       if (!pesq || !pesq.n) return tdClick(onclickExpr, '–', ' color:var(--text3);', `Nenhum dos ${qtd} chamados fechados teve resposta na pesquisa de satisfacao — clique para ver os chamados`);
       const falta = felNecessarias(pesq.positivas, pesq.n);
       const cor = pesq.pct >= FEL_META ? 'var(--ok)' : (pesq.pct >= 85 ? 'var(--warn)' : 'var(--danger)');
       const sub = falta === 0 ? '✓ meta' : `+${falta} p/ meta`;
+      const metaT = metaF && metaF.t, metaS = metaF && metaF.s;
+      const atualH = tempo && tempo.mttrH !== null ? tempo.mttrH : null;
+      const corT = atualH !== null && metaT ? (atualH <= metaT.h ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
+      const atualS = sla && sla.pct !== null && sla.pct !== undefined ? sla.pct : null;
+      const corS = atualS !== null && metaS && metaS.pct !== null ? (atualS >= metaS.pct ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
+      const txtS = metaS ? (metaS.pct === null ? 'prazo não basta' : '≥ ' + metaS.pct + '%') : '–';
+      const linhaT = `<br><span style="font-weight:600; font-size:11px; color:${corT};">⏱ ${atualH !== null ? fmtH(atualH) : '–'} → ${metaT ? '≤ ' + fmtH(metaT.h) : '–'}</span><br><span style="font-weight:600; font-size:11px; color:${corS};">SLA ${atualS !== null ? atualS + '%' : '–'} → ${txtS}</span>`;
       const tip = `Felicidade ${pesq.pct.toFixed(1).replace('.', ',')}% (${pesq.positivas} positivas de ${pesq.n} respostas). Meta ${FEL_META}%: ` + (falta === 0 ? 'meta batida' : `faltam ${falta} resposta(s) positiva(s) a mais (sem nenhuma negativa nova) — ${(FEL_META - pesq.pct).toFixed(1).replace('.', ',')}pp abaixo da meta`) + ' — clique para ver os chamados';
-      return tdClick(onclickExpr, `${Math.round(pesq.pct)}%<br><span style="font-weight:400; font-size:11px; color:var(--text3);">${sub} · ${pesq.positivas}/${pesq.n}</span>`, ` font-weight:700; color:${cor};`, tip);
+      return tdClick(onclickExpr, `${Math.round(pesq.pct)}%<br><span style="font-weight:400; font-size:11px; color:var(--text3);">${sub} · ${pesq.positivas}/${pesq.n}</span>${linhaT}`, ` font-weight:700; color:${cor};`, tip + ` | Tempo medio atual ${atualH !== null ? fmtH(atualH) : '–'}; tempo para sustentar ${FEL_META}% (estimado pelo historico do ano): ${metaT ? 'ate ' + fmtH(metaT.h) + ' (' + metaT.n + ' chamados avaliados)' : 'sem corte de tempo que chegue a ' + FEL_META + '%'}. SLA atual ${atualS !== null ? atualS + '%' : '–'}; SLA para ${FEL_META}% de felicidade: ` + (metaS ? (metaS.pct === null ? `o prazo sozinho nao basta (no prazo, so ${metaS.x.toFixed(0)}% ficam felizes)` : `${metaS.pct}% no prazo (no prazo ${metaS.x.toFixed(0)}% felizes; fora ${metaS.y !== null ? metaS.y.toFixed(0) + '%' : 's/ dados'})`) : 'sem dados suficientes'));
     }
     if (reuniaoMensalModo === 'satisfacao') {
       // % de respostas positivas da pesquisa de satisfacao (Movidesk) entre os chamados da categoria que foram avaliados
@@ -4193,13 +4310,13 @@ function initReuniaoMensal() {
   };
   function renderTabela() {
   const bodyRows = linhas.map(l => {
-    const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(l.porCategoria[c] || 0, l.slaPorCategoria[c], l.tempoPorCategoria[c], l.pesqPorCategoria[c], `openModalReuniaoMensalCategoria(${jsStr(l.mesKey)}, ${jsStr(c)})`)).join('');
+    const cols = REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(l.porCategoria[c] || 0, l.slaPorCategoria[c], l.tempoPorCategoria[c], l.pesqPorCategoria[c], `openModalReuniaoMensalCategoria(${jsStr(l.mesKey)}, ${jsStr(c)})`, felMeta[c])).join('');
     const corReducao = l.reducaoDuvidas > 0 ? 'var(--ok)' : (l.reducaoDuvidas === 0 ? 'var(--warn)' : 'var(--danger)');
     const reducaoTexto = l.reducaoDuvidas > 0 ? `✓ ${l.reducaoDuvidas}pp de reducao` : (l.reducaoDuvidas === 0 ? '– sem variacao' : `✗ ${Math.abs(l.reducaoDuvidas)}pp de aumento`);
     return `<tr>
       <td style="font-weight:600; cursor:pointer;" title="Ver detalhamento" onclick="openModalReuniaoMensalTotal(${jsStr(l.mesKey)})">${esc(l.label)}</td>
       ${cols}
-      ${celulaCategoria(l.outros, l.slaOutros, l.tempoOutros, l.pesqOutros, `openModalReuniaoMensalOutros(${jsStr(l.mesKey)})`)}
+      ${celulaCategoria(l.outros, l.slaOutros, l.tempoOutros, l.pesqOutros, `openModalReuniaoMensalOutros(${jsStr(l.mesKey)})`, felMeta.__outros)}
       ${tdClick(`openModalReuniaoMensalTotal(${jsStr(l.mesKey)})`, l.atendidosSuporte, ' font-weight:700;')}
       ${tdClick(`openModalReuniaoMensalTotal(${jsStr(l.mesKey)})`, l.mttrH !== null ? fmtH(l.mttrH) : '-')}
       ${tdClick(`openModalReuniaoMensalPrimeiraResposta(${jsStr(l.mesKey)})`, l.pctPrimeira+'%')}
@@ -4216,8 +4333,8 @@ function initReuniaoMensal() {
   const corReducaoTotal = metaBatida ? 'var(--ok)' : (ytdReducaoDuvidas >= 0 ? 'var(--warn)' : 'var(--danger)');
   const totalRow = `<tr style="border-top:2px solid var(--panel-border); font-weight:700;">
     <td style="cursor:pointer;" title="Ver detalhamento" onclick="openModalReuniaoMensalTotal('total')">YTD (acumulado do ano)</td>
-    ${REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(totalGeral[c], slaGeralPorCategoria[c], tempoGeralPorCategoria[c], pesqGeralPorCategoria[c], `openModalReuniaoMensalCategoria('total', ${jsStr(c)})`)).join('')}
-    ${celulaCategoria(totalGeralOutros, slaGeralOutros, tempoGeralOutros, pesqGeralOutros, `openModalReuniaoMensalOutros('total')`)}
+    ${REUNIAO_MENSAL_CATEGORIAS.map(c => celulaCategoria(totalGeral[c], slaGeralPorCategoria[c], tempoGeralPorCategoria[c], pesqGeralPorCategoria[c], `openModalReuniaoMensalCategoria('total', ${jsStr(c)})`, felMeta[c])).join('')}
+    ${celulaCategoria(totalGeralOutros, slaGeralOutros, tempoGeralOutros, pesqGeralOutros, `openModalReuniaoMensalOutros('total')`, felMeta.__outros)}
     ${tdClick(`openModalReuniaoMensalTotal('total')`, totalGeralFechados)}
     ${tdClick(`openModalReuniaoMensalTotal('total')`, statsGeralTempo.mttrH !== null ? fmtH(statsGeralTempo.mttrH) : '-')}
     ${tdClick(`openModalReuniaoMensalPrimeiraResposta('total')`, statsGeral.pctPrimeira+'%')}
@@ -4239,7 +4356,7 @@ function initReuniaoMensal() {
     : reuniaoMensalModo === 'satisfacao'
     ? "Todos os meses desde jan/2026 — time Suporte · colunas de categoria em % de respostas positivas da pesquisa de satisfacao do Movidesk (entre parenteses: respostas; '–' = nenhuma resposta)"
     : reuniaoMensalModo === 'felicidade'
-    ? "Todos os meses desde jan/2026 — time Suporte · felicidade = % de respostas positivas na pesquisa de satisfacao (meta 95%). Abaixo do %: quantas respostas positivas a mais faltam para chegar na meta e positivas/respostas"
+    ? "Todos os meses desde jan/2026 — time Suporte · felicidade = % de respostas positivas na pesquisa de satisfacao (meta 95%). Abaixo do %: quantas respostas positivas a mais faltam para chegar na meta e positivas/respostas; depois, ⏱ tempo medio de atendimento atual → tempo necessario e SLA atual → SLA necessario (estimados pelo historico do ano: ate que tempo / com que % no prazo os chamados avaliados chegam a 95% de respostas positivas)"
     : reuniaoMensalModo === 'tempo'
     ? "Todos os meses desde jan/2026 — time Suporte · colunas de categoria em tempo medio de atendimento (criacao ate resolucao; '–' = nenhum chamado fechado)"
     : 'Todos os meses desde jan/2026 — time Suporte · colunas de categoria em quantidade de chamados fechados';
@@ -4300,11 +4417,87 @@ function initReuniaoMensal() {
       const f2 = felNecessarias(ult.pos, ult.n);
       r += `<br><b>Ultimo mes com resposta (${esc(com[com.length - 1].p.lab)}):</b> ${ult.pct.toFixed(1).replace('.', ',')}% — ` + (f2 === 0 ? 'meta batida' : `faltam ${f2} positiva(s) para ${FEL_META}%`) + '.';
     }
+    // Grafico de tempo: tempo medio de atendimento de cada mes (barras) x tempo para sustentar a meta de felicidade (linha tracejada)
+    const metaF = felMeta[felCat], metaT = metaF && metaF.t, metaS = metaF && metaF.s;
+    const tpts = linhas.map(l => {
+      const t = felCat === '__geral' ? { mttrH: l.mttrH } : (felCat === '__outros' ? l.tempoOutros : l.tempoPorCategoria[felCat]);
+      const sl = felCat === '__geral' ? { pct: l.pctSla } : (felCat === '__outros' ? l.slaOutros : l.slaPorCategoria[felCat]);
+      return { lab: l.label.split('/')[0].slice(0, 3), h: t && t.mttrH !== null && t.mttrH !== undefined ? t.mttrH : null, sla: sl && sl.pct !== null && sl.pct !== undefined ? sl.pct : null };
+    });
+    const maxH = Math.max(1, ...tpts.map(p => p.h || 0), metaT ? metaT.h : 0) * 1.15;
+    const yT = v => T + (1 - v / maxH) * ph;
+    let s2 = `<svg viewBox="0 0 ${W} ${H}" style="width:100%; max-width:${W}px; height:auto; display:block; margin:0 auto;" role="img" aria-label="Tempo medio de atendimento x tempo necessario para a meta">`;
+    [0, 0.25, 0.5, 0.75, 1].forEach(f => {
+      const v = maxH / 1.15 * f * 1.15;
+      s2 += `<line x1="${L}" x2="${W - R}" y1="${yT(v)}" y2="${yT(v)}" stroke="var(--panel-border)" stroke-width="1"/><text x="${L - 6}" y="${yT(v) + 4}" text-anchor="end" font-size="11" fill="var(--text3)">${fmtH(v)}</text>`;
+    });
+    tpts.forEach((p, i) => {
+      const cx = L + band * i + band / 2;
+      s2 += `<text x="${cx}" y="${H - Bt + 18}" text-anchor="middle" font-size="11.5" fill="var(--text2, var(--text3))">${esc(p.lab)}</text>`;
+      if (p.h === null) return;
+      const ok = metaT ? p.h <= metaT.h : true;
+      const cor = metaT ? (ok ? 'var(--ok)' : 'var(--danger)') : 'var(--text3)';
+      s2 += `<rect x="${cx - bw / 2}" y="${yT(p.h)}" width="${bw}" height="${T + ph - yT(p.h)}" rx="3" fill="${cor}" opacity=".55"><title>Tempo medio ${fmtH(p.h)}${p.sla !== null ? ' · SLA ' + p.sla + '%' : ''}</title></rect>`;
+      s2 += `<text x="${cx}" y="${yT(p.h) - 5}" text-anchor="middle" font-size="11.5" font-weight="700" fill="${cor}">${fmtH(p.h)}</text>`;
+      if (p.sla !== null) s2 += `<text x="${cx}" y="${T + ph - 6}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text)">SLA ${p.sla}%</text>`;
+    });
+    if (metaT) s2 += `<line x1="${L}" x2="${W - R}" y1="${yT(metaT.h)}" y2="${yT(metaT.h)}" stroke="var(--ok)" stroke-width="2" stroke-dasharray="7 5"/><text x="${W - R - 4}" y="${yT(metaT.h) - 6}" text-anchor="end" font-size="11.5" font-weight="700" fill="var(--ok)">Tempo p/ ${FEL_META}%: ≤ ${fmtH(metaT.h)}</text>`;
+    s2 += `</svg>`;
+    document.getElementById('graficoFelTempo').innerHTML = s2;
+    document.getElementById('felSubTempo').innerHTML = `<b>⏱ Tempo medio de atendimento</b> de cada mes (barras; verde = dentro do tempo necessario, vermelho = acima; o SLA do mes aparece dentro da barra) x <span style="color:var(--ok);">- - -</span> tempo necessario para sustentar ${FEL_META}% de felicidade — ${esc(nomeCat)}. Tempo e SLA necessarios sao estimativas do historico do ano: ate que tempo, e com que % de chamados no prazo, os chamados avaliados ainda chegaram a ${FEL_META}% de respostas positivas.`;
+    const tAtual = tpts.filter(p => p.h !== null);
+    if (tAtual.length) {
+      const u = tAtual[tAtual.length - 1];
+      r += `<br><b>Tempo:</b> atual (${esc(u.lab)}) ${fmtH(u.h)} · ` + (metaT ? `necessario ≤ ${fmtH(metaT.h)} (${metaT.n} chamados avaliados) — ` + (u.h <= metaT.h ? '<b style="color:var(--ok);">dentro do tempo necessario</b>' : `<b style="color:var(--danger);">precisa reduzir ${fmtH(u.h - metaT.h)}</b>`) : 'sem tempo que chegue a ' + FEL_META + '% nos dados do ano (poucas respostas ou a nota nao depende do tempo).');
+      r += `<br><b>SLA:</b> atual (${esc(u.lab)}) ${u.sla !== null ? u.sla + '%' : '–'} · ` + (metaS ? (metaS.pct === null ? `o prazo sozinho nao basta: mesmo no prazo, so ${metaS.x.toFixed(0)}% dos avaliados ficam felizes` : `necessario ≥ ${metaS.pct}% no prazo (no prazo ${metaS.x.toFixed(0)}% ficam felizes; fora do prazo ${metaS.y !== null ? metaS.y.toFixed(0) + '%' : 'sem dados'})` + (u.sla !== null ? (u.sla >= metaS.pct ? ' — <b style="color:var(--ok);">dentro</b>' : ` — <b style="color:var(--danger);">faltam ${metaS.pct - u.sla}pp</b>`) : '')) : 'sem dados suficientes de SLA avaliados.');
+    }
     document.getElementById('resumoFelicidade').innerHTML = r || 'Sem respostas de pesquisa para esta categoria.';
   }
   window._renderGrafFel = renderGrafFel;
+  // "O que melhorar no mes": para o mes escolhido, cada categoria com felicidade, SLA e tempo atuais contra o que e' necessario
+  // (tempo e SLA estimados pelo historico do ano) e o que falta fazer. Os checkboxes escolhem quais indicadores contam como "abaixo".
+  function renderMelhorar() {
+    const sel = document.getElementById('melMes'); if (!sel) return;
+    if (!sel.options.length) sel.innerHTML = linhas.slice().reverse().map(l => `<option value="${esc(l.mesKey)}">${esc(l.label)}</option>`).join('');
+    const l = linhas.find(x => x.mesKey === sel.value) || linhas[linhas.length - 1];
+    const usaF = document.getElementById('melF').checked, usaS = document.getElementById('melS').checked, usaT = document.getElementById('melT').checked, todas = document.getElementById('melTodas').checked;
+    const nomes = REUNIAO_MENSAL_CATEGORIAS.concat(['__outros']);
+    const linhaDe = (id) => {
+      const geral = id === '__geral', outros = id === '__outros';
+      const pq = geral ? l.pesquisa : (outros ? l.pesqOutros : l.pesqPorCategoria[id]);
+      const sla = geral ? { pct: l.pctSla } : (outros ? l.slaOutros : l.slaPorCategoria[id]);
+      const tempo = geral ? { mttrH: l.mttrH } : (outros ? l.tempoOutros : l.tempoPorCategoria[id]);
+      const qtd = geral ? l.total : (outros ? l.outros : (l.porCategoria[id] || 0));
+      const m = felMeta[id] || {};
+      const acoes = [];
+      let abF = false, abS = false, abT = false;
+      if (pq && pq.n && pq.pct < FEL_META) { abF = true; acoes.push(`+${felNecessarias(pq.positivas, pq.n)} respostas positivas (felicidade ${Math.round(pq.pct)}% → ${FEL_META}%)`); }
+      if (m.s && m.s.pct !== null && sla && sla.pct !== null && sla.pct !== undefined && sla.pct < m.s.pct) { abS = true; acoes.push(`SLA +${m.s.pct - sla.pct}pp (${sla.pct}% → ≥ ${m.s.pct}%)`); }
+      if (m.t && tempo && tempo.mttrH !== null && tempo.mttrH !== undefined && tempo.mttrH > m.t.h) { abT = true; acoes.push(`reduzir ${fmtH(tempo.mttrH - m.t.h)} no tempo (${fmtH(tempo.mttrH)} → ≤ ${fmtH(m.t.h)})`); }
+      const abaixo = (usaF && abF) || (usaS && abS) || (usaT && abT);
+      return { id, nome: geral ? 'Geral (todas)' : (outros ? 'Outros' : id), qtd, pq, sla, tempo, m, abF, abS, abT, abaixo, acoes };
+    };
+    let itens = ['__geral'].concat(nomes).map(linhaDe);
+    if (!todas) itens = itens.filter(x => x.abaixo);
+    const sinal = (ab, ok, txt) => `<td style="text-align:center; color:${ab ? 'var(--danger)' : (ok ? 'var(--ok)' : 'var(--text3)')}; font-weight:${ab ? 700 : 400};">${txt}</td>`;
+    const corpo = itens.map(x => {
+      const aberto = x.id === '__geral' ? `openModalReuniaoMensalTotal(${jsStr(l.mesKey)})` : (x.id === '__outros' ? `openModalReuniaoMensalOutros(${jsStr(l.mesKey)})` : `openModalReuniaoMensalCategoria(${jsStr(l.mesKey)}, ${jsStr(x.id)})`);
+      return `<tr>
+        <td style="font-weight:600; cursor:pointer;" title="Ver os chamados" onclick="${aberto}">${esc(x.nome)} <span style="font-weight:400; color:var(--text3); font-size:11px;">(${x.qtd})</span></td>
+        ${sinal(x.abF, x.pq && x.pq.n, x.pq && x.pq.n ? Math.round(x.pq.pct) + '% <span style="font-weight:400; font-size:11px;">(' + x.pq.positivas + '/' + x.pq.n + ')</span>' : '–')}
+        ${sinal(x.abS, x.sla && x.sla.pct !== null && x.sla.pct !== undefined, (x.sla && x.sla.pct !== null && x.sla.pct !== undefined ? x.sla.pct + '%' : '–') + (x.m.s ? ' <span style="font-weight:400; font-size:11px;">→ ' + (x.m.s.pct === null ? 'prazo não basta' : '≥ ' + x.m.s.pct + '%') + '</span>' : ''))}
+        ${sinal(x.abT, x.tempo && x.tempo.mttrH !== null && x.tempo.mttrH !== undefined, (x.tempo && x.tempo.mttrH !== null && x.tempo.mttrH !== undefined ? fmtH(x.tempo.mttrH) : '–') + (x.m.t ? ' <span style="font-weight:400; font-size:11px;">→ ≤ ' + fmtH(x.m.t.h) + '</span>' : ''))}
+        <td style="font-size:12.5px;">${x.acoes.length ? x.acoes.map(a => esc(a)).join('<br>') : '<span style="color:var(--ok);">✓ dentro do necessário</span>'}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('tabelaMelhorar').innerHTML = `<table><thead><tr><th>Categoria (chamados fechados)</th><th>😊 Felicidade</th><th>SLA atual → necessário</th><th>⏱ Tempo atual → necessário</th><th style="text-align:left;">O que melhorar para o mês ficar melhor</th></tr></thead>
+      <tbody>${corpo || '<tr><td colspan="5" style="color:var(--ok);">Nenhuma categoria abaixo do necessário nos indicadores marcados. 🎉</td></tr>'}</tbody></table>`;
+    document.getElementById('melSub').textContent = `${l.label} — ${itens.filter(x => x.abaixo).length} categoria(s) abaixo do necessário nos indicadores marcados. Tempo e SLA necessários são estimados pelo histórico do ano (ver o gráfico acima); clique no nome para ver os chamados.`;
+  }
+  window._renderMelhorar = renderMelhorar;
   renderTabela();
   renderGrafFel();
+  renderMelhorar();
   renderEmissoes();
 }
 // Sessao ja desbloqueada (ex.: recarga automatica da pagina): o gate some, mas a tabela precisa ser montada.
@@ -6781,6 +6974,66 @@ function tvAlterna() {
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.documentElement.classList.contains('tv')) tvAlterna(); });
 }
 
+// ===== Configuracao: clientes TMS Admin =====
+let TMS_RASCUNHO = null;
+function tmsClientesConhecidos() {
+  const s = new Set();
+  TICKETS_TODOS.forEach(t => { if (t.clientOrg) s.add(t.clientOrg); });
+  Object.keys(RESOLVED_MONTHS_RAW).forEach(k => RESOLVED_MONTHS_RAW[k].forEach(r => { if (r.clientOrg) s.add(r.clientOrg); }));
+  return Array.from(s).sort((a, b) => a.localeCompare(b));
+}
+function tmsRascunho() {
+  if (!TMS_RASCUNHO) {
+    const c = TMS.cfg || {};
+    const ex = c.excluir || {};
+    TMS_RASCUNHO = { clientes: (c.clientes || []).slice(), abertos: ex.abertos !== false, historico: ex.historico !== false };
+  }
+  return TMS_RASCUNHO;
+}
+function tmsCfgRender() {
+  const root = document.getElementById('cfgCorpo'); if (!root || !root.firstChild) return;
+  let box = document.getElementById('tmsCfg');
+  if (!box) { box = document.createElement('div'); box.id = 'tmsCfg'; root.insertBefore(box, root.firstChild); }
+  const r = tmsRascunho();
+  box.innerHTML = `<div class="panel" style="margin-bottom:18px;"><h2>TMS Admin — clientes tratados à parte</h2>
+    <div class="panel-sub">Os clientes desta lista <b>saem</b> dos números do painel nas partes marcadas abaixo e passam a aparecer só no card <b>TMS Admin</b> (aba Ao Vivo), com indicadores próprios. Pode ter mais de um. A lista fica salva no GitHub e vale para todos que abrirem o painel.</div>
+    <div id="tmsLista" style="display:flex; flex-wrap:wrap; gap:8px; margin:10px 0;">${r.clientes.length ? r.clientes.map((c, i) => `<span class="and-selo" style="gap:10px;">${esc(c)} <button type="button" class="cfg-btn" style="padding:0 8px; border-radius:50%;" title="Remover" onclick="tmsRemove(${i})">✕</button></span>`).join('') : '<span class="panel-sub">Nenhum cliente na lista.</span>'}</div>
+    <div class="cfg-acoes" style="align-items:center;"><input type="text" id="tmsNovo" list="tmsOpcoes" placeholder="Digite ou escolha o nome do cliente (como aparece no painel)" style="max-width:460px;" onkeydown="if(event.key==='Enter')tmsAdd()">
+      <datalist id="tmsOpcoes">${tmsClientesConhecidos().map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      <button type="button" class="cfg-btn" onclick="tmsAdd()">Adicionar</button></div>
+    <div class="cfg-grid" style="margin-top:14px;">
+      <label class="cfg-chave"><input type="checkbox" id="tmsAbertos" ${r.abertos ? 'checked' : ''} onchange="tmsRascunho().abertos=this.checked"> Tirar de <b>Ao Vivo</b>, Gestão de Melhorias e Fluxograma (chamados em aberto e resolvidos de hoje)</label>
+      <label class="cfg-chave"><input type="checkbox" id="tmsHist" ${r.historico ? 'checked' : ''} onchange="tmsRascunho().historico=this.checked"> Tirar de <b>Histórico, Clientes, One-on-One, Gamificação e Reunião Mensal</b> (resolvidos e abertos por mês)</label>
+    </div>
+    <div class="cfg-acoes"><button type="button" class="cfg-btn" onclick="tmsSalva()">Salvar para todos</button><span id="tmsMsg" class="panel-sub" style="align-self:center;"></span></div>
+    <div class="panel-sub" style="margin-top:6px;">O nome precisa ser igual ao do cliente no painel (acentos, maiúsculas e símbolos são ignorados). NPS e emissões não têm cliente por chamado e continuam inteiros.</div></div>`;
+}
+function tmsAdd() {
+  const i = document.getElementById('tmsNovo'); if (!i) return;
+  const v = i.value.trim(); if (!v) return;
+  const r = tmsRascunho();
+  if (!r.clientes.some(c => TMS.norm(c) === TMS.norm(v))) r.clientes.push(v);
+  tmsCfgRender();
+}
+function tmsRemove(i) { tmsRascunho().clientes.splice(i, 1); tmsCfgRender(); }
+async function tmsSalva() {
+  const m = document.getElementById('tmsMsg'), r = tmsRascunho();
+  const corpo = { clientes: r.clientes, excluir: { abertos: !!r.abertos, historico: !!r.historico } };
+  m.textContent = 'Salvando...';
+  try {
+    const resp = await fetch('/api/tms', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfgToken() }, body: JSON.stringify(corpo) });
+    const d = await resp.json().catch(() => ({}));
+    if (!resp.ok) { m.textContent = d.erro || ('Não foi possível salvar (' + resp.status + ').'); return; }
+    try { localStorage.setItem('painelCfgLocal', JSON.stringify({ salvo_em: d.salvo_em, tms_admin: corpo })); } catch (e) {}
+    m.textContent = 'Salvo para todos. Recarregando o painel...';
+    setTimeout(() => { location.href = location.pathname + '?t=' + Date.now(); }, 1200);
+  } catch (e) { m.textContent = 'Falha de conexão ao salvar.'; }
+}
+{
+  const _cr = cfgRender;
+  cfgRender = function () { _cr(); tmsCfgRender(); };
+}
+
 renderGestaoMelhorias();
 
 function tick() {
@@ -6834,10 +7087,25 @@ setInterval(() => {
     }
     setTimeout(escondeAviso, Math.max(0, MIN_MS - (Date.now() - inicio)));
   }
+  // Configuracao do painel (lista de clientes TMS Admin etc.): arquivo na branch "config" do GitHub. Se o que foi salvo neste
+  // navegador for mais novo que o do GitHub (o GitHub guarda cache por ate 5 min), vale o do navegador. Falha = sem configuracao.
+  function carregaCfg() {
+    return fetch('https://raw.githubusercontent.com/TeskeHub33-blip/Painel-Suporte/config/painel_config.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .catch(function () { return {}; })
+      .then(function (remoto) {
+        var loc = null;
+        try { loc = JSON.parse(localStorage.getItem('painelCfgLocal') || 'null'); } catch (e) {}
+        return (loc && (!remoto.salvo_em || loc.salvo_em > remoto.salvo_em)) ? loc : remoto;
+      });
+  }
   function carrega(tentativa) {
-    fetch(URL_DADOS + '?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(inicia)
+    Promise.all([
+      fetch(URL_DADOS + '?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+      carregaCfg()
+    ])
+      .then(function (res) { window.__CFG = res[1] || {}; inicia(res[0]); })
       .catch(function (err) {
         mostra('Tentando de novo em 30 segundos (' + err.message + ').');
         setTimeout(function () { carrega(tentativa + 1); }, 30000);
