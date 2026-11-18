@@ -1698,8 +1698,8 @@ const LABELS = {
   priorizados: 'Priorizados (WhatsApp)',
   naoAtualizadosHoje: 'Nao atualizados hoje',
   contraturno: 'Contraturno (Alife e Vinicius) — em atendimento',
-  cargaParada: 'Chamados alto impacto',
-  incidenteGeral: 'Possivel incidente geral',
+  cargaParada: 'Alto impacto',
+  incidenteGeral: 'Indisponibilidade',
   reuniaoCliente: 'Realizar reuniao com cliente',
   classificacaoIncorreta: 'Possivel classificacao incorreta',
   chatsEmAtendimento: 'Chats em atendimento (aproximado)',
@@ -2771,7 +2771,7 @@ document.getElementById('kpiRow').innerHTML =
   kpiTile(corPorFaixa(venceEm1Hora.length, 0, 5), venceEm1Hora.length, 'Vencem em 1 hora', 'venceEm1Hora') +
   kpiTile(corPorFaixa(venceHoje.length, 5, 20), venceHoje.length, 'Vencem hoje', 'venceHoje') +
   kpiTile(corPorFaixa(bouncing.length, 0, 10), bouncing.length, 'Aging (&gt;2 dias)', 'bouncing') +
-  kpiTile(incidenteGeral.length === 0 ? 'ok' : 'danger', incidenteGeral.length, 'Possivel incidente geral', 'incidenteGeral', 'Novos/em atendimento com sistema inoperante, instabilidade ou travamento geral; ou pico de clientes (3+ em 60 min)');
+  kpiTile(incidenteGeral.length === 0 ? 'ok' : 'danger', incidenteGeral.length, 'Indisponibilidade', 'incidenteGeral', 'Novos/em atendimento com sistema inoperante, instabilidade ou travamento geral; ou pico de clientes (3+ em 60 min)');
 
 
 // ===== Alerta de possivel incidente geral (faixa vermelha + som) =====
@@ -2867,7 +2867,7 @@ const hintAltoImpacto = `Tempo medio de resolucao (mes) — alto impacto: ${mttr
 document.getElementById('kpiRow2').innerHTML =
   kpiTile('neutral', priorizados.length, 'Priorizados (WhatsApp)', 'priorizados', hintPriorizados) +
   kpiTile('neutral', contraturno.length, 'Contraturno em atendimento', 'contraturno') +
-  kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Chamados alto impacto', 'cargaParada', hintAltoImpacto) +
+  kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Alto impacto', 'cargaParada', hintAltoImpacto) +
   kpiTile(classificacaoIncorreta.length === 0 ? 'ok' : 'warn', classificacaoIncorreta.length, 'Possivel classificacao incorreta', 'classificacaoIncorreta') +
   kpiTile(reuniaoCliente.length === 0 ? 'ok' : 'warn', reuniaoCliente.length, 'Realizar reuniao com cliente', 'reuniaoCliente', 'Em atendimento com mais de 5 interacoes com o cliente e sem solucao — sem task e fora Shopee');
 
