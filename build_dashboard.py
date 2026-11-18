@@ -2346,10 +2346,10 @@ function corPorFaixa(valor, okAte, warnAte) {{
 const incidenteGeral = apply('incidenteGeral');
 document.getElementById('kpiRow').innerHTML =
   kpiTile('neutral', novos.length, 'Novos (aguard. atend.)', 'novos') +
+  kpiTile(incidenteGeral.length === 0 ? 'ok' : 'danger', incidenteGeral.length, 'Indisponibilidade', 'incidenteGeral', 'Novos/em atendimento com sistema inoperante, instabilidade ou travamento geral; ou pico de clientes (3+ em 60 min)') +
   kpiTile(corPorFaixa(venceEm1Hora.length, 0, 5), venceEm1Hora.length, 'Vencem em 1 hora', 'venceEm1Hora') +
   kpiTile(corPorFaixa(venceHoje.length, 5, 20), venceHoje.length, 'Vencem hoje', 'venceHoje') +
-  kpiTile(corPorFaixa(bouncing.length, 0, 10), bouncing.length, 'Aging (&gt;2 dias)', 'bouncing') +
-  kpiTile(incidenteGeral.length === 0 ? 'ok' : 'danger', incidenteGeral.length, 'Indisponibilidade', 'incidenteGeral', 'Novos/em atendimento com sistema inoperante, instabilidade ou travamento geral; ou pico de clientes (3+ em 60 min)');
+  kpiTile(corPorFaixa(bouncing.length, 0, 10), bouncing.length, 'Aging (&gt;2 dias)', 'bouncing');
 
 
 // ===== Alerta de possivel incidente geral (faixa vermelha + som) =====
