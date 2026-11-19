@@ -74,7 +74,6 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({erro: 'Use POST.'});
   try {
     if (!process.env.MOVIDESK_TOKEN) return res.status(503).json({erro: 'MOVIDESK_TOKEN não configurado na Vercel.'});
-    if (!process.env.GITHUB_TOKEN_CONFIG) return res.status(503).json({erro: 'A variável GITHUB_TOKEN_CONFIG não está configurada na Vercel.'});
     const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const protocolo = String(corpo.protocolo || '').replace(/[^0-9A-Za-z_-]/g, '');
     if (!protocolo) return res.status(400).json({erro: 'Informe o protocolo.'});
@@ -90,6 +89,7 @@ module.exports = async (req, res) => {
     if (id) nova.createdBy = {id};
     await md('PATCH', '/tickets', {id: t.id}, {actions: [nova]});
 
+    if (!process.env.GITHUB_TOKEN_CONFIG) return res.status(200).json({ok: true, protocolo, logGravado: true, aviso: 'Log gravado no Movidesk e chamado removido neste navegador. Para a remoção valer para todos, falta criar GITHUB_TOKEN_CONFIG na Vercel.'});
     const erroBranch = await garanteBranch();
     if (erroBranch) return res.status(502).json({erro: 'Log gravado no Movidesk, mas: ' + erroBranch, logGravado: true});
     const erroSalvar = await guardaRemovido(protocolo);
