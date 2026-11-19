@@ -14,6 +14,7 @@ import re
 # Onde a pagina busca os dados (branch "dados" do repositorio; a Vercel nao faz deploy dessa branch).
 DADOS_URL = 'https://raw.githubusercontent.com/TeskeHub33-blip/Painel-Suporte/dados/dados.json'
 CFG_URL = 'https://raw.githubusercontent.com/TeskeHub33-blip/Painel-Suporte/config/painel_config.json'
+REM_URL = 'https://raw.githubusercontent.com/TeskeHub33-blip/Painel-Suporte/config/indisponibilidade_removidos.json'
 
 # Tela de carregamento (caminhao da EmiteAi). Fica no INICIO da pagina para aparecer no primeiro quadro.
 # Nos recarregamentos automaticos (URL com ?t=) ela nao aparece, para nao piscar na TV.
@@ -112,9 +113,10 @@ CARREGADOR = r"""
     Promise.all([
       fetch(URL_DADOS + '?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
-      carregaCfg()
+      carregaCfg(),
+      fetch('__REM__?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
     ])
-      .then(function (res) { window.__CFG = res[1] || {}; inicia(res[0]); })
+      .then(function (res) { window.__CFG = res[1] || {}; window.__REM = res[2] || {}; inicia(res[0]); })
       .catch(function (err) {
         mostra('Tentando de novo em 30 segundos (' + err.message + ').');
         setTimeout(function () { carrega(tentativa + 1); }, 30000);
@@ -132,7 +134,7 @@ def externalizar(html):
     n = html.count('<script>')
     html = html.replace('<script>', '<script type="text/plain" data-app>')
     assert n >= 1, 'nenhum <script> encontrado para externalizar'
-    return CAMINHAO + html + CARREGADOR.replace('__URL__', DADOS_URL).replace('__CFG__', CFG_URL)
+    return CAMINHAO + html + CARREGADOR.replace('__URL__', DADOS_URL).replace('__CFG__', CFG_URL).replace('__REM__', REM_URL)
 
 
 def montar_dados(valores, now_br, now_iso, base_dir):
