@@ -73,28 +73,35 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({erro: 'Use POST.'});
   try {
-    if (!process.env.MOVIDESK_TOKEN) return res.status(503).json({erro: 'MOVIDESK_TOKEN não configurado na Vercel.'});
     const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const protocolo = String(corpo.protocolo || '').replace(/[^0-9A-Za-z_-]/g, '');
     if (!protocolo) return res.status(400).json({erro: 'Informe o protocolo.'});
 
-    const r = await md('GET', '/tickets', {'$select': 'id,protocol,createdDate,baseStatus', '$filter': `protocol eq '${protocolo}'`, '$top': '1'});
-    const t = r && r[0];
-    if (!t) return res.status(404).json({erro: 'Chamado não encontrado entre os abertos do Movidesk.'});
-    if (Date.now() - new Date(t.createdDate).getTime() < MIN_MS) return res.status(409).json({erro: 'Só dá para remover depois de 5 minutos da abertura do chamado.'});
+    // Por enquanto a remocao do painel NAO depende do Movidesk: se o log falhar, remove mesmo assim e avisa.
+    const avisos = [];
+    if (!process.env.MOVIDESK_TOKEN) avisos.push('MOVIDESK_TOKEN não configurado: o log não foi gravado no Movidesk.');
+    else {
+      try {
+        const r = await md('GET', '/tickets', {'$select': 'id,protocol,createdDate', '$filter': `protocol eq '${protocolo}'`, '$top': '1'});
+        const t = r && r[0];
+        if (!t) avisos.push('Chamado não encontrado entre os abertos do Movidesk: o log não foi gravado.');
+        else if (Date.now() - new Date(t.createdDate).getTime() < MIN_MS) return res.status(409).json({erro: 'Só dá para remover depois de 5 minutos da abertura do chamado.'});
+        else {
+          const msg = 'Chamado removido do alerta de indisponibilidade do Painel Diário: não se trata de indisponibilidade geral.';
+          const nova = {type: 1, description: `<p><strong>[PAINEL]</strong></p><p>${msg}</p>`};
+          const id = await autorId();
+          if (id) nova.createdBy = {id};
+          await md('PATCH', '/tickets', {id: t.id}, {actions: [nova]});
+        }
+      } catch (e) { avisos.push('Não consegui gravar o log no Movidesk (' + mascara(e.message || e) + ').'); }
+    }
 
-    const msg = 'Chamado removido do alerta de indisponibilidade do Painel Diário: não se trata de indisponibilidade geral.';
-    const nova = {type: 1, description: `<p><strong>[PAINEL]</strong></p><p>${msg}</p>`};
-    const id = await autorId();
-    if (id) nova.createdBy = {id};
-    await md('PATCH', '/tickets', {id: t.id}, {actions: [nova]});
-
-    if (!process.env.GITHUB_TOKEN_CONFIG) return res.status(200).json({ok: true, protocolo, logGravado: true, aviso: 'Log gravado no Movidesk e chamado removido neste navegador. Para a remoção valer para todos, falta criar GITHUB_TOKEN_CONFIG na Vercel.'});
-    const erroBranch = await garanteBranch();
-    if (erroBranch) return res.status(502).json({erro: 'Log gravado no Movidesk, mas: ' + erroBranch, logGravado: true});
-    const erroSalvar = await guardaRemovido(protocolo);
-    if (erroSalvar) return res.status(502).json({erro: 'Log gravado no Movidesk, mas: ' + erroSalvar, logGravado: true});
-    return res.status(200).json({ok: true, protocolo});
+    if (!process.env.GITHUB_TOKEN_CONFIG) avisos.push('Removido só neste navegador: falta GITHUB_TOKEN_CONFIG na Vercel para valer para todos.');
+    else {
+      const erro = (await garanteBranch()) || (await guardaRemovido(protocolo));
+      if (erro) avisos.push('Removido só neste navegador: ' + erro);
+    }
+    return res.status(200).json({ok: true, protocolo, aviso: avisos.join(' ')});
   } catch (e) {
     return res.status(500).json({erro: mascara(e.message || e)});
   }
