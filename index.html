@@ -1802,7 +1802,7 @@ async function incRemover(protocolo, btn) {
     const d = await resp.json().catch(() => ({}));
     if (!resp.ok && !d.logGravado) { btn.disabled = false; btn.textContent = 'Remover do painel'; alert(d.erro || ('Não foi possível remover (' + resp.status + ').')); return; }
     try { const m = JSON.parse(localStorage.getItem('incRemovidos') || '{}'); m[protocolo] = new Date().toISOString(); localStorage.setItem('incRemovidos', JSON.stringify(m)); } catch (e) {}
-    if (d.erro) alert(d.erro);
+    if (d.erro || d.aviso) alert(d.erro || d.aviso);
     location.reload();
   } catch (e) { btn.disabled = false; btn.textContent = 'Remover do painel'; alert('Falha de conexão ao remover.'); }
 }
