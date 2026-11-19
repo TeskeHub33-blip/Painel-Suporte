@@ -221,6 +221,12 @@ td { padding: 8px 6px; border-bottom: 1px solid var(--panel-border); vertical-al
 .col-subject { max-width: 260px; }
 .col-team { color: var(--text-dim); width: 110px; font-size: 11.5px; }
 .col-status { width: 90px; font-size: 11px; font-weight: 700; }
+.inc-acao-th { display: none; }
+table.inc-acao .inc-acao-th { display: table-cell; }
+.inc-acao-td { width: 130px; text-align: center; white-space: nowrap; }
+.inc-rem { font: inherit; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--danger); background: transparent; color: var(--danger); cursor: pointer; }
+.inc-rem:hover:not(:disabled) { background: var(--danger); color: #fff; }
+.inc-rem:disabled { opacity: .5; cursor: not-allowed; }
 .col-time { width: 80px; font-size: 12px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
 .stalest { color: var(--danger); }
 .ticket-link { color: var(--pink); text-decoration: none; font-weight: 600; }
@@ -1388,7 +1394,7 @@ html.tv #tabLive #gridChatsLive { flex: 1 1 auto; }
     </div>
     <div class="modal-body">
       <table>
-        <thead><tr><th>Chamado</th><th>Assunto</th><th>Cliente</th><th>Tecnico</th><th>Status</th><th id="modalTimeHeader">Tempo</th></tr></thead>
+        <thead><tr><th>Chamado</th><th>Assunto</th><th>Cliente</th><th>Tecnico</th><th>Status</th><th id="modalTimeHeader">Tempo</th><th class="inc-acao-th">Alerta</th></tr></thead>
         <tbody id="modalTbody"></tbody>
       </table>
     </div>
@@ -1602,6 +1608,13 @@ const filaPriorizada = ATIVOS.filter(t => t._tier !== null).slice().sort((a,b) =
 // Regra 2: pico - em 60 min, 3+ clientes diferentes com chamados de instabilidade/lentidao (termos estreitos) OU
 //          5+ clientes diferentes com "travada"/nao emite/nao carrega (termos amplos). Calibrado com novembro/2026.
 const INC_STATUS = ['Novo', 'Em atendimento', 'Em atendimento - N2'];
+// Chamados que a equipe tirou do alerta ("Remover do painel"): lista no GitHub (branch config, lida pelo carregador) + o que este navegador acabou de remover.
+const INC_REMOVIDOS = (function () {
+  const m = Object.assign({}, (window.__REM && window.__REM.removidos) || {});
+  try { Object.assign(m, JSON.parse(localStorage.getItem('incRemovidos') || '{}')); } catch (e) {}
+  return new Set(Object.keys(m));
+})();
+const INC_MIN_REMOVER_MIN = 5;
 const INC_R1_HORAS = 12, INC_JANELA_MIN = 60, INC_MIN_ESTREITO = 3, INC_MIN_AMPLO = 5;
 const INC_FORTE = /inoperan|fora do ar|sistema\s+(esta\s+|estao\s+)?(parado|caiu|lento|fora)|instabilidade\s+(no|do|na|de)\s+(sistema|portal|emite)|lentidao\s+(no\s+sistema|no\s+portal|emite)|todas\s+(as\s+)?(cargas|lts?)\b|nenhuma\s+carga|travamento\s+geral/;
 const INC_PICO_ESTREITO = /instabilidade|lentidao|fora do ar|inoperan|sistema\s+(esta\s+|estao\s+)?(parado|caiu|lento)|indisponibilidade|todas\s+(as\s+)?(cargas|lts)/;
@@ -1612,7 +1625,7 @@ const INC_EVENTOS = (() => {
   const add = t => {
     const c = t._created || parseDt(t.createdDate); if (!c) return;
     const ms = c.getTime(); if (ms < lim || ms > fim + 60000) return;
-    if (vistos.has(t.protocol)) return; vistos.add(t.protocol);
+    if (vistos.has(t.protocol) || INC_REMOVIDOS.has(String(t.protocol))) return; vistos.add(t.protocol);
     out.push({ t: t, cli: t.clientOrg || '?', txt: incNorm((t.subject || '') + ' ' + String(t.description || '').slice(0, 400)) });
   };
   TICKETS.forEach(add); RESOLVED_MONTH_ALL.forEach(add);
@@ -1627,7 +1640,7 @@ const INC_PICO_PROTOCOLOS = new Set([].concat(INC_P1 ? INC_P1.ev : [], INC_P2 ? 
 const INC_PICO_CLIENTES = new Set([].concat(INC_P1 ? Array.from(INC_P1.clientes) : [], INC_P2 ? Array.from(INC_P2.clientes) : []));
 TICKETS.forEach(t => {
   const recente = t._created && (NOW - t._created) <= INC_R1_HORAS * 3600000;
-  t._incR1 = !!recente && INC_FORTE.test(incNorm((t.subject || '') + ' ' + String(t.description || '').slice(0, 600)));
+  t._incR1 = !!recente && !INC_REMOVIDOS.has(String(t.protocol)) && INC_FORTE.test(incNorm((t.subject || '') + ' ' + String(t.description || '').slice(0, 600)));
   t._incPico = INC_PICO_PROTOCOLOS.has(t.protocol);
 });
 
@@ -1756,7 +1769,7 @@ const LABELS = {
   cargaParada: 'Alto impacto',
   incidenteGeral: 'Indisponibilidade',
   reuniaoCliente: 'Realizar reuniao com cliente',
-  classificacaoIncorreta: 'Possivel classificacao incorreta',
+  classificacaoIncorreta: 'Possível classificação incorreta',
   chatsEmAtendimento: 'Chats em atendimento (aproximado)',
   chatsAguardando: 'Chats aguardando atendimento (aproximado)',
 };
@@ -1764,7 +1777,39 @@ const LABELS = {
 function openModal(name) {
   const items = apply(name);
   renderModal(LABELS[name] || name, items, name === 'bouncing' ? 'update' : 'open');
+  if (name === 'incidenteGeral') incColunaRemover(items);
 }
+// Coluna "Alerta" do modal de indisponibilidade: botao para tirar da lista um chamado que nao e' indisponibilidade geral.
+// So' libera depois de 5 min da abertura; grava um log interno no Movidesk e a remocao vale para todos (api/removerindisp).
+function incColunaRemover(items) {
+  const tab = document.querySelector('#modalOverlay table'); if (!tab) return;
+  tab.classList.add('inc-acao');
+  const linhas = document.querySelectorAll('#modalTbody tr');
+  items.forEach((t, i) => {
+    const tr = linhas[i]; if (!tr) return;
+    const min = t._created ? Math.floor((NOW - t._created) / 60000) : 999;
+    const td = document.createElement('td'); td.className = 'col-time inc-acao-td';
+    if (min < INC_MIN_REMOVER_MIN) td.innerHTML = '<button type="button" class="inc-rem" disabled title="Disponível 5 minutos após a abertura">Remover do painel</button><br><small>em ' + (INC_MIN_REMOVER_MIN - min) + ' min</small>';
+    else td.innerHTML = '<button type="button" class="inc-rem" onclick="incRemover(' + jsStr(String(t.protocol)) + ', this)">Remover do painel</button>';
+    tr.appendChild(td);
+  });
+}
+async function incRemover(protocolo, btn) {
+  if (!confirm('O chamado ' + protocolo + ' NÃO se trata de indisponibilidade geral?\n\nEle sai da lista de alerta e um log interno é registrado no Movidesk.')) return;
+  btn.disabled = true; btn.textContent = 'Removendo...';
+  try {
+    const resp = await fetch('/api/removerindisp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ protocolo: protocolo }) });
+    const d = await resp.json().catch(() => ({}));
+    if (!resp.ok && !d.logGravado) { btn.disabled = false; btn.textContent = 'Remover do painel'; alert(d.erro || ('Não foi possível remover (' + resp.status + ').')); return; }
+    try { const m = JSON.parse(localStorage.getItem('incRemovidos') || '{}'); m[protocolo] = new Date().toISOString(); localStorage.setItem('incRemovidos', JSON.stringify(m)); } catch (e) {}
+    if (d.erro) alert(d.erro);
+    location.reload();
+  } catch (e) { btn.disabled = false; btn.textContent = 'Remover do painel'; alert('Falha de conexão ao remover.'); }
+}
+(function () {
+  const ov = document.getElementById('modalOverlay'); if (!ov) return;
+  new MutationObserver(() => { if (!ov.classList.contains('open')) { const t = ov.querySelector('table'); if (t) t.classList.remove('inc-acao'); } }).observe(ov, { attributes: true, attributeFilter: ['class'] });
+})();
 function openModalTecnico(name, tecnico) {
   const items = apply(name).filter(t => t.ownerName === tecnico);
   renderModal((LABELS[name]||name) + ' — ' + tecnico, items, name === 'bouncing' ? 'update' : 'open');
@@ -1778,7 +1823,7 @@ function exportTxt(filename, headers, rows) {
     const linhas = [headers.join('\t')].concat(rows.map(r => headers.map(h => limpa(r[h]).replace(/\t/g, ' ')).join('\t')));
     window.claude.downloads.save({filename, data: '\ufeff' + linhas.join('\r\n')}).catch(err => {
       console.error('export failed', err);
-      if (err && err.code !== 'declined') alert('Nao foi possivel exportar: ' + (err.message || err.code));
+      if (err && err.code !== 'declined') alert('Não foi possível exportar: ' + (err.message || err.code));
     });
     return;
   }
@@ -1793,7 +1838,7 @@ function exportTxt(filename, headers, rows) {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   } catch (err) {
     console.error('export failed', err);
-    alert('Nao foi possivel exportar: ' + (err.message || err));
+    alert('Não foi possível exportar: ' + (err.message || err));
   }
 }
 function exportLiveList(items, filename) {
@@ -2878,10 +2923,10 @@ function renderAlertaIncidente() {
   if (!incAtivo()) { document.documentElement.style.setProperty('--inc-h', '0px'); if (el) el.remove(); return; }
   const partes = [];
   if (INC_TESTE) partes.push('TESTE do alerta: nenhum incidente real foi detectado');
-  if (INC_PICO_CLIENTES.size) partes.push(INC_PICO_CLIENTES.size + ' clientes diferentes abriram chamados de instabilidade/travamento na ultima hora');
+  if (INC_PICO_CLIENTES.size) partes.push(INC_PICO_CLIENTES.size + ' clientes diferentes abriram chamados de instabilidade/travamento na última hora');
   const r1 = incidenteGeral.filter(t => t._incR1);
   if (r1.length) partes.push(r1.length + ' chamado(s) novo(s)/em atendimento citam sistema inoperante ou instabilidade');
-  const html = '<span class="inc-tit">&#9888; ATENCAO: possivel instabilidade geral</span>'
+  const html = '<span class="inc-tit">&#9888; ATENÇÃO: Possível instabilidade geral</span>'
     + '<span class="inc-det">' + partes.join(' &middot; ') + '<br><small id="incSomDica"></small></span>'
     + (incidenteGeral.length ? '<button type="button" onclick="openModal(\'incidenteGeral\')">Ver chamados (' + incidenteGeral.length + ')</button>' : '')
     + '<button type="button" onclick="incAlternaMudo()">' + (incMudo() ? 'Ativar som' : 'Silenciar som') + '</button>'
@@ -2956,7 +3001,7 @@ document.getElementById('kpiRow2').innerHTML =
   kpiTile('neutral', priorizados.length, 'Priorizados (WhatsApp)', 'priorizados', hintPriorizados) +
   kpiTile('neutral', contraturno.length, 'Contraturno em atendimento', 'contraturno') +
   kpiTile(cargaParada.length === 0 ? 'ok' : 'danger', cargaParada.length, 'Alto impacto', 'cargaParada', hintAltoImpacto) +
-  kpiTile(classificacaoIncorreta.length === 0 ? 'ok' : 'warn', classificacaoIncorreta.length, 'Possivel classificacao incorreta', 'classificacaoIncorreta') +
+  kpiTile(classificacaoIncorreta.length === 0 ? 'ok' : 'warn', classificacaoIncorreta.length, 'Possível classificação incorreta', 'classificacaoIncorreta') +
   kpiTile(reuniaoCliente.length === 0 ? 'ok' : 'warn', reuniaoCliente.length, 'Realizar reuniao com cliente', 'reuniaoCliente', 'Em atendimento com mais de 5 interacoes com o cliente e sem solucao — sem task e fora Shopee');
 
 document.getElementById('gridChatsLive').innerHTML = (typeof renderEscalaAgora === 'function') ? renderEscalaAgora() : '';
@@ -3078,7 +3123,7 @@ document.getElementById('gridBottom').innerHTML = `
       <tbody>${tableHtml(cargaParada.sort((a,b)=>(b._hoursOpen||0)-(a._hoursOpen||0)), 'open', 14)}</tbody></table>
   </div>
   <div class="panel">
-    <h2>Possivel classificacao incorreta${exportButtonHtml("exportLiveList(classificacaoIncorreta, 'classificacao_incorreta.txt')")}</h2>
+    <h2>Possível classificação incorreta${exportButtonHtml("exportLiveList(classificacaoIncorreta, 'classificacao_incorreta.txt')")}</h2>
     <div class="panel-sub">${classificacaoIncorreta.length} chamados abertos com categoria diferente de Bug, mas que ja passaram pela fila de desenvolvimento ou tem assunto de bug</div>
     <table><thead><tr><th>Chamado</th><th>Assunto</th><th>Categoria atual</th><th>Motivo</th><th>Tecnico</th></tr></thead>
       <tbody>${tableHtmlMisclass(classificacaoIncorreta, 14)}</tbody></table>
@@ -7213,9 +7258,10 @@ setInterval(() => {
     Promise.all([
       fetch(URL_DADOS + '?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
-      carregaCfg()
+      carregaCfg(),
+      fetch('https://raw.githubusercontent.com/TeskeHub33-blip/Painel-Suporte/config/indisponibilidade_removidos.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
     ])
-      .then(function (res) { window.__CFG = res[1] || {}; inicia(res[0]); })
+      .then(function (res) { window.__CFG = res[1] || {}; window.__REM = res[2] || {}; inicia(res[0]); })
       .catch(function (err) {
         mostra('Tentando de novo em 30 segundos (' + err.message + ').');
         setTimeout(function () { carrega(tentativa + 1); }, 30000);
