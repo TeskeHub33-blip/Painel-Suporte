@@ -47,6 +47,7 @@ V16_CSS = """
 #gridChatsLive .esc-c-prox span { font-size: 11px; font-weight: 600; color: var(--text3); font-variant-numeric: tabular-nums; }
 #gridChatsLive .esc-vz { color: var(--text3); }
 #gridChatsLive .esc-card { cursor: pointer; }
+html.tv #gridChatsLive .esc-manual { display: none; }
 #gridChatsLive .esc-card:hover { outline: 1.5px solid var(--accent, #6c8cff); }
 .esc-modal { position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .esc-modal-box { background: var(--panel, #1b2030); color: var(--text, #e8ecf5); border: .5px solid var(--panel-border, #333); border-radius: 12px; padding: 18px 20px; width: min(440px, 100%); display: flex; flex-direction: column; gap: 10px; }
@@ -119,7 +120,7 @@ function renderEscalaAgora() {
     const prox = !n ? '—' : n.fora ? 'fora do horário' : (n.nomes[0] ? esc(n.nomes[0]) : 'ninguém');
     const rodape = '<div class="esc-c-prox"><span>' + hh(pn.hora) + '</span>' + prox + '</div>';
     const abre = cls => '<div class="esc-card' + cls + '" onclick="escEdita(' + ai + ')" title="Clique para preencher manualmente">';
-    const cab = '<div class="esc-c-top"><span class="esc-c-atv">' + esc(titulo) + '</span>' + (c && c.manual ? '<span class="esc-pill sob"><i></i>Manual</span>' : (sob ? '<span class="esc-pill sob"><i></i>Sobreaviso</span>' : '')) + '</div>' + (detalhe ? '<div class="esc-c-det">' + esc(detalhe) + '</div>' : '');
+    const cab = '<div class="esc-c-top"><span class="esc-c-atv">' + esc(titulo) + '</span>' + (c && c.manual ? '<span class="esc-pill sob esc-manual"><i></i>Manual</span>' : (sob ? '<span class="esc-pill sob"><i></i>Sobreaviso</span>' : '')) + '</div>' + (detalhe ? '<div class="esc-c-det">' + esc(detalhe) + '</div>' : '');
     if (!c) return abre(' off') + cab + '<div class="esc-c-vazio">Escala não publicada</div>' + rodape + '</div>';
     if (c.fora) return abre(' off') + cab + '<div class="esc-c-vazio">Fora do horário</div>' + rodape + '</div>';
     const nomes = c.nomes.filter(Boolean);
