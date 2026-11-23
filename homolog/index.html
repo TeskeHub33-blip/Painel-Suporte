@@ -943,6 +943,19 @@ html[data-tema="dark"] .panel table tbody tr:hover td { background: rgba(255,255
 #gridChatsLive .esc-c-prox { margin-top: auto; padding-top: 8px; border-top: .5px solid var(--panel-border); font-size: clamp(12px, .8vw, 15px); color: var(--text-dim); display: flex; gap: 8px; align-items: baseline; }
 #gridChatsLive .esc-c-prox span { font-size: 11px; font-weight: 600; color: var(--text3); font-variant-numeric: tabular-nums; }
 #gridChatsLive .esc-vz { color: var(--text3); }
+#gridChatsLive .esc-card { cursor: pointer; }
+#gridChatsLive .esc-card:hover { outline: 1.5px solid var(--accent, #6c8cff); }
+.esc-modal { position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.esc-modal-box { background: var(--panel, #1b2030); color: var(--text, #e8ecf5); border: .5px solid var(--panel-border, #333); border-radius: 12px; padding: 18px 20px; width: min(440px, 100%); display: flex; flex-direction: column; gap: 10px; }
+.esc-modal-box h3 { margin: 0; font-size: 17px; }
+.esc-modal-box label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-dim, #aab); }
+.esc-modal-box input, .esc-modal-box select { font: inherit; font-size: 14px; padding: 7px 9px; border-radius: 7px; border: 1px solid var(--panel-border, #444); background: var(--bg, #11151f); color: var(--text, #e8ecf5); }
+.esc-modal-box .esc-m-linha { display: flex; gap: 10px; }
+.esc-modal-box .esc-m-linha label { flex: 1; }
+.esc-modal-box .esc-m-bot { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.esc-modal-box button { font: inherit; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: 7px; border: 1px solid var(--panel-border, #444); background: transparent; color: var(--text, #e8ecf5); cursor: pointer; }
+.esc-modal-box button.prim { background: var(--accent, #4f6bff); border-color: transparent; color: #fff; }
+.esc-modal-box .esc-m-msg { font-size: 12px; color: var(--warn, #e8b04a); min-height: 16px; }
 #gridChatsLive .esc-rodape { font-size: 11.5px; color: var(--text3); line-height: 1.5; margin-top: 14px; }
 
 /* ===== Visao executiva do Fluxograma ===== */
@@ -6882,7 +6895,19 @@ function escalaPartes(ts) {
 }
 function escalaDiaAnterior(data) { const d = new Date(data + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); }
 // Celula da planilha para a atividade (indice 0..7) na data/hora de Brasilia. null = dia nao publicado.
+// Preenchimento manual na tela (vale sobre a planilha): mapa data -> hora -> atividade -> "P|2a|3a". Fica no GitHub (api/escala) e neste navegador.
+function escManualMapa() {
+  const rem = window.__ESC || {};
+  let loc = null; try { loc = JSON.parse(localStorage.getItem('escManualLocal') || 'null'); } catch (e) {}
+  return (loc && (!rem.salvo_em || loc.salvo_em > rem.salvo_em)) ? (loc.manual || {}) : (rem.manual || {});
+}
+function escManualCell(ai, pt) {
+  const m = ((escManualMapa()[pt.data] || {})[pt.hora] || {})[ai];
+  if (m === undefined || m === null) return null;
+  return {fora: false, manual: true, nomes: String(m).split('|').map(x => x.trim()), soPrincipal: false};
+}
 function escalaCelula(dados, ai, pt) {
+  const man = escManualCell(ai, pt); if (man) return man;
   const dop = pt.data, dia = (dados.dias || {})[dop];      // a planilha usa a data do calendario em todas as horas
   if (!dia) return null;
   const hora = dia[pt.hora];
@@ -6893,6 +6918,8 @@ function escalaCelula(dados, ai, pt) {
 }
 // Cards: no fim de semana/feriado com sobreaviso publicado, vale o sobreaviso; senao, o Principal da planilha.
 function escalaQuem(dados, ai, pt) {
+  const man = escManualCell(ai, pt);
+  if (man) { const nm = man.nomes.filter(Boolean); return {tipo: 'esc', nomes: nm.slice(0, 1), reserva: nm.slice(1)}; }
   const sob = (dados.sobreaviso || {})[pt.data];
   if (sob) return {tipo: 'sob', nomes: sob[pt.hora] || []};
   if (pt.fds) return {tipo: 'sob', nomes: null};
@@ -6913,13 +6940,14 @@ function renderEscalaAgora() {
     const titulo = nomeAtv.replace(/\s*\(.*\)$/, ''), detalhe = (nomeAtv.match(/\((.*)\)$/) || [])[1];
     const prox = !n ? '—' : n.fora ? 'fora do horário' : (n.nomes[0] ? esc(n.nomes[0]) : 'ninguém');
     const rodape = '<div class="esc-c-prox"><span>' + hh(pn.hora) + '</span>' + prox + '</div>';
-    const cab = '<div class="esc-c-top"><span class="esc-c-atv">' + esc(titulo) + '</span>' + (sob ? '<span class="esc-pill sob"><i></i>Sobreaviso</span>' : '') + '</div>' + (detalhe ? '<div class="esc-c-det">' + esc(detalhe) + '</div>' : '');
-    if (!c) return '<div class="esc-card off">' + cab + '<div class="esc-c-vazio">Escala não publicada</div>' + rodape + '</div>';
-    if (c.fora) return '<div class="esc-card off">' + cab + '<div class="esc-c-vazio">Fora do horário</div>' + rodape + '</div>';
+    const abre = cls => '<div class="esc-card' + cls + '" onclick="escEdita(' + ai + ')" title="Clique para preencher manualmente">';
+    const cab = '<div class="esc-c-top"><span class="esc-c-atv">' + esc(titulo) + '</span>' + (c && c.manual ? '<span class="esc-pill sob"><i></i>Manual</span>' : (sob ? '<span class="esc-pill sob"><i></i>Sobreaviso</span>' : '')) + '</div>' + (detalhe ? '<div class="esc-c-det">' + esc(detalhe) + '</div>' : '');
+    if (!c) return abre(' off') + cab + '<div class="esc-c-vazio">Escala não publicada</div>' + rodape + '</div>';
+    if (c.fora) return abre(' off') + cab + '<div class="esc-c-vazio">Fora do horário</div>' + rodape + '</div>';
     const nomes = c.nomes.filter(Boolean);
-    if (!nomes.length) { semResp++; return '<div class="esc-card alerta">' + cab + '<div class="esc-c-vazio"><b>Sem responsável</b> nesta hora</div>' + rodape + '</div>'; }
+    if (!nomes.length) { semResp++; return abre(' alerta') + cab + '<div class="esc-c-vazio"><b>Sem responsável</b> nesta hora</div>' + rodape + '</div>'; }
     const reserva = nomes.slice(1).map((x, i) => '<span class="esc-c-chip"><i>' + (i + 2) + 'º</i>' + esc(x) + '</span>').join('');
-    return '<div class="esc-card">' + cab + '<div class="esc-c-pessoa"><span class="esc-c-av">' + esc(escIniciais(nomes[0])) + '</span><span class="esc-c-nome">' + esc(nomes[0]) + '</span></div>'
+    return abre('') + cab + '<div class="esc-c-pessoa"><span class="esc-c-av">' + esc(escIniciais(nomes[0])) + '</span><span class="esc-c-nome">' + esc(nomes[0]) + '</span></div>'
       + '<div class="esc-c-res">' + (reserva || '<span class="esc-vz">sem reserva</span>') + '</div>' + rodape + '</div>';
   });
   const grupo = (titulo, de, ate) => '<div class="esc-grupo"><div class="esc-g-tit">' + titulo + '</div><div class="esc-grade">' + cartoes.slice(de, ate).join('') + '</div></div>';
@@ -6929,7 +6957,55 @@ function renderEscalaAgora() {
     + grupo('Canais de atendimento', 0, 4) + grupo('Chamados e N2', 4, 8)
     + '<div class="esc-rodape">Escala lida da planilha em ' + esc(dados.gerado_em || '-') + ' e conferida uma vez por dia.'
     + (soPrincipal ? ' Para hoje a planilha só informou o Principal de cada atividade.' : '')
-    + ' Em sábados, domingos e feriados, Chamados Novos e priorizados mostram o sobreaviso.</div></div>';
+    + ' Em sábados, domingos e feriados, Chamados Novos e priorizados mostram o sobreaviso. Clique em um cartão para preencher manualmente.</div></div>';
+}
+function escNomesConhecidos() {
+  const set = new Set(), d = escalaDados();
+  Object.keys((d && d.dias) || {}).forEach(k => ((d.dias[k]) || []).forEach(h => (h || []).forEach(c => String(c).split('|').forEach(x => { x = x.trim(); if (x && x !== '—' && x !== '-' && x.indexOf('fora') !== 0) set.add(x); }))));
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+function escV(id) { const e = document.getElementById(id); return e ? e.value : ''; }
+function escFecha() { const m = document.getElementById('escModal'); if (m) m.remove(); }
+function escEdita(ai) {
+  const dados = escalaDados(); if (!dados) return;
+  const pt = escalaPartes(Date.now()), AT = dados.atividades || [], atual = escalaCelula(dados, ai, pt);
+  const nomes = atual && !atual.fora ? atual.nomes : [];
+  escFecha();
+  const ov = document.createElement('div'); ov.id = 'escModal'; ov.className = 'esc-modal';
+  ov.onclick = e => { if (e.target === ov) escFecha(); };
+  const hs = (id, sel) => '<select id="' + id + '">' + Array.from({length: 24}, (_, h) => '<option value="' + h + '"' + (h === sel ? ' selected' : '') + '>' + String(h).padStart(2, '0') + 'h</option>').join('') + '</select>';
+  const campo = (i, rot) => '<label>' + rot + '<input type="text" id="escN' + i + '" list="escNomes" value="' + esc(nomes[i] || '') + '" placeholder="Nome (deixe vazio para ninguém)"></label>';
+  ov.innerHTML = '<div class="esc-modal-box"><h3>' + esc((AT[ai] || '').replace(/ *[(].*$/, '')) + ' — preencher manualmente</h3>'
+    + '<div style="font-size:12px;color:var(--text3);">Vale sobre a planilha, para todos que abrirem o painel. Hoje, ' + esc(pt.data.split('-').reverse().join('/')) + '.</div>'
+    + campo(0, 'Principal') + campo(1, '2º') + campo(2, '3º')
+    + '<datalist id="escNomes">' + escNomesConhecidos().map(n => '<option value="' + esc(n) + '">').join('') + '</datalist>'
+    + '<div class="esc-m-linha"><label>Das' + hs('escDe', pt.hora) + '</label><label>Até as (inclusive)' + hs('escAte', pt.hora) + '</label></div>'
+    + '<div class="esc-m-msg" id="escMsg"></div>'
+    + '<div class="esc-m-bot"><button type="button" class="prim" onclick="escSalva(' + ai + ', false)">Salvar</button>'
+    + '<button type="button" onclick="escSalva(' + ai + ', true)" title="Apaga o preenchimento manual dessas horas">Voltar para a planilha</button>'
+    + '<button type="button" onclick="escFecha()">Cancelar</button></div></div>';
+  document.body.appendChild(ov);
+}
+async function escSalva(ai, limpar) {
+  const pt = escalaPartes(Date.now()), de = Number(escV('escDe')), ate = Number(escV('escAte')), msg = document.getElementById('escMsg');
+  if (ate < de) { if (msg) msg.textContent = 'A hora final precisa ser igual ou depois da inicial.'; return; }
+  const nomes = [0, 1, 2].map(i => escV('escN' + i).replace(/[|]/g, ' ').trim());
+  if (!limpar && !nomes[0] && (nomes[1] || nomes[2])) { if (msg) msg.textContent = 'Preencha o Principal antes do 2º e do 3º.'; return; }
+  const base = JSON.parse(JSON.stringify(escManualMapa()));
+  base[pt.data] = base[pt.data] || {};
+  for (let h = de; h <= ate; h++) {
+    base[pt.data][h] = base[pt.data][h] || {};
+    if (limpar) delete base[pt.data][h][ai]; else base[pt.data][h][ai] = nomes.join('|');
+  }
+  try { localStorage.setItem('escManualLocal', JSON.stringify({salvo_em: new Date().toISOString(), manual: base})); } catch (e) {}
+  escalaAtualiza();
+  if (msg) msg.textContent = 'Salvando para todos...';
+  try {
+    const resp = await fetch('/api/escala', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({data: pt.data, de: de, ate: ate, atividade: ai, nomes: limpar ? null : nomes})});
+    const d = await resp.json().catch(() => ({}));
+    if (!resp.ok) { if (msg) msg.textContent = (d.erro || ('Erro ' + resp.status)) + ' Salvo só neste navegador.'; return; }
+  } catch (e) { if (msg) msg.textContent = 'Sem conexão: salvo só neste navegador.'; return; }
+  escFecha();
 }
 function escalaAtualiza() { const g = document.getElementById('gridChatsLive'); if (g) g.innerHTML = renderEscalaAgora(); }
 setInterval(escalaAtualiza, 60000);
@@ -7259,9 +7335,10 @@ setInterval(() => {
       fetch(URL_DADOS + '?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
       carregaCfg(),
-      fetch('https://raw.githubusercontent.com/TeskeHub33-blip/Painel-Suporte/config/indisponibilidade_removidos.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
+      fetch('https://raw.githubusercontent.com/TeskeHub33-blip/Painel-Suporte/config/indisponibilidade_removidos.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; }),
+      fetch('https://raw.githubusercontent.com/TeskeHub33-blip/Painel-Suporte/config/escala_manual.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
     ])
-      .then(function (res) { window.__CFG = res[1] || {}; window.__REM = res[2] || {}; inicia(res[0]); })
+      .then(function (res) { window.__CFG = res[1] || {}; window.__REM = res[2] || {}; window.__ESC = res[3] || {}; inicia(res[0]); })
       .catch(function (err) {
         mostra('Tentando de novo em 30 segundos (' + err.message + ').');
         setTimeout(function () { carrega(tentativa + 1); }, 30000);
