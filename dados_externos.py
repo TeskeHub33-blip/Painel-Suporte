@@ -18,7 +18,7 @@ REM_URL = 'https://raw.githubusercontent.com/TeskeHub33-blip/Painel-Suporte/conf
 ESC_URL = 'https://raw.githubusercontent.com/TeskeHub33-blip/Painel-Suporte/config/escala_manual.json'
 
 # Tela de carregamento (caminhao da EmiteAi). Fica no INICIO da pagina para aparecer no primeiro quadro.
-# Nos recarregamentos automaticos (URL com ?t=) ela nao aparece, para nao piscar na TV.
+# Aparece tambem nos recarregamentos automaticos, para as pessoas verem que a tela esta atualizando.
 CAMINHAO = r"""<style>
 #carregandoDados{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:radial-gradient(ellipse at 50% 40%,#25376a 0%,#141f3f 70%);color:#fff;font-family:Inter,Arial,sans-serif;text-align:center;padding:24px;transition:opacity .45s ease}
 #carregandoDados.some{opacity:0;pointer-events:none}
@@ -42,7 +42,6 @@ html.sem-caminhao #carregandoDados{display:none}
 @keyframes cdPonto{0%,80%,100%{opacity:.2}40%{opacity:1}}
 @media (prefers-reduced-motion:reduce){#carregandoDados *{animation-duration:3s!important}}
 </style>
-<script>if(location.search.indexOf('t=')>-1)document.documentElement.classList.add('sem-caminhao');</script>
 <div id="carregandoDados" role="status" aria-live="polite">
   <div class="cd-cena" aria-hidden="true">
     <div class="cd-estrada"></div><div class="cd-faixa"></div>
@@ -70,7 +69,7 @@ CARREGADOR = r"""
   var URL_DADOS = '__URL__';
   var aviso = document.getElementById('carregandoDados');
   var inicio = Date.now();
-  var MIN_MS = document.documentElement.classList.contains('sem-caminhao') ? 0 : 1400;   // deixa o caminhao andar um pouco
+  var MIN_MS = 1400;   // deixa o caminhao andar um pouco
   function mostra(txt) {
     if (!aviso) return;
     aviso.className = 'erro'; aviso.style.display = '';

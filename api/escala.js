@@ -32,7 +32,21 @@ const nome = x => String(x || '').replace(/[|]/g, ' ').trim().slice(0, 60);
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  if (req.method !== 'POST') return res.status(405).json({erro: 'Use POST.'});
+  if (req.method === 'GET') {
+    // Leitura para as telas abertas (sincronizam a cada ~15 s). Cache curto na Vercel: muitas telas = poucas chamadas ao GitHub.
+    try {
+      let corpo = {};
+      if (process.env.GITHUB_TOKEN_CONFIG) {
+        const atual = await gh('GET', `/contents/${ARQUIVO}?ref=${BRANCH}`);
+        if (atual.ok && atual.json) corpo = JSON.parse(Buffer.from(atual.json.content, 'base64').toString('utf8'));
+      }
+      res.setHeader('Cache-Control', 'public, s-maxage=10, stale-while-revalidate=20');
+      return res.status(200).json({salvo_em: corpo.salvo_em || null, manual: corpo.manual || {}});
+    } catch (e) {
+      return res.status(200).json({salvo_em: null, manual: {}});
+    }
+  }
+  if (req.method !== 'POST') return res.status(405).json({erro: 'Use GET ou POST.'});
   try {
     if (!process.env.GITHUB_TOKEN_CONFIG) return res.status(503).json({erro: 'GITHUB_TOKEN_CONFIG não está configurada na Vercel.'});
     const c = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});

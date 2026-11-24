@@ -72,12 +72,14 @@ function tvVideoAcesa() {
     if (!tvEmModoTv()) { if (_tvVideo) { _tvVideo.pause(); _tvVideo.remove(); _tvVideo = null; } return; }
     if (!_tvVideo) {
       _tvCanvas = document.createElement('canvas'); _tvCanvas.width = 16; _tvCanvas.height = 16;
-      if (!_tvCanvas.captureStream) return;
       const v = document.createElement('video');
       v.muted = true; v.defaultMuted = true; v.loop = true;
       v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
       v.style.cssText = 'position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:.01;pointer-events:none;z-index:-1';
-      v.srcObject = _tvCanvas.captureStream(5);
+      const nz = window.TV_NOSLEEP;
+      if (nz) v.innerHTML = '<source src="' + nz.webm + '" type="video/webm"><source src="' + nz.mp4 + '" type="video/mp4">';
+      else if (_tvCanvas.captureStream) v.srcObject = _tvCanvas.captureStream(5);
+      else return;
       document.body.appendChild(v); _tvVideo = v;
     }
     const c = _tvCanvas.getContext('2d'); _tvQuadro++;

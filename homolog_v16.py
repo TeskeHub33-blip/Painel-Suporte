@@ -183,6 +183,7 @@ async function escSalva(ai, limpar) {
     const resp = await fetch('/api/escala', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({data: pt.data, de: de, ate: ate, atividade: ai, nomes: limpar ? null : nomes})});
     const d = await resp.json().catch(() => ({}));
     if (!resp.ok) { if (msg) msg.textContent = (d.erro || ('Erro ' + resp.status)) + ' Salvo só neste navegador.'; return; }
+    if (d.salvo_em) { window.__ESC = {salvo_em: d.salvo_em, manual: base}; try { localStorage.removeItem('escManualLocal'); } catch (e) {} escalaAtualiza(); }
   } catch (e) { if (msg) msg.textContent = 'Sem conexão: salvo só neste navegador.'; return; }
   escFecha();
 }
