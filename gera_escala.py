@@ -143,6 +143,60 @@ for d, lst in dias.items():
             continue
         cel[3] = REGRA_55PBX
 
+# REGRAS DA OPERACAO (pedidas em 24/11/2026), aplicadas por cima da planilha, so' onde a hora ja esta publicada:
+# 1) Guias Shopee: das 06h as 11h ficam Maria Paula (principal) e Joao Matoso (2o); das 11h as 16h fica Guilherme Paredes.
+#    Cada um so' entra dentro do proprio horario de trabalho e se aparece na escala daquele dia (ausencia/folga na planilha vale).
+# 2) Bruna Rocha, so' nas sextas: comeca as 16h em vez de 18h (Chamados Novos principal; no Chat entra de 2a, pois ja ha principal).
+def _nomes_dia(lst, h0, h1):
+    s = set()
+    for h in range(h0, h1 + 1):
+        for c in (lst[h] or []):
+            for n in c.split('|'):
+                s.add(n.strip())
+    return s
+
+
+def _poe_bruna(txt, so_se_principal_ocupado=False):
+    """Poe a Bruna na celula 'P|2a|3a': principal se estiver vazio (Novos); 2o se o principal ja estiver ocupado (Chat)."""
+    vazio = lambda x: x.strip() in ('', '—', '-')
+    p = (txt.split('|') + ['—', '—', '—'])[:3]
+    if 'Bruna Rocha' in p:
+        return txt
+    if vazio(p[0]):
+        p[0] = 'Bruna Rocha'
+    elif vazio(p[1]):
+        p[1] = 'Bruna Rocha'
+    return '|'.join(p)
+
+
+# horas (inicio inclusive) em que cada pessoa pode assumir Guias Shopee, por dia da semana (0 = segunda)
+HORAS_SHOPEE = {
+    'Maria Paula': {1: range(6, 11), 2: range(6, 11), 3: range(6, 11), 4: range(6, 11), 5: range(6, 11)},
+    'João Matoso': {0: range(6, 11), 1: range(6, 11), 2: range(6, 11), 3: range(6, 11), 4: range(6, 11)},
+    'Guilherme Paredes': {0: (11, 13, 14, 15), 1: (11, 13, 14, 15), 2: (11, 13, 14, 15), 3: (11, 13, 14, 15), 4: (11, 12)},
+}
+for d, lst in dias.items():
+    wd = datetime.date.fromisoformat(d).weekday()
+    presentes = {'Maria Paula': _nomes_dia(lst, 6, 10), 'João Matoso': _nomes_dia(lst, 6, 10),
+                 'Guilherme Paredes': _nomes_dia(lst, 8, 18), 'Bruna Rocha': _nomes_dia(lst, 18, 23)}
+    antes = [list(c) if c else c for c in lst]
+    for h in range(24):
+        cel = lst[h]
+        if not cel or cel[0].split('|')[0].strip().lower() == 'fora':
+            continue
+        if 6 <= h <= 10:
+            quem = [n for n in ('Maria Paula', 'João Matoso') if h in HORAS_SHOPEE[n].get(wd, ()) and n in presentes[n]]
+            if quem:
+                cel[0] = '|'.join(quem)
+        elif 11 <= h <= 15:
+            g = 'Guilherme Paredes'
+            if h in HORAS_SHOPEE[g].get(wd, ()) and g in presentes[g]:
+                cel[0] = g
+        if wd == 4 and h in (16, 17) and 'Bruna Rocha' in presentes['Bruna Rocha']:
+            b = 'Bruna Rocha'
+            cel[4] = _poe_bruna(cel[4])
+            cel[1] = _poe_bruna(cel[1], so_se_principal_ocupado=True)
+
 saida = {
     'gerado_em': datetime.datetime.now(BRT).strftime('%d/%m/%Y %H:%M') + ' (Brasília)',
     'fonte': 'Planilhas Atividades_Suporte_EmiteAi e Programação de Alocação de Sobreaviso (SharePoint, time Operações/Suporte)',
