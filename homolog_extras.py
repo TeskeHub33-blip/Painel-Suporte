@@ -33,6 +33,7 @@ from homolog_v19 import V19_CSS, V19_JS, aplicar_v19
 from homolog_v20 import V20_CSS, V20_JS, aplicar_v20
 from homolog_v21 import V21_JS
 from homolog_v22 import V22_JS
+from homolog_v23 import V23_JS
 
 TEMA_CLARO_CSS = """
 /* ===== HOMOLOGACAO v2: tema claro EmiteAi ===== */
@@ -191,7 +192,7 @@ def aplicar_homologacao(html, badge=True):
                         '        <button type="button" data-sub="fluxo" onclick="setGmSub(\'fluxo\')">Fluxo</button>', 1)
     html = html.replace('<div id="gmIndic" style="display:none;"></div>',
                         '<div id="gmIndic" style="display:none;"></div>\n    <div id="gmFluxo" style="display:none;"></div>', 1)
-    html = html.replace('renderGestaoMelhorias();\n\nfunction tick()', FLUXO_JS + NAV_JS + BUGS_JS + V2_JS + TEMA_JS + V3_JS + V5_JS + V6_JS + V7_JS + V8_JS + V9_JS + V10_JS + V11_JS + V12_JS + V13_JS + V14_JS + V15_JS + V16_JS + V17_JS + V18_JS + V19_JS + V20_JS + V21_JS + V22_JS + '\nrenderGestaoMelhorias();\n\nfunction tick()', 1)
+    html = html.replace('renderGestaoMelhorias();\n\nfunction tick()', FLUXO_JS + NAV_JS + BUGS_JS + V2_JS + TEMA_JS + V3_JS + V5_JS + V6_JS + V7_JS + V8_JS + V9_JS + V10_JS + V11_JS + V12_JS + V13_JS + V14_JS + V15_JS + V16_JS + V17_JS + V18_JS + V19_JS + V20_JS + V21_JS + V23_JS + V22_JS + '\nrenderGestaoMelhorias();\n\nfunction tick()', 1)
     html = reestruturar_navegacao(html)
     html = aplicar_tema(html)
     html = aplicar_v3(html)
