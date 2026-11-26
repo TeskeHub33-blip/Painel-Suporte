@@ -162,7 +162,7 @@ function fatRender() {
     '<div class="panel-sub" style="margin-bottom:12px;">Dados do painel de faturamento do EmiteAí, mês a mês desde jan/2025. Atualizado automaticamente todo dia às 09:00 · última atualização: <b>' + esc(quando) + '</b>. O mês corrente é acumulado até d-1.</div>' +
     '<div class="panel"><div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;"><b>Mês:</b><select id="fatMes" class="itil-select" onchange="FAT_MES=this.value; fatRender();">' + opts + '</select><button type="button" class="export-btn" onclick="fatCarrega()">Recarregar</button></div></div>' +
     '<div style="margin-top:14px;">' + fatHeroHtml(pm, atual) + '</div>' +
-    '<div class="kpi-row" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin-top:14px;">' + FAT_TIPOS.map(t => kpi(FAT_N(atual[t[0]]), t[1])).join('') + kpi(FAT_N(atual.sist), 'Sistêmico') + '</div>' +
+    '<div class="kpi-row" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin-top:14px;">' + kpi(FAT_N(atual.clientes), 'Clientes') + FAT_TIPOS.map(t => kpi(FAT_N(atual[t[0]]), t[1])).join('') + kpi(FAT_N(atual.sist), 'Sistêmico') + '</div>' +
     '<div class="panel" style="margin-top:18px;"><h2>Documentos por mês</h2><div style="margin:6px 0 8px;">' + legenda + '</div>' + fatGraficoMeses(pm) + '</div>' +
     '<div class="panel" style="margin-top:18px;"><h2>Maiores clientes em ' + fatRotuloMes(FAT_MES) + '</h2>' + fatGraficoTop(fatLinhasMes()) + '</div>' +
     '<div class="panel" style="margin-top:18px;"><h2>Resumo mês a mês</h2><div id="fatTabM">' + fatTabelaHtml('m', FAT_MCOLS, pm) + '</div><div style="margin-top:10px;"><button type="button" class="export-btn" onclick="fatCsvMeses()">Exportar resumo (CSV)</button></div></div>' +
@@ -338,7 +338,7 @@ function fatHeroHtml(pm, atual) {
     '<div class="fat-hero-t">Emissões por chamado · ' + fatRotuloMes(FAT_MES) + '</div>' +
     '<div class="fat-hero-v">' + (chA ? FAT_N(Math.round(razA)) : '-') + '</div>' +
     (delta ? '<span class="fat-pill ' + (sobe ? 'sobe' : 'desce') + '">' + (sobe ? '▲' : '▼') + ' ' + delta.replace('+', '') + ' vs ' + fatRotuloMes(ant) + '</span>' : '<span class="fat-pill">' + (chA ? 'sem ' + fatRotuloMes(ant) + ' para comparar' : 'sem chamados deste mês') + '</span>') +
-    '</div><div class="fat-hero-dir">' + mini('Emissões', FAT_N(fatEmis(atual)), 'CT-e + NFS-e + Sistêmico + GNRE') + mini('Chamados abertos', chA ? FAT_N(chA) : '-', 'Suporte, sem cancelados') + mini('Clientes', FAT_N(atual.clientes)) + mini('Total de documentos', FAT_N(atual.docs)) + '</div></div>' +
+    '</div><div class="fat-hero-dir">' + mini('Emissões', FAT_N(fatEmis(atual)), 'CT-e + NFS-e + Sistêmico + GNRE') + mini('Chamados abertos', chA ? FAT_N(chA) : '-', 'Suporte, sem cancelados') + '</div></div>' +
     (razA ? '<div style="margin-top:14px; max-width:520px;">' + barra(fatRotuloMes(FAT_MES), razA, sobe || !razB ? '#16a34a' : '#dc2626') + (razB ? barra(fatRotuloMes(ant), razB, '#9ca3af') : '') + '</div>' : '') +
     '<h2 style="margin-top:18px;">Comparativo de emissões por chamado</h2><div id="fatRazao">' + fatRazaoHtml() + '</div></div>';
 }
