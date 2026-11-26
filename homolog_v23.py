@@ -153,11 +153,32 @@ function fatRender() {
   const box = document.getElementById('fatCorpo');
   if (!(FAT.dados || []).length) { box.innerHTML = '<div class="panel"><div class="panel-sub">Ainda não há dados de faturamento. A rotina diária das 09:00 envia os dados; assim que ela rodar, eles aparecem aqui.</div></div>'; return; }
   const pm = fatPorMes(), atual = pm.find(m => m.mes === FAT_MES) || pm[pm.length - 1], lin = fatLinhas();
-  const ant = pm[pm.indexOf(atual) - 1];
-  const kpi = (v, t) => '<div class="kpi"><div class="value">' + v + '</div><div class="kpi-label">' + t + '</div></div>';
+  const porMes = {}; pm.forEach(m => { porMes[m.mes] = m; });
+  const pct = (a, b) => b ? (a >= b ? '+' : '') + ((a - b) * 100 / b).toFixed(1).replace('.', ',') + '%' : null;
+  const cor = (a, b) => !b ? '' : (a >= b ? 'var(--success, #16a34a)' : 'var(--danger, #dc2626)');
+  const sub = (txt, a, b) => txt ? '<div style="font-size:11px; margin-top:4px; opacity:.9; color:' + cor(a, b) + ';">' + txt + '</div>' : '';
+  const kpi = (v, t, extra) => '<div class="kpi"><div class="value">' + v + '</div><div class="kpi-label">' + t + '</div>' + (extra || '') + '</div>';
+  // Mesmo mes do ano anterior
+  const anoAnt = (parseInt(FAT_MES.slice(0, 4), 10) - 1) + FAT_MES.slice(4), mAA = porMes[anoAnt];
+  const cDocs = kpi(FAT_N(atual.docs), 'Total de documentos', mAA ? sub(pct(atual.docs, mAA.docs) + ' vs ' + fatRotuloMes(anoAnt) + ' (' + FAT_N(mAA.docs) + ')', atual.docs, mAA.docs) : sub('sem dados de ' + fatRotuloMes(anoAnt)));
+  // Media mensal do trimestre do mes escolhido x trimestre anterior (meses que tem dados)
+  const ano = parseInt(FAT_MES.slice(0, 4), 10), mes = parseInt(FAT_MES.slice(5), 10), tri = Math.floor((mes - 1) / 3);
+  const doTri = (a, t) => [1, 2, 3].map(i => a + '-' + String(t * 3 + i).padStart(2, '0')).filter(k => porMes[k] && k <= FAT_MES);
+  const triAnt = tri === 0 ? [ano - 1, 3] : [ano, tri - 1];
+  const kA = doTri(ano, tri), kP = doTri(triAnt[0], triAnt[1]);
+  const media = ks => ks.length ? ks.reduce((s, k) => s + porMes[k].docs, 0) / ks.length : 0;
+  const mediaA = media(kA), mediaP = media(kP);
+  const cTri = kpi(FAT_N(Math.round(mediaA)), 'Média/mês do ' + (tri + 1) + 'º tri/' + ano + (kA.length < 3 ? ' (' + kA.length + ' mês' + (kA.length > 1 ? 'es' : '') + ')' : ''),
+    mediaP ? sub(pct(mediaA, mediaP) + ' vs ' + (triAnt[1] + 1) + 'º tri/' + triAnt[0] + ' (média ' + FAT_N(Math.round(mediaP)) + ')', mediaA, mediaP) : sub('sem trimestre anterior'));
+  // Emissoes por chamado: (CT-e + NFS-e + Sistemico + GNRE) / chamados abertos do mes (mesma regra da Reuniao Mensal)
+  const emis = m => m ? m.cte + m.nfse + m.sist + m.gnre : 0;
+  const chamDe = k => (typeof CHAMADOS_ABERTOS !== 'undefined' && CHAMADOS_ABERTOS[k]) || 0;
+  const chA = chamDe(FAT_MES), chB = chamDe(anoAnt);
+  const razA = chA ? emis(atual) / chA : 0, razB = chB && mAA ? emis(mAA) / chB : 0;
+  const cChamado = kpi(chA ? FAT_N(Math.round(razA)) : '-', 'Emissões por chamado',
+    chA ? sub(FAT_N(emis(atual)) + ' emissões ÷ ' + FAT_N(chA) + ' chamados abertos' + (razB ? '<br>' + pct(razA, razB) + ' vs ' + fatRotuloMes(anoAnt) + ' (' + FAT_N(Math.round(razB)) + ')' : ''), razA, razB) : sub('sem chamados deste mês'));
   const opts = (FAT.meses || []).slice().reverse().map(m => '<option value="' + m + '"' + (m === FAT_MES ? ' selected' : '') + '>' + fatRotuloMes(m) + '</option>').join('');
   const quando = FAT.atualizado_em ? new Date(FAT.atualizado_em).toLocaleString('pt-BR') : '-';
-  const variacao = ant && ant.docs ? ' <span style="font-size:11px; opacity:.75;">(' + (atual.docs >= ant.docs ? '+' : '') + ((atual.docs - ant.docs) * 100 / ant.docs).toFixed(1).replace('.', ',') + '% vs mês anterior)</span>' : '';
   const legenda = FAT_TIPOS.map(t => '<span style="display:inline-flex; align-items:center; gap:4px; margin-right:12px; font-size:12px;"><i style="width:10px; height:10px; background:' + t[2] + '; display:inline-block; border-radius:2px;"></i>' + t[1] + '</span>').join('');
   const cabM = ['Mês', 'Clientes'].concat(FAT_TIPOS.map(t => t[1])).concat(['Sistêmico', 'Total docs']).map((c, i) => '<th' + (i ? ' style="text-align:right;"' : '') + '>' + c + '</th>').join('');
   const corpoM = pm.slice().reverse().map(m => '<tr' + (m.mes === FAT_MES ? ' style="font-weight:700;"' : '') + '><td>' + fatRotuloMes(m.mes) + '</td><td style="text-align:right;">' + FAT_N(m.clientes) + '</td>' + FAT_TIPOS.map(t => '<td style="text-align:right;">' + FAT_N(m[t[0]]) + '</td>').join('') + '<td style="text-align:right;">' + FAT_N(m.sist) + '</td><td style="text-align:right;">' + FAT_N(m.docs) + '</td></tr>').join('');
@@ -166,7 +187,7 @@ function fatRender() {
   box.innerHTML =
     '<div class="panel-sub" style="margin-bottom:12px;">Dados do painel de faturamento do EmiteAí, mês a mês desde jan/2025. Atualizado automaticamente todo dia às 09:00 · última atualização: <b>' + esc(quando) + '</b>. O mês corrente é acumulado até d-1.</div>' +
     '<div class="panel"><div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;"><b>Mês:</b><select id="fatMes" class="itil-select" onchange="FAT_MES=this.value; fatRender();">' + opts + '</select><button type="button" class="export-btn" onclick="fatCarrega()">Recarregar</button></div></div>' +
-    '<div class="kpi-row" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top:14px;">' + kpi(FAT_N(atual.clientes), 'Clientes') + kpi(FAT_N(atual.docs) + variacao, 'Total de documentos') + FAT_TIPOS.map(t => kpi(FAT_N(atual[t[0]]), t[1])).join('') + kpi(FAT_N(atual.sist), 'Sistêmico') + '</div>' +
+    '<div class="kpi-row" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top:14px;">' + kpi(FAT_N(atual.clientes), 'Clientes') + cDocs + cTri + cChamado + FAT_TIPOS.map(t => kpi(FAT_N(atual[t[0]]), t[1])).join('') + kpi(FAT_N(atual.sist), 'Sistêmico') + '</div>' +
     '<div class="panel" style="margin-top:18px;"><h2>Documentos por mês</h2><div style="margin:6px 0 8px;">' + legenda + '</div>' + fatGraficoMeses(pm) + '</div>' +
     '<div class="panel" style="margin-top:18px;"><h2>Maiores clientes em ' + fatRotuloMes(FAT_MES) + '</h2>' + fatGraficoTop(fatLinhasMes()) + '</div>' +
     '<div class="panel" style="margin-top:18px;"><h2>Resumo mês a mês</h2><div style="overflow:auto;"><table><thead><tr>' + cabM + '</tr></thead><tbody>' + corpoM + '</tbody></table></div><div style="margin-top:10px;"><button type="button" class="export-btn" onclick="fatCsvMeses()">Exportar resumo (CSV)</button></div></div>' +
