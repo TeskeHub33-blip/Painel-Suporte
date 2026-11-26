@@ -65,7 +65,7 @@ var FAT = null, FAT_MES = '', FAT_FILTRO = '';
 var FAT_N = v => Number(v || 0).toLocaleString('pt-BR');
 var FAT_TIPOS = [['cte', 'CT-e', '#2563eb'], ['nfse', 'NFS-e', '#16a34a'], ['mdfe', 'MDF-e', '#f59e0b'], ['gnre', 'GNRE', '#9333ea'], ['ciot', 'CIOT', '#e11d48']];
 var FAT_COLS = [['nome', 'Cliente'], ['cnpj', 'CNPJ matriz'], ['cte', 'CT-e'], ['nfse', 'NFS-e'], ['mdfe', 'MDF-e'], ['gnre', 'GNRE'], ['pix', 'GNRE PIX'], ['ciot', 'CIOT'], ['sist', 'Sistêmico'], ['docs', 'Total docs'], ['receb', 'Recebimentos']];
-var FAT_NUM = {cte: 1, nfse: 1, mdfe: 1, gnre: 1, pix: 1, ciot: 1, sist: 1, docs: 1, receb: 1};
+var FAT_NUM = {clientes: 1, cte: 1, nfse: 1, mdfe: 1, gnre: 1, pix: 1, ciot: 1, sist: 1, docs: 1, receb: 1};
 function fatRotuloMes(m) { return m ? m.slice(5) + '/' + m.slice(0, 4) : ''; }
 function fatTelaSenha(msg) {
   document.getElementById('fatCorpo').innerHTML = '<div class="panel" style="max-width:380px; margin:30px auto; text-align:center;"><h2>Faturamento protegido</h2>' +
@@ -150,6 +150,7 @@ function fatGraficoTop(lin) {
 }
 function fatRender() {
   if (!FAT) return;
+  fatEstilo();
   const box = document.getElementById('fatCorpo');
   if (!(FAT.dados || []).length) { box.innerHTML = '<div class="panel"><div class="panel-sub">Ainda não há dados de faturamento. A rotina diária das 09:00 envia os dados; assim que ela rodar, eles aparecem aqui.</div></div>'; return; }
   const pm = fatPorMes(), atual = pm.find(m => m.mes === FAT_MES) || pm[pm.length - 1], lin = fatLinhas();
@@ -180,27 +181,98 @@ function fatRender() {
   const opts = (FAT.meses || []).slice().reverse().map(m => '<option value="' + m + '"' + (m === FAT_MES ? ' selected' : '') + '>' + fatRotuloMes(m) + '</option>').join('');
   const quando = FAT.atualizado_em ? new Date(FAT.atualizado_em).toLocaleString('pt-BR') : '-';
   const legenda = FAT_TIPOS.map(t => '<span style="display:inline-flex; align-items:center; gap:4px; margin-right:12px; font-size:12px;"><i style="width:10px; height:10px; background:' + t[2] + '; display:inline-block; border-radius:2px;"></i>' + t[1] + '</span>').join('');
-  const cabM = ['Mês', 'Clientes'].concat(FAT_TIPOS.map(t => t[1])).concat(['Sistêmico', 'Total docs']).map((c, i) => '<th' + (i ? ' style="text-align:right;"' : '') + '>' + c + '</th>').join('');
-  const corpoM = pm.slice().reverse().map(m => '<tr' + (m.mes === FAT_MES ? ' style="font-weight:700;"' : '') + '><td>' + fatRotuloMes(m.mes) + '</td><td style="text-align:right;">' + FAT_N(m.clientes) + '</td>' + FAT_TIPOS.map(t => '<td style="text-align:right;">' + FAT_N(m[t[0]]) + '</td>').join('') + '<td style="text-align:right;">' + FAT_N(m.sist) + '</td><td style="text-align:right;">' + FAT_N(m.docs) + '</td></tr>').join('');
-  const cab = FAT_COLS.map(c => '<th' + (FAT_NUM[c[0]] ? ' style="text-align:right;"' : '') + '>' + c[1] + '</th>').join('');
-  const corpo = lin.map(r => '<tr>' + FAT_COLS.map(c => { const v = r[c[0]]; return FAT_NUM[c[0]] ? '<td style="text-align:right;">' + FAT_N(v) + '</td>' : '<td>' + esc(v == null ? '' : String(v)) + '</td>'; }).join('') + '</tr>').join('') || '<tr><td colspan="' + FAT_COLS.length + '" class="empty-msg">Nenhum registro.</td></tr>';
   box.innerHTML =
     '<div class="panel-sub" style="margin-bottom:12px;">Dados do painel de faturamento do EmiteAí, mês a mês desde jan/2025. Atualizado automaticamente todo dia às 09:00 · última atualização: <b>' + esc(quando) + '</b>. O mês corrente é acumulado até d-1.</div>' +
     '<div class="panel"><div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;"><b>Mês:</b><select id="fatMes" class="itil-select" onchange="FAT_MES=this.value; fatRender();">' + opts + '</select><button type="button" class="export-btn" onclick="fatCarrega()">Recarregar</button></div></div>' +
     '<div class="kpi-row" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top:14px;">' + kpi(FAT_N(atual.clientes), 'Clientes') + cDocs + cTri + cChamado + FAT_TIPOS.map(t => kpi(FAT_N(atual[t[0]]), t[1])).join('') + kpi(FAT_N(atual.sist), 'Sistêmico') + '</div>' +
     '<div class="panel" style="margin-top:18px;"><h2>Documentos por mês</h2><div style="margin:6px 0 8px;">' + legenda + '</div>' + fatGraficoMeses(pm) + '</div>' +
     '<div class="panel" style="margin-top:18px;"><h2>Maiores clientes em ' + fatRotuloMes(FAT_MES) + '</h2>' + fatGraficoTop(fatLinhasMes()) + '</div>' +
-    '<div class="panel" style="margin-top:18px;"><h2>Resumo mês a mês</h2><div style="overflow:auto;"><table><thead><tr>' + cabM + '</tr></thead><tbody>' + corpoM + '</tbody></table></div><div style="margin-top:10px;"><button type="button" class="export-btn" onclick="fatCsvMeses()">Exportar resumo (CSV)</button></div></div>' +
+    '<div class="panel" style="margin-top:18px;"><h2>Resumo mês a mês</h2><div id="fatTabM">' + fatTabelaHtml('m', FAT_MCOLS, pm) + '</div><div style="margin-top:10px;"><button type="button" class="export-btn" onclick="fatCsvMeses()">Exportar resumo (CSV)</button></div></div>' +
     '<div class="panel" style="margin-top:18px;"><h2>Por cliente em ' + fatRotuloMes(FAT_MES) + '</h2><div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:8px 0 10px;">' +
-    '<input id="fatFiltro" type="text" class="itil-select" style="min-width:240px;" placeholder="Filtrar por nome / CNPJ" value="' + esc(FAT_FILTRO) + '" oninput="FAT_FILTRO=this.value; fatRenderTabela();">' +
+    '<input id="fatFiltro" type="text" class="itil-select" style="min-width:240px;" placeholder="Filtrar por nome / CNPJ" value="' + esc(FAT_FILTRO) + '" oninput="FAT_FILTRO=this.value; fatRedesenha(\'c\');">' +
     '<button type="button" class="export-btn" onclick="fatCsv()">Exportar mês (CSV)</button><button type="button" class="export-btn" onclick="fatCsv(true)">Exportar tudo (CSV)</button></div>' +
-    '<div style="overflow:auto; max-height:60vh;"><table><thead><tr>' + cab + '</tr></thead><tbody>' + corpo + '</tbody></table></div></div>';
+    '<div id="fatTabC">' + fatTabelaHtml('c', FAT_COLS, lin) + '</div></div>';
 }
 function fatLinhasMes() { return (FAT.dados || []).filter(r => r.mes === FAT_MES); }
-function fatRenderTabela() {
-  const sel = document.getElementById('fatFiltro'), pos = sel ? sel.selectionStart : 0;
-  fatRender();
-  const i = document.getElementById('fatFiltro'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (e) {} }
+// --- Tabelas do Faturamento: ordenar clicando no titulo, modo ranking (medalhas, barras, animacoes), titulos centralizados ---
+var FAT_ORD = { c: { col: 'docs', dir: -1 }, m: { col: 'mes', dir: -1 } }, FAT_RANK = { c: false, m: false };
+var FAT_TEXTO = { nome: 1, cnpj: 1, mes: 1 };
+var FAT_MCOLS = [['mes', 'Mês'], ['clientes', 'Clientes'], ['cte', 'CT-e'], ['nfse', 'NFS-e'], ['mdfe', 'MDF-e'], ['gnre', 'GNRE'], ['ciot', 'CIOT'], ['sist', 'Sistêmico'], ['docs', 'Total docs']];
+function fatEstilo() {
+  if (document.getElementById('fatEstilo')) return;
+  const st = document.createElement('style'); st.id = 'fatEstilo';
+  st.textContent =
+    '.fat-tab{width:100%; border-collapse:collapse;}' +
+    '.fat-tab th,.fat-tab td{text-align:center; vertical-align:middle; padding:9px 14px; white-space:nowrap;}' +
+    '.fat-tab th.fat-esq,.fat-tab td.fat-esq{text-align:left;}' +
+    '.fat-tab th.fat-ord{cursor:pointer; user-select:none; transition:background .15s;}' +
+    '.fat-tab th.fat-ord:hover{background:rgba(37,99,235,.12);}' +
+    '.fat-seta{display:inline-block; width:12px; margin-left:5px; font-size:10px; opacity:.3;}' +
+    '.fat-tab th.fat-on .fat-seta{opacity:1; color:#2563eb;}' +
+    '.fat-tab tbody tr{transition:background .15s;}' +
+    '.fat-tab tbody tr:hover{background:rgba(37,99,235,.08);}' +
+    '.fat-rk tbody tr{animation:fatEntra .45s ease both;}' +
+    '@keyframes fatEntra{from{opacity:0; transform:translateY(8px);}to{opacity:1; transform:none;}}' +
+    '.fat-pos{display:inline-flex; align-items:center; justify-content:center; min-width:30px; height:30px; border-radius:50%; font-weight:700; font-size:12px; background:rgba(127,127,127,.18);}' +
+    '.fat-pos.p1{background:linear-gradient(135deg,#fde047,#f59e0b); color:#422006; font-size:16px; animation:fatPulso 1.8s infinite;}' +
+    '.fat-pos.p2{background:linear-gradient(135deg,#e5e7eb,#9ca3af); color:#111827; font-size:16px;}' +
+    '.fat-pos.p3{background:linear-gradient(135deg,#fdba74,#c2410c); color:#fff; font-size:16px;}' +
+    '@keyframes fatPulso{0%{box-shadow:0 0 0 0 rgba(245,158,11,.55);}70%{box-shadow:0 0 0 9px rgba(245,158,11,0);}100%{box-shadow:0 0 0 0 rgba(245,158,11,0);}}' +
+    '.fat-rk tr.r1 td{background:rgba(245,158,11,.13);}.fat-rk tr.r2 td{background:rgba(156,163,175,.14);}.fat-rk tr.r3 td{background:rgba(194,65,12,.10);}' +
+    '.fat-rk tr.r1 td,.fat-rk tr.r2 td,.fat-rk tr.r3 td{font-weight:700;}' +
+    '.fat-cel{position:relative;}.fat-cel>span{position:relative;}' +
+    '.fat-bar{position:absolute; left:0; top:18%; bottom:18%; width:var(--w); background:linear-gradient(90deg,rgba(37,99,235,.34),rgba(37,99,235,.06)); border-radius:0 6px 6px 0; transform-origin:left; animation:fatCresce .9s ease both; pointer-events:none;}' +
+    '@keyframes fatCresce{from{transform:scaleX(0);}to{transform:scaleX(1);}}' +
+    '.fat-ativo{background:#2563eb !important; color:#fff !important;}';
+  document.head.appendChild(st);
+}
+function fatOrdena(lista, tab) {
+  const o = FAT_ORD[tab], d = o.dir, col = o.col;
+  return lista.slice().sort((a, b) => {
+    const x = a[col], y = b[col];
+    const r = FAT_TEXTO[col] ? String(x == null ? '' : x).localeCompare(String(y == null ? '' : y), 'pt-BR', { numeric: true }) : Number(x || 0) - Number(y || 0);
+    return r * d || String(a.nome || a.mes).localeCompare(String(b.nome || b.mes), 'pt-BR');
+  });
+}
+function fatTabelaHtml(tab, cols, lista) {
+  const o = FAT_ORD[tab], rk = FAT_RANK[tab], metrica = FAT_TEXTO[o.col] ? 'docs' : o.col;
+  const ord = fatOrdena(lista, tab), pos = new Map();
+  lista.slice().sort((a, b) => Number(b[metrica] || 0) - Number(a[metrica] || 0)).forEach((r, i) => pos.set(r, i + 1));
+  const maxv = Math.max.apply(null, lista.map(r => Number(r[metrica] || 0)).concat([1]));
+  const medalha = ['', '🥇', '🥈', '🥉'];
+  const cab = (rk ? '<th>#</th>' : '') + cols.map(c => {
+    const on = o.col === c[0];
+    return '<th class="fat-ord' + (on ? ' fat-on' : '') + (c[0] === 'nome' ? ' fat-esq' : '') + '" onclick="fatClicaCol(\'' + tab + '\',\'' + c[0] + '\')" title="Ordenar por ' + esc(c[1]) + '">' + esc(c[1]) + '<span class="fat-seta">' + (on ? (o.dir > 0 ? '▲' : '▼') : '↕') + '</span></th>';
+  }).join('');
+  const corpo = ord.map((r, i) => {
+    const p = pos.get(r), cls = rk && p <= 3 ? ' class="r' + p + '"' : '';
+    const dest = tab === 'm' && r.mes === FAT_MES ? ' style="outline:2px solid rgba(37,99,235,.45); outline-offset:-2px;"' : '';
+    const atraso = rk ? ' style="animation-delay:' + Math.min(i, 24) * 35 + 'ms;"' : '';
+    const tds = cols.map(c => {
+      const v = r[c[0]];
+      if (c[0] === 'nome') return '<td class="fat-esq">' + esc(v == null ? '' : String(v)) + '</td>';
+      if (c[0] === 'mes') return '<td>' + fatRotuloMes(v) + '</td>';
+      if (c[0] === 'cnpj') return '<td>' + esc(v == null ? '' : String(v)) + '</td>';
+      if (rk && c[0] === metrica) return '<td class="fat-cel"><i class="fat-bar" style="--w:' + (100 * Number(v || 0) / maxv).toFixed(1) + '%"></i><span>' + FAT_N(v) + '</span></td>';
+      return '<td>' + FAT_N(v) + '</td>';
+    }).join('');
+    const est = (rk ? 'animation-delay:' + Math.min(i, 24) * 35 + 'ms;' : '') + (tab === 'm' && r.mes === FAT_MES ? 'outline:2px solid rgba(37,99,235,.45); outline-offset:-2px;' : '');
+    return '<tr' + (rk && p <= 3 ? ' class="r' + p + '"' : '') + (est ? ' style="' + est + '"' : '') + '>' + (rk ? '<td><span class="fat-pos' + (p <= 3 ? ' p' + p : '') + '">' + (p <= 3 ? medalha[p] : p) + '</span></td>' : '') + tds + '</tr>';
+  }).join('') || '<tr><td colspan="' + (cols.length + 1) + '" class="empty-msg">Nenhum registro.</td></tr>';
+  return '<div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0 0 10px;">' +
+    '<button type="button" id="fatRk' + tab + '" class="export-btn' + (rk ? ' fat-ativo' : '') + '" onclick="fatRanking(\'' + tab + '\',!FAT_RANK.' + tab + ')">🏆 Ranking' + (rk ? ' (ligado)' : '') + '</button>' +
+    '<span style="font-size:12px; opacity:.75;">Clique no título da coluna para ordenar (crescente ↔ decrescente).' + (rk ? ' Ranking pela coluna <b>' + esc((cols.find(c => c[0] === metrica) || [0, metrica])[1]) + '</b>.' : '') + '</span></div>' +
+    '<div style="overflow:auto;' + (tab === 'c' ? ' max-height:60vh;' : '') + '"><table class="fat-tab' + (rk ? ' fat-rk' : '') + '"><thead><tr>' + cab + '</tr></thead><tbody>' + corpo + '</tbody></table></div>';
+}
+function fatClicaCol(tab, col) {
+  const o = FAT_ORD[tab];
+  if (o.col === col) o.dir = -o.dir; else { o.col = col; o.dir = FAT_TEXTO[col] ? 1 : -1; }
+  fatRedesenha(tab);
+}
+function fatRanking(tab, on) { FAT_RANK[tab] = on; fatRedesenha(tab); }
+function fatRedesenha(tab) {
+  const el = document.getElementById(tab === 'c' ? 'fatTabC' : 'fatTabM'); if (!el || !FAT) return;
+  el.innerHTML = tab === 'c' ? fatTabelaHtml('c', FAT_COLS, fatLinhas()) : fatTabelaHtml('m', FAT_MCOLS, fatPorMes());
 }
 function fatBaixa(nome, linhas) {
   const aspas = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
