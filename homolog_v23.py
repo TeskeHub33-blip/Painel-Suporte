@@ -154,37 +154,15 @@ function fatRender() {
   const box = document.getElementById('fatCorpo');
   if (!(FAT.dados || []).length) { box.innerHTML = '<div class="panel"><div class="panel-sub">Ainda não há dados de faturamento. A rotina diária das 09:00 envia os dados; assim que ela rodar, eles aparecem aqui.</div></div>'; return; }
   const pm = fatPorMes(), atual = pm.find(m => m.mes === FAT_MES) || pm[pm.length - 1], lin = fatLinhas();
-  const porMes = {}; pm.forEach(m => { porMes[m.mes] = m; });
-  const pct = (a, b) => b ? (a >= b ? '+' : '') + ((a - b) * 100 / b).toFixed(1).replace('.', ',') + '%' : null;
-  const cor = (a, b) => !b ? '' : (a >= b ? 'var(--success, #16a34a)' : 'var(--danger, #dc2626)');
-  const sub = (txt, a, b) => txt ? '<div style="font-size:11px; margin-top:4px; opacity:.9; color:' + cor(a, b) + ';">' + txt + '</div>' : '';
-  const kpi = (v, t, extra) => '<div class="kpi"><div class="value">' + v + '</div><div class="kpi-label">' + t + '</div>' + (extra || '') + '</div>';
-  // Mesmo mes do ano anterior
-  const anoAnt = (parseInt(FAT_MES.slice(0, 4), 10) - 1) + FAT_MES.slice(4), mAA = porMes[anoAnt];
-  const cDocs = kpi(FAT_N(atual.docs), 'Total de documentos', mAA ? sub(pct(atual.docs, mAA.docs) + ' vs ' + fatRotuloMes(anoAnt) + ' (' + FAT_N(mAA.docs) + ')', atual.docs, mAA.docs) : sub('sem dados de ' + fatRotuloMes(anoAnt)));
-  // Media mensal do trimestre do mes escolhido x trimestre anterior (meses que tem dados)
-  const ano = parseInt(FAT_MES.slice(0, 4), 10), mes = parseInt(FAT_MES.slice(5), 10), tri = Math.floor((mes - 1) / 3);
-  const doTri = (a, t) => [1, 2, 3].map(i => a + '-' + String(t * 3 + i).padStart(2, '0')).filter(k => porMes[k] && k <= FAT_MES);
-  const triAnt = tri === 0 ? [ano - 1, 3] : [ano, tri - 1];
-  const kA = doTri(ano, tri), kP = doTri(triAnt[0], triAnt[1]);
-  const media = ks => ks.length ? ks.reduce((s, k) => s + porMes[k].docs, 0) / ks.length : 0;
-  const mediaA = media(kA), mediaP = media(kP);
-  const cTri = kpi(FAT_N(Math.round(mediaA)), 'Média/mês do ' + (tri + 1) + 'º tri/' + ano + (kA.length < 3 ? ' (' + kA.length + ' mês' + (kA.length > 1 ? 'es' : '') + ')' : ''),
-    mediaP ? sub(pct(mediaA, mediaP) + ' vs ' + (triAnt[1] + 1) + 'º tri/' + triAnt[0] + ' (média ' + FAT_N(Math.round(mediaP)) + ')', mediaA, mediaP) : sub('sem trimestre anterior'));
-  // Emissoes por chamado: (CT-e + NFS-e + Sistemico + GNRE) / chamados abertos do mes (mesma regra da Reuniao Mensal)
-  const emis = m => m ? m.cte + m.nfse + m.sist + m.gnre : 0;
-  const chamDe = k => (typeof CHAMADOS_ABERTOS !== 'undefined' && CHAMADOS_ABERTOS[k]) || 0;
-  const chA = chamDe(FAT_MES), chB = chamDe(anoAnt);
-  const razA = chA ? emis(atual) / chA : 0, razB = chB && mAA ? emis(mAA) / chB : 0;
-  const cChamado = kpi(chA ? FAT_N(Math.round(razA)) : '-', 'Emissões por chamado',
-    chA ? sub(FAT_N(emis(atual)) + ' emissões ÷ ' + FAT_N(chA) + ' chamados abertos' + (razB ? '<br>' + pct(razA, razB) + ' vs ' + fatRotuloMes(anoAnt) + ' (' + FAT_N(Math.round(razB)) + ')' : ''), razA, razB) : sub('sem chamados deste mês'));
+  const kpi = (v, t) => '<div class="kpi"><div class="value">' + v + '</div><div class="kpi-label">' + t + '</div></div>';
   const opts = (FAT.meses || []).slice().reverse().map(m => '<option value="' + m + '"' + (m === FAT_MES ? ' selected' : '') + '>' + fatRotuloMes(m) + '</option>').join('');
   const quando = FAT.atualizado_em ? new Date(FAT.atualizado_em).toLocaleString('pt-BR') : '-';
   const legenda = FAT_TIPOS.map(t => '<span style="display:inline-flex; align-items:center; gap:4px; margin-right:12px; font-size:12px;"><i style="width:10px; height:10px; background:' + t[2] + '; display:inline-block; border-radius:2px;"></i>' + t[1] + '</span>').join('');
   box.innerHTML =
     '<div class="panel-sub" style="margin-bottom:12px;">Dados do painel de faturamento do EmiteAí, mês a mês desde jan/2025. Atualizado automaticamente todo dia às 09:00 · última atualização: <b>' + esc(quando) + '</b>. O mês corrente é acumulado até d-1.</div>' +
     '<div class="panel"><div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;"><b>Mês:</b><select id="fatMes" class="itil-select" onchange="FAT_MES=this.value; fatRender();">' + opts + '</select><button type="button" class="export-btn" onclick="fatCarrega()">Recarregar</button></div></div>' +
-    '<div class="kpi-row" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top:14px;">' + kpi(FAT_N(atual.clientes), 'Clientes') + cDocs + cTri + cChamado + FAT_TIPOS.map(t => kpi(FAT_N(atual[t[0]]), t[1])).join('') + kpi(FAT_N(atual.sist), 'Sistêmico') + '</div>' +
+    '<div style="margin-top:14px;">' + fatHeroHtml(pm, atual) + '</div>' +
+    '<div class="kpi-row" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin-top:14px;">' + FAT_TIPOS.map(t => kpi(FAT_N(atual[t[0]]), t[1])).join('') + kpi(FAT_N(atual.sist), 'Sistêmico') + '</div>' +
     '<div class="panel" style="margin-top:18px;"><h2>Documentos por mês</h2><div style="margin:6px 0 8px;">' + legenda + '</div>' + fatGraficoMeses(pm) + '</div>' +
     '<div class="panel" style="margin-top:18px;"><h2>Maiores clientes em ' + fatRotuloMes(FAT_MES) + '</h2>' + fatGraficoTop(fatLinhasMes()) + '</div>' +
     '<div class="panel" style="margin-top:18px;"><h2>Resumo mês a mês</h2><div id="fatTabM">' + fatTabelaHtml('m', FAT_MCOLS, pm) + '</div><div style="margin-top:10px;"><button type="button" class="export-btn" onclick="fatCsvMeses()">Exportar resumo (CSV)</button></div></div>' +
@@ -223,7 +201,19 @@ function fatEstilo() {
     '.fat-cel{position:relative;}.fat-cel>span{position:relative;}' +
     '.fat-bar{position:absolute; left:0; top:18%; bottom:18%; width:var(--w); background:linear-gradient(90deg,rgba(37,99,235,.34),rgba(37,99,235,.06)); border-radius:0 6px 6px 0; transform-origin:left; animation:fatCresce .9s ease both; pointer-events:none;}' +
     '@keyframes fatCresce{from{transform:scaleX(0);}to{transform:scaleX(1);}}' +
-    '.fat-ativo{background:#2563eb !important; color:#fff !important;}';
+    '.fat-ativo{background:#2563eb !important; color:#fff !important;}' +
+    '.fat-hero-topo{display:flex; flex-wrap:wrap; gap:22px; align-items:center; justify-content:space-between;}' +
+    '.fat-hero-t{font-size:12px; letter-spacing:.06em; text-transform:uppercase; opacity:.7; font-weight:700;}' +
+    '.fat-hero-v{font-size:64px; line-height:1.05; font-weight:800; margin:4px 0 8px; background:linear-gradient(135deg,#2563eb,#9333ea); -webkit-background-clip:text; background-clip:text; color:transparent; animation:fatPop .6s ease both;}' +
+    '@keyframes fatPop{from{opacity:0; transform:scale(.85);}to{opacity:1; transform:none;}}' +
+    '.fat-pill{display:inline-block; padding:4px 12px; border-radius:999px; font-size:13px; font-weight:700; background:rgba(127,127,127,.18);}' +
+    '.fat-pill.sobe{background:rgba(22,163,74,.16); color:#16a34a;}.fat-pill.desce{background:rgba(220,38,38,.14); color:#dc2626;}' +
+    '.fat-hero-dir{display:grid; grid-template-columns:repeat(2,minmax(150px,1fr)); gap:10px; flex:1; max-width:520px;}' +
+    '.fat-mini{border:1px solid rgba(127,127,127,.25); border-radius:12px; padding:10px 14px;}' +
+    '.fat-mini-v{font-size:22px; font-weight:800;}.fat-mini-t{font-size:12px; font-weight:600; opacity:.85;}.fat-mini-s{font-size:10.5px; opacity:.6; margin-top:2px;}' +
+    '.fat-barh{height:100%; border-radius:6px; transform-origin:left; animation:fatCresce .9s ease both;}' +
+    '.fat-barra{transform-box:fill-box; transform-origin:bottom; animation:fatSobe .7s ease both;}' +
+    '@keyframes fatSobe{from{transform:scaleY(0);}to{transform:scaleY(1);}}';
   document.head.appendChild(st);
 }
 function fatOrdena(lista, tab) {
@@ -273,6 +263,84 @@ function fatRanking(tab, on) { FAT_RANK[tab] = on; fatRedesenha(tab); }
 function fatRedesenha(tab) {
   const el = document.getElementById(tab === 'c' ? 'fatTabC' : 'fatTabM'); if (!el || !FAT) return;
   el.innerHTML = tab === 'c' ? fatTabelaHtml('c', FAT_COLS, fatLinhas()) : fatTabelaHtml('m', FAT_MCOLS, fatPorMes());
+}
+// --- Indicador Emissoes por chamado: card visual + comparativo por periodo (mensal, trimestral, anual) contra o mesmo periodo do ano anterior ---
+var FAT_PER = 'm';
+function fatEmis(m) { return m ? m.cte + m.nfse + m.sist + m.gnre : 0; }
+function fatCham(k) { return (typeof CHAMADOS_ABERTOS !== 'undefined' && CHAMADOS_ABERTOS[k]) || 0; }
+function fatAnoAnt(k) { return (parseInt(k.slice(0, 4), 10) - 1) + k.slice(4); }
+function fatPct(a, b) { return b ? (a >= b ? '+' : '') + ((a - b) * 100 / b).toFixed(1).replace('.', ',') + '%' : null; }
+// Agrupa os meses por mes / trimestre / ano e calcula emissoes por chamado (soma de emissoes / soma de chamados) e o mesmo periodo do ano anterior.
+function fatSerieRazao(per) {
+  const pm = fatPorMes(), por = {}; pm.forEach(m => { por[m.mes] = m; });
+  const grupos = [], idx = {};
+  pm.forEach(m => {
+    const a = m.mes.slice(0, 4), mm = parseInt(m.mes.slice(5), 10), t = Math.floor((mm - 1) / 3) + 1;
+    const k = per === 'm' ? m.mes : per === 't' ? a + 'T' + t : a;
+    const l = per === 'm' ? m.mes.slice(5) + '/' + a.slice(2) : per === 't' ? t + 'º tri/' + a.slice(2) : a;
+    if (!(k in idx)) { idx[k] = grupos.length; grupos.push({ k: k, l: l, meses: [], max: per === 'm' ? 1 : per === 't' ? 3 : 12 }); }
+    grupos[idx[k]].meses.push(m.mes);
+  });
+  const calc = meses => {
+    let e = 0, c = 0;
+    meses.forEach(k => { if (por[k] && fatCham(k)) { e += fatEmis(por[k]); c += fatCham(k); } });
+    return c ? { v: e / c, e: e, c: c } : null;
+  };
+  return grupos.map(g => {
+    const a = calc(g.meses), p = calc(g.meses.map(fatAnoAnt));
+    return { l: g.l, a: a, p: p, parcial: g.meses.length < g.max };
+  }).filter(g => g.a);
+}
+function fatGraficoRazao(ser) {
+  if (!ser.length) return '<div class="empty-msg">Sem dados de chamados para montar o comparativo.</div>';
+  const W = 900, H = 300, ml = 52, mr = 10, mt = 22, mb = 52, n = ser.length;
+  const max = Math.max.apply(null, ser.map(g => Math.max(g.a.v, g.p ? g.p.v : 0)).concat([1]));
+  const passo = Math.pow(10, Math.floor(Math.log10(max))), topo = Math.ceil(max / passo) * passo;
+  const bw = (W - ml - mr) / n, larg = Math.min(26, bw * 0.38), esc2 = v => (H - mt - mb) * v / topo;
+  let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; display:block;" role="img" aria-label="Emissões por chamado">';
+  for (let g = 0; g <= 4; g++) {
+    const y = mt + (H - mt - mb) * (1 - g / 4);
+    s += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y + '" y2="' + y + '" stroke="currentColor" stroke-opacity=".12"/><text x="' + (ml - 6) + '" y="' + (y + 4) + '" text-anchor="end" font-size="10" fill="currentColor" fill-opacity=".65">' + FAT_N(Math.round(topo * g / 4)) + '</text>';
+  }
+  ser.forEach((g, i) => {
+    const cx = ml + bw * i + bw / 2, ha = esc2(g.a.v), hp = g.p ? esc2(g.p.v) : 0;
+    const sobe = g.p ? g.a.v >= g.p.v : true, corA = g.p ? (sobe ? '#16a34a' : '#dc2626') : '#2563eb';
+    const tit = g.l + (g.parcial ? ' (parcial)' : '') + ': ' + FAT_N(Math.round(g.a.v)) + ' emissões/chamado (' + FAT_N(g.a.e) + ' ÷ ' + FAT_N(g.a.c) + ')' + (g.p ? ' · ano anterior: ' + FAT_N(Math.round(g.p.v)) + ' (' + fatPct(g.a.v, g.p.v) + ')' : '');
+    if (g.p) s += '<rect x="' + (cx - larg - 1) + '" y="' + (H - mb - hp) + '" width="' + larg + '" height="' + hp + '" rx="3" fill="#9ca3af" fill-opacity=".55"><title>' + esc(tit) + '</title></rect>';
+    s += '<rect class="fat-barra" style="animation-delay:' + Math.min(i, 24) * 30 + 'ms" x="' + (g.p ? cx + 1 : cx - larg / 2) + '" y="' + (H - mb - ha) + '" width="' + larg + '" height="' + ha + '" rx="3" fill="' + corA + '"' + (g.parcial ? ' fill-opacity=".6" stroke="' + corA + '" stroke-dasharray="3 2"' : '') + '><title>' + esc(tit) + '</title></rect>';
+    if (n <= 14) s += '<text x="' + (g.p ? cx + 1 + larg / 2 : cx) + '" y="' + (H - mb - ha - 5) + '" text-anchor="middle" font-size="10" font-weight="700" fill="currentColor">' + FAT_N(Math.round(g.a.v)) + '</text>';
+    s += '<text x="' + cx + '" y="' + (H - mb + 15) + '" text-anchor="middle" font-size="10" fill="currentColor" fill-opacity=".75">' + g.l + (g.parcial ? '*' : '') + '</text>';
+    if (g.p && n <= 14) s += '<text x="' + cx + '" y="' + (H - mb + 29) + '" text-anchor="middle" font-size="10" font-weight="700" fill="' + corA + '">' + (sobe ? '▲ ' : '▼ ') + fatPct(g.a.v, g.p.v).replace('+', '') + '</text>';
+  });
+  return s + '</svg>';
+}
+function fatRazaoHtml() {
+  const btn = (p, t) => '<button type="button" class="export-btn fat-per' + (FAT_PER === p ? ' fat-ativo' : '') + '" onclick="fatPeriodo(\'' + p + '\')">' + t + '</button>';
+  const ser = fatSerieRazao(FAT_PER);
+  const nota = FAT_PER === 'm' ? 'Cada mês contra o mesmo mês do ano anterior.' : FAT_PER === 't' ? 'Cada trimestre contra o mesmo trimestre do ano anterior. * = trimestre incompleto (compara com os mesmos meses do ano anterior).' : 'Cada ano contra o ano anterior. * = ano em andamento (compara com os mesmos meses do ano anterior).';
+  return '<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:14px 0 6px;">' + btn('m', 'Mensal') + btn('t', 'Trimestral') + btn('a', 'Anual') +
+    '<span style="margin-left:8px; font-size:12px; opacity:.75;">' + nota + '</span></div>' +
+    '<div style="margin:2px 0 6px; font-size:12px;"><span style="display:inline-flex; align-items:center; gap:4px; margin-right:14px;"><i style="width:10px; height:10px; background:#9ca3af; opacity:.7; display:inline-block; border-radius:2px;"></i>Ano anterior</span>' +
+    '<span style="display:inline-flex; align-items:center; gap:4px; margin-right:14px;"><i style="width:10px; height:10px; background:#16a34a; display:inline-block; border-radius:2px;"></i>Período atual acima</span>' +
+    '<span style="display:inline-flex; align-items:center; gap:4px;"><i style="width:10px; height:10px; background:#dc2626; display:inline-block; border-radius:2px;"></i>Período atual abaixo</span></div>' + fatGraficoRazao(ser);
+}
+function fatPeriodo(per) { FAT_PER = per; const el = document.getElementById('fatRazao'); if (el) el.innerHTML = fatRazaoHtml(); }
+// Card grande do indicador, do mes escolhido.
+function fatHeroHtml(pm, atual) {
+  const por = {}; pm.forEach(m => { por[m.mes] = m; });
+  const ant = fatAnoAnt(FAT_MES), mAA = por[ant], chA = fatCham(FAT_MES), chB = fatCham(ant);
+  const razA = chA ? fatEmis(atual) / chA : 0, razB = chB && mAA ? fatEmis(mAA) / chB : 0;
+  const delta = razB && razA ? fatPct(razA, razB) : null, sobe = razA >= razB;
+  const maxv = Math.max(razA, razB, 1);
+  const mini = (t, v, sub) => '<div class="fat-mini"><div class="fat-mini-v">' + v + '</div><div class="fat-mini-t">' + t + '</div>' + (sub ? '<div class="fat-mini-s">' + sub + '</div>' : '') + '</div>';
+  const barra = (t, v, cor) => '<div style="display:flex; align-items:center; gap:8px; margin:5px 0; font-size:12px;"><div style="width:96px;">' + t + '</div><div style="flex:1; background:rgba(127,127,127,.16); border-radius:6px; height:12px; overflow:hidden;"><div class="fat-barh" style="width:' + (100 * v / maxv).toFixed(1) + '%; background:' + cor + ';"></div></div><div style="width:56px; text-align:right; font-weight:700;">' + FAT_N(Math.round(v)) + '</div></div>';
+  return '<div class="panel fat-hero"><div class="fat-hero-topo"><div class="fat-hero-esq">' +
+    '<div class="fat-hero-t">Emissões por chamado · ' + fatRotuloMes(FAT_MES) + '</div>' +
+    '<div class="fat-hero-v">' + (chA ? FAT_N(Math.round(razA)) : '-') + '</div>' +
+    (delta ? '<span class="fat-pill ' + (sobe ? 'sobe' : 'desce') + '">' + (sobe ? '▲' : '▼') + ' ' + delta.replace('+', '') + ' vs ' + fatRotuloMes(ant) + '</span>' : '<span class="fat-pill">' + (chA ? 'sem ' + fatRotuloMes(ant) + ' para comparar' : 'sem chamados deste mês') + '</span>') +
+    '</div><div class="fat-hero-dir">' + mini('Emissões', FAT_N(fatEmis(atual)), 'CT-e + NFS-e + Sistêmico + GNRE') + mini('Chamados abertos', chA ? FAT_N(chA) : '-', 'Suporte, sem cancelados') + mini('Clientes', FAT_N(atual.clientes)) + mini('Total de documentos', FAT_N(atual.docs)) + '</div></div>' +
+    (razA ? '<div style="margin-top:14px; max-width:520px;">' + barra(fatRotuloMes(FAT_MES), razA, sobe || !razB ? '#16a34a' : '#dc2626') + (razB ? barra(fatRotuloMes(ant), razB, '#9ca3af') : '') + '</div>' : '') +
+    '<h2 style="margin-top:18px;">Comparativo de emissões por chamado</h2><div id="fatRazao">' + fatRazaoHtml() + '</div></div>';
 }
 function fatBaixa(nome, linhas) {
   const aspas = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
