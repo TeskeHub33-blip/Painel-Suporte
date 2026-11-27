@@ -1,5 +1,5 @@
 {
-  "salvo_em": "2026-11-27T14:12:04.978Z",
+  "salvo_em": "2026-11-27T14:55:55.003Z",
   "manual": {
     "2026-11-23": {
       "12": {
@@ -81,13 +81,16 @@
       },
       "11": {
         "0": "João Matoso||",
-        "1": "Guilherme Marcarini|João Matoso|"
+        "1": "Guilherme Marcarini|João Matoso|",
+        "4": "Guilherme Meyer|Guilherme Meyer|"
       },
       "12": {
-        "0": "João Matoso||"
+        "0": "João Matoso||",
+        "4": "Guilherme Meyer|Guilherme Meyer|"
       },
       "13": {
-        "0": "João Matoso||"
+        "0": "João Matoso||",
+        "4": "Guilherme Meyer|Guilherme Meyer|"
       }
     }
   }
